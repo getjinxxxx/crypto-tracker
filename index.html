@@ -211,16 +211,19 @@
   </div>
 
   <div class="legend">
-    <span class="item"><span class="sw take"></span> Take profit (&ge;+30%)</span>
-    <span class="item"><span class="sw near"></span> Getting close (+15&ndash;30%)</span>
-    <span class="item"><span class="sw hold"></span> Hold (0&ndash;15%)</span>
-    <span class="item"><span class="sw loss"></span> At a loss (&lt;0%)</span>
+    <span class="item"><span class="sw take"></span> Take profit / Ready to buy</span>
+    <span class="item"><span class="sw near"></span> Getting close / Good dip entry</span>
+    <span class="item"><span class="sw hold"></span> Hold / Fair entry</span>
+    <span class="item"><span class="sw loss"></span> At a loss / High entry</span>
   </div>
 
   <div class="hint">
-    Only <b>Invested (&#8369;)</b> is editable. Amount = Invested &divide; Entry Price. Current = Amount &times; live market price.<br>
-    Tap the circle to switch a row between <b>Active</b> (already bought) and <b>Pending</b> (waiting order). The chart shows the recent price trend.<br>
-    <span style="opacity:.8">Note: signals are a simple guide based on % gain, not financial advice. The decision is yours.</span>
+    <b>Active rows</b> (bought): P/L and take-profit signal based on % gain.<br>
+    <b>Pending rows</b> (waiting orders): the P/L column shows how far the market must drop to reach your target,
+    and the signal rates your target entry against the 30-day price range &mdash;
+    <b>Good dip entry</b> (near the recent low), <b>Fair entry</b> (mid-range), <b>High entry</b> (near the recent high),
+    <b>Deep dip target</b> (below anything seen in 30 days), <b>Ready to buy</b> (market already at/below your target).<br>
+    <span style="opacity:.8">Note: these are simple guides from price data, not financial advice. The decision is yours.</span>
   </div>
 
   <!-- ADD COIN MODAL -->
@@ -284,6 +287,7 @@
   let market = {};   // coinId -> { price, change24h }
   let charts = {};   // coinId -> Chart instance
   let ranges = {};   // coinId -> selected range in days
+  let stats = {};    // coinId -> { low30, high30 } for entry-zone suggestions
 
   function loadState() {
     try {
@@ -314,10 +318,11 @@
     state.coins.forEach(coinId => container.appendChild(buildCoinCard(coinId)));
     renderSummary();
     updateTotals();
-    // (re)load charts
+    // (re)load charts + 30d stats for entry suggestions
     state.coins.forEach(coinId => {
       if (!ranges[coinId]) ranges[coinId] = 7;
       loadChart(coinId);
+      if (!stats[coinId]) loadStats(coinId);
     });
   }
 
@@ -362,7 +367,8 @@
     // per-coin stat line
     const stat = document.createElement("div");
     stat.className = "coin-stat";
-    stat.innerHTML = 'Active: <b data-role="active">0</b> &middot; Pending: <b data-role="pending">0</b>';
+    stat.innerHTML = 'Active: <b data-role="active">0</b> &middot; Pending: <b data-role="pending">0</b>' +
+      '<span data-role="range" style="display:block;margin-top:2px"></span>';
     card.appendChild(stat);
 
     // table
@@ -488,7 +494,54 @@
     if (plEl && sigEl) {
       plEl.classList.remove("up", "down");
       sigEl.className = "badge";
-      if (row.pending) { plEl.textContent = "\u2014"; sigEl.textContent = "Pending"; sigEl.classList.add("b-wait"); return; }
+
+      // ----- PENDING rows: show distance-to-target + entry-zone suggestion -----
+      if (row.pending) {
+        // "P/L" column shows how far the market is from your target entry.
+        if (mkt != null && entry > 0) {
+          const gap = ((mkt - entry) / entry) * 100; // market vs target
+          if (mkt <= entry) {
+            // market has reached (or dropped below) your target -> should fill
+            plEl.textContent = "target hit";
+            plEl.classList.add("up");
+          } else {
+            // market still above target -> price must drop this much to trigger
+            plEl.textContent = "\u2193 " + Math.abs(gap).toFixed(1) + "% to target";
+          }
+        } else {
+          plEl.textContent = "\u2014";
+        }
+
+        // Signal badge = entry-zone verdict using 30d low/high.
+        const st = stats[coinId];
+        if (mkt != null && entry > 0 && mkt <= entry) {
+          sigEl.textContent = "Ready to buy";
+          sigEl.classList.add("b-take");
+        } else if (st && entry > 0) {
+          const range = st.high30 - st.low30;
+          // position of target within the last 30 days: 0 = at the low, 1 = at the high
+          const posn = range > 0 ? (entry - st.low30) / range : 0.5;
+          if (entry < st.low30 * 0.985) {
+            // target is below anything seen in 30d -> may never fill soon
+            sigEl.textContent = "Deep dip target";
+            sigEl.classList.add("b-wait");
+          } else if (posn <= 0.35) {
+            sigEl.textContent = "Good dip entry";
+            sigEl.classList.add("b-near");
+          } else if (posn <= 0.7) {
+            sigEl.textContent = "Fair entry";
+            sigEl.classList.add("b-hold");
+          } else {
+            sigEl.textContent = "High entry";
+            sigEl.classList.add("b-loss");
+          }
+        } else {
+          sigEl.textContent = "Pending";
+          sigEl.classList.add("b-wait");
+        }
+        return;
+      }
+
       if (!canCompute) { plEl.textContent = "\u2014"; sigEl.textContent = "\u2014"; return; }
       const cur = amount * mkt, diff = cur - peso, pct = (diff / peso) * 100;
       const sign = diff >= 0 ? "+" : "\u2212";
@@ -608,6 +661,28 @@
     } catch (e) {
       // leave canvas empty on failure; price still shows
     }
+  }
+
+  // 30-day low/high for entry-zone suggestions (fetched once per coin, cached)
+  async function loadStats(coinId) {
+    try {
+      const res = await fetch("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=30", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const j = await res.json();
+      const ys = (j.prices || []).map(p => p[1]).filter(v => isFinite(v));
+      if (!ys.length) return;
+      stats[coinId] = { low30: Math.min(...ys), high30: Math.max(...ys) };
+      // refresh pending-row indicators + show the 30d range basis
+      const card = document.getElementById("chart_" + coinId);
+      if (card) {
+        const cardEl = card.closest(".coin-card");
+        cardEl.querySelectorAll("tbody tr").forEach((tr, i) => updateRowComputed(coinId, i, tr));
+        const rangeEl = cardEl.querySelector('[data-role="range"]');
+        if (rangeEl) {
+          rangeEl.innerHTML = "30d range: <b>" + fmtPeso(stats[coinId].low30) + "</b> &ndash; <b>" + fmtPeso(stats[coinId].high30) + "</b> (entry suggestion basis)";
+        }
+      }
+    } catch (e) {}
   }
 
   function drawChart(coinId, points, days, color) {
