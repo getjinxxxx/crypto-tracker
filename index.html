@@ -393,6 +393,12 @@
   let chartTypes = {}; // coinId -> "line" | "candle"
   let stats = {};    // coinId -> { low30, high30 } for entry-zone suggestions
 
+  // Is the candlestick controller available? (the financial plugin auto-registers it)
+  function candlesReady() {
+    try { return !!(Chart && Chart.registry && Chart.registry.getController("candlestick")); }
+    catch (e) { return false; }
+  }
+
   function loadState() {
     try {
       const savedSeed = parseInt(localStorage.getItem(SEED_KEY) || "0", 10);
@@ -1031,36 +1037,40 @@
     const ctx = canvas.getContext("2d");
 
     // ----- Candlestick mode -----
-    // Requires the financial chart plugin + a time-scale date adapter (both via CDN).
-    const financialOk = Chart.registry && Chart.registry.getController && (() => { try { return !!Chart.registry.getController("candlestick"); } catch (e) { return false; } })();
-    if (type === "candle" && points.length && points[0].o != null && financialOk) {
-      const data = points.map(p => ({ x: p.t, o: p.o, h: p.h, l: p.l, c: p.c }));
-      charts[coinId] = new Chart(ctx, {
-        type: "candlestick",
-        data: { datasets: [{
-          data: data,
-          color: { up: "#34d399", down: "#ff6b6b", unchanged: "#8e8e93" },
-          borderColor: { up: "#34d399", down: "#ff6b6b", unchanged: "#8e8e93" }
-        }] },
-        options: {
-          responsive: true, maintainAspectRatio: false, animation: false,
-          plugins: { legend: { display: false },
-            tooltip: { callbacks: {
-              label: (it) => {
-                const d = it.raw;
-                return ["O \u20b1" + fmtN(d.o), "H \u20b1" + fmtN(d.h), "L \u20b1" + fmtN(d.l), "C \u20b1" + fmtN(d.c)];
-              }
-            } } },
-          scales: {
-            x: { type: "time", time: { unit: days <= 1 ? "hour" : days <= 7 ? "day" : "week" },
-                 grid: { display: false }, ticks: { color: "#8e8e93", font: { size: 9 }, maxTicksLimit: 5, maxRotation: 0 } },
-            y: { position: "right", grid: { color: "rgba(255,255,255,0.05)" },
-                 ticks: { color: "#8e8e93", font: { size: 10 }, maxTicksLimit: 4,
-                          callback: (v) => "\u20b1" + Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }) } }
+    // Requires the financial chart plugin (auto-registers) + a time-scale date adapter.
+    if (type === "candle" && points.length && points[0].o != null && candlesReady()) {
+      try {
+        const data = points.map(p => ({ x: p.t, o: p.o, h: p.h, l: p.l, c: p.c }));
+        charts[coinId] = new Chart(ctx, {
+          type: "candlestick",
+          data: { datasets: [{
+            data: data,
+            color: { up: "#34d399", down: "#ff6b6b", unchanged: "#8e8e93" },
+            borderColor: { up: "#34d399", down: "#ff6b6b", unchanged: "#8e8e93" }
+          }] },
+          options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            plugins: { legend: { display: false },
+              tooltip: { callbacks: {
+                label: (it) => {
+                  const d = it.raw;
+                  return ["O \u20b1" + fmtN(d.o), "H \u20b1" + fmtN(d.h), "L \u20b1" + fmtN(d.l), "C \u20b1" + fmtN(d.c)];
+                }
+              } } },
+            scales: {
+              x: { type: "time", time: { unit: days <= 1 ? "hour" : days <= 7 ? "day" : "week" },
+                   grid: { display: false }, ticks: { color: "#8e8e93", font: { size: 9 }, maxTicksLimit: 5, maxRotation: 0 } },
+              y: { position: "right", grid: { color: "rgba(255,255,255,0.05)" },
+                   ticks: { color: "#8e8e93", font: { size: 10 }, maxTicksLimit: 4,
+                            callback: (v) => "\u20b1" + Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }) } }
+            }
           }
-        }
-      });
-      return;
+        });
+        return;
+      } catch (err) {
+        // fall through to line chart if candlestick fails to render
+        if (charts[coinId]) { try { charts[coinId].destroy(); } catch (e) {} charts[coinId] = null; }
+      }
     }
 
     // ----- Line mode (default; also fallback if candles unavailable) -----
@@ -1258,7 +1268,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 16;
+  const APP_VERSION = 17;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
