@@ -230,6 +230,52 @@
   .avg-line b { color: var(--text); }
   .coin-pl { font-size: 12px; margin-top: 2px; }
   .coin-pl.up { color: var(--green); } .coin-pl.down { color: var(--red); }
+  .hl-line { color: var(--muted); font-size: 12px; margin-top: 2px; display: block; }
+  .hl-line b { color: var(--text); }
+
+  /* row controls: sort/filter + quick add */
+  .row-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 4px; }
+  .row-controls .mini {
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; font-size: 11px; padding: 4px 10px; cursor: pointer;
+  }
+  .row-controls .mini.active { background: var(--gold); color: #000; border-color: var(--gold); font-weight: 700; }
+  .row-controls .spacer { flex: 1; }
+
+  /* note input */
+  .note-input {
+    width: 100%; background: transparent; border: none; color: var(--muted);
+    font: inherit; font-size: 12px; font-style: italic; padding: 2px 6px 8px 8px;
+  }
+  .note-input::placeholder { color: #555; }
+  .note-input:focus { outline: none; color: var(--text); }
+  tr.note-row td { border-top: none; padding-top: 0; }
+
+  /* goal progress */
+  .goal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 18px; }
+  .goal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .goal-head .lbl { color: var(--muted); font-size: 13px; }
+  .goal-head input {
+    width: 130px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 6px 10px; font-size: 14px; text-align: right;
+  }
+  .goal-head input:focus { outline: none; border-color: var(--gold); }
+  .goal-bar { height: 12px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+  .goal-bar .fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--green)); border-radius: 999px; transition: width .4s; }
+  .goal-pct { text-align: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .goal-pct b { color: var(--gold-bright); }
+
+  /* what-if calculator + reminder */
+  .whatif { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .whatif .row2 { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .whatif input {
+    width: 120px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 5px 8px; font-size: 13px; text-align: right;
+  }
+  .whatif input:focus { outline: none; border-color: var(--gold); }
+  .whatif .result { color: var(--text); }
+  .whatif .result.up { color: var(--green); } .whatif .result.down { color: var(--red); }
+  .reminder { color: var(--muted); font-size: 11.5px; text-align: center; margin: 14px 0; line-height: 1.5; opacity: .85; }
 
   /* Modal */
   .modal-overlay {
@@ -281,6 +327,24 @@
   <!-- PLAIN-LANGUAGE SUMMARY -->
   <div class="plain" id="plainSummary"></div>
 
+  <!-- GOAL PROGRESS -->
+  <div class="goal-card">
+    <div class="goal-head">
+      <span class="lbl">Portfolio goal <span class="help" data-help="goal">?</span></span>
+      <input id="goalInput" type="text" inputmode="decimal" placeholder="e.g. 50000" />
+    </div>
+    <div class="goal-bar"><div class="fill" id="goalFill" style="width:0%"></div></div>
+    <div class="goal-pct" id="goalPct">Set a target to track your progress.</div>
+  </div>
+
+  <!-- PORTFOLIO HISTORY -->
+  <div class="coin-card" id="historyCard" style="display:none">
+    <div class="coin-head"><span class="name">Portfolio value over time</span>
+      <span class="help" data-help="history" style="margin-left:6px">?</span></div>
+    <div class="chart-box" style="height:130px"><canvas id="historyChart"></canvas></div>
+    <div class="coin-stat" id="historyNote"></div>
+  </div>
+
   <!-- SUMMARY -->
   <div class="summary">
     <div class="cap">Pending money (waiting orders), per coin <span class="help" data-help="pending">?</span></div>
@@ -299,6 +363,8 @@
     <div class="row"><span class="lbl">Current Value of Active (all) <span class="help" data-help="current">?</span></span><span class="val" id="grandCurrent">&mdash;</span></div>
     <div class="row big"><span class="lbl">Total Balance (active + pending) <span class="help" data-help="balance">?</span></span><span class="val" id="grandBalance">&mdash;</span></div>
   </div>
+
+  <div class="reminder" id="reminder"></div>
 
   <div class="legend">
     <span class="item"><span class="sw take"></span> Take profit / Ready to buy</span>
@@ -391,7 +457,11 @@
   let charts = {};   // coinId -> Chart instance
   let ranges = {};   // coinId -> selected range in days
   let chartTypes = {}; // coinId -> "line" | "candle"
-  let stats = {};    // coinId -> { low30, high30 } for entry-zone suggestions
+  let stats = {};    // coinId -> { low30, high30, high24, low24 } for suggestions + 24h range
+  let sortMode = {};   // coinId -> "default" | "profit" | "price"
+  let filterMode = {}; // coinId -> "all" | "active" | "pending"
+  let historyChart = null;
+  let whatIf = {};     // coinId -> target sell price for the what-if calculator
 
   // Is the candlestick controller available? (the financial plugin auto-registers it)
   function candlesReady() {
@@ -403,9 +473,16 @@
     try {
       const savedSeed = parseInt(localStorage.getItem(SEED_KEY) || "0", 10);
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw && savedSeed >= SEED_VERSION) return JSON.parse(raw);
+      if (raw && savedSeed >= SEED_VERSION) {
+        const parsed = JSON.parse(raw);
+        if (parsed.goal === undefined) parsed.goal = "";
+        if (!parsed.history) parsed.history = [];   // [{ t, value }]
+        return parsed;
+      }
     } catch (e) {}
     const seeded = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    seeded.goal = "";
+    seeded.history = [];
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       localStorage.setItem(SEED_KEY, String(SEED_VERSION));
@@ -490,7 +567,7 @@
   }
   function applyCachedStats(coinId) {
     const c = cacheGet("stats_" + coinId);
-    if (c && c.v) { stats[coinId] = c.v; showRange(coinId); refreshRows(coinId); }
+    if (c && c.v) { stats[coinId] = c.v; showRange(coinId); show24(coinId); refreshRows(coinId); }
   }
 
   function buildCoinCard(coinId) {
@@ -563,10 +640,33 @@
     const stat = document.createElement("div");
     stat.className = "coin-stat";
     stat.innerHTML = 'Active: <b data-role="active">0</b> &middot; Pending: <b data-role="pending">0</b>' +
+      '<span class="hl-line" data-role="hl24"></span>' +
       '<span class="avg-line" data-role="avg"></span>' +
       '<span class="coin-pl" data-role="coinpl"></span>' +
       '<span data-role="range" style="display:block;margin-top:2px"></span>';
     card.appendChild(stat);
+
+    // row controls: filter + sort + quick add
+    const controls = document.createElement("div");
+    controls.className = "row-controls";
+    const curFilter = filterMode[coinId] || "all";
+    const curSort = sortMode[coinId] || "default";
+    [["all","All"],["active","Active"],["pending","Pending"]].forEach(([f, label]) => {
+      const b = document.createElement("button");
+      b.className = "mini" + (curFilter === f ? " active" : "");
+      b.textContent = label;
+      b.onclick = () => { filterMode[coinId] = f; render(); };
+      controls.appendChild(b);
+    });
+    const spacer = document.createElement("span"); spacer.className = "spacer"; controls.appendChild(spacer);
+    [["default","Sort: added"],["profit","Sort: P/L"],["price","Sort: price"]].forEach(([s, label]) => {
+      const b = document.createElement("button");
+      b.className = "mini" + (curSort === s ? " active" : "");
+      b.textContent = label;
+      b.onclick = () => { sortMode[coinId] = s; render(); };
+      controls.appendChild(b);
+    });
+    card.appendChild(controls);
 
     // table
     const wrap = document.createElement("div");
@@ -584,22 +684,72 @@
       '<th class="act"></th>' +
       '</tr></thead><tbody></tbody>';
     const tbody = table.querySelector("tbody");
-    (state.rows[coinId] || []).forEach((row, i) => tbody.appendChild(buildRow(coinId, row, i)));
+    // Build a list of {row, idx} then filter + sort for display (idx keeps data binding correct)
+    let entries = (state.rows[coinId] || []).map((row, idx) => ({ row, idx }));
+    if (curFilter === "active") entries = entries.filter(e => !e.row.pending);
+    else if (curFilter === "pending") entries = entries.filter(e => e.row.pending);
+    const mkt = market[coinId] ? market[coinId].price : null;
+    if (curSort === "profit") {
+      entries.sort((a, b) => rowPL(coinId, b.row, mkt) - rowPL(coinId, a.row, mkt));
+    } else if (curSort === "price") {
+      entries.sort((a, b) => num(b.row.price) - num(a.row.price));
+    }
+    entries.forEach(e => {
+      tbody.appendChild(buildRow(coinId, e.row, e.idx));
+      if (e.row.note || e.row._showNote) tbody.appendChild(buildNoteRow(coinId, e.idx));
+    });
     wrap.appendChild(table);
     card.appendChild(wrap);
 
-    // add row
+    // quick add + add row
+    const addWrap = document.createElement("div");
+    addWrap.style.display = "flex"; addWrap.style.gap = "6px"; addWrap.style.flexWrap = "wrap";
     const addBtn = document.createElement("button");
     addBtn.className = "add-row";
     addBtn.innerHTML = '<span class="plus">+</span> Add ' + lib.sym + ' row';
     addBtn.onclick = () => addRow(coinId);
-    card.appendChild(addBtn);
+    addWrap.appendChild(addBtn);
+    const quickBtn = document.createElement("button");
+    quickBtn.className = "add-row";
+    quickBtn.innerHTML = '<span class="plus">\u26a1</span> Quick add at market';
+    quickBtn.title = "Add a bought row pre-filled with the current market price";
+    quickBtn.onclick = () => quickAdd(coinId);
+    addWrap.appendChild(quickBtn);
+    card.appendChild(addWrap);
 
     return card;
   }
 
+  // profit (peso) for a single active row given a market price (used for sorting)
+  function rowPL(coinId, row, mkt) {
+    if (row.pending || mkt == null) return -Infinity;
+    const peso = num(row.peso);
+    const typedEntry = num(row.price);
+    const entry = typedEntry > 0 ? typedEntry : mkt;
+    if (entry <= 0 || peso <= 0) return -Infinity;
+    return (peso / entry) * mkt - peso;
+  }
+
+  // a small second row under a row for its note
+  function buildNoteRow(coinId, i) {
+    const tr = document.createElement("tr");
+    tr.className = "note-row";
+    const td = document.createElement("td");
+    td.colSpan = 8;
+    const inp = document.createElement("input");
+    inp.className = "note-input";
+    inp.type = "text";
+    inp.placeholder = "Note (e.g. buy more on dip, long-term hold)\u2026";
+    inp.value = (state.rows[coinId][i] && state.rows[coinId][i].note) || "";
+    inp.oninput = () => { state.rows[coinId][i].note = inp.value; saveState(); };
+    td.appendChild(inp);
+    tr.appendChild(td);
+    return tr;
+  }
+
   function buildRow(coinId, row, i) {
     const tr = document.createElement("tr");
+    tr.setAttribute("data-idx", i);
     if (row.pending) tr.classList.add("pending");
 
     // circle
@@ -649,9 +799,15 @@
     sigSpan.className = "badge"; sigSpan.setAttribute("data-role", "signal");
     tdSig.appendChild(sigSpan);
 
-    // delete
+    // actions: note toggle + delete
     const tdAct = document.createElement("td");
     tdAct.className = "act";
+    const noteBtn = document.createElement("button");
+    noteBtn.className = "del";
+    noteBtn.textContent = row.note ? "\u{1F4DD}" : "\u270E"; // memo if has note, pencil otherwise
+    noteBtn.title = "Add / edit note";
+    noteBtn.style.fontSize = "13px";
+    noteBtn.onclick = () => { state.rows[coinId][i]._showNote = !state.rows[coinId][i]._showNote; render(); };
     const del = document.createElement("button");
     del.className = "del"; del.textContent = "\u00d7"; del.title = "Delete row";
     del.onclick = () => {
@@ -661,6 +817,7 @@
         state.rows[coinId].splice(i, 1); saveState(); render();
       }
     };
+    tdAct.appendChild(noteBtn);
     tdAct.appendChild(del);
 
     tr.append(tdChk, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdSig, tdAct);
@@ -777,6 +934,15 @@
     saveState(); render();
   }
 
+  // Quick add: a bought (active) row pre-filled with the current market price.
+  function quickAdd(coinId) {
+    const mkt = market[coinId] ? market[coinId].price : null;
+    if (mkt == null) { alert("Live price not loaded yet. Try again in a moment."); return; }
+    if (!state.rows[coinId]) state.rows[coinId] = [];
+    state.rows[coinId].push({ price: String(Math.round(mkt * 100) / 100), peso: 0, pending: false });
+    saveState(); render();
+  }
+
   function sums(coinId) {
     let active = 0, pending = 0, activeCurrent = 0, activeAmount = 0;
     const mkt = market[coinId] ? market[coinId].price : null;
@@ -836,7 +1002,9 @@
     pl: { t: "P/L (Profit / Loss)", b: "Current value minus what you invested. Green = you\u2019re earning, red = you\u2019re losing (for now). For pending orders, it shows how far the price must drop to reach your target." },
     signal: { t: "Signal", b: "A simple guide.\n\nFor coins you bought: Take profit (\u2265+30%), Getting close (+15\u201330%), Hold (0\u201315%), At a loss (below 0%).\n\nFor pending orders: Ready to buy, Good dip entry (near recent low), Fair entry (mid), High entry (near recent high), Deep dip target (below the last 30 days).\n\nNot financial advice \u2014 just a guide." },
     pending: { t: "Pending money", b: "Money set aside for orders that are still waiting to buy at your target price. You haven\u2019t actually bought these yet." },
-    balance: { t: "Total Balance", b: "Everything together: the current value of coins you already bought PLUS the money set aside in pending orders." }
+    balance: { t: "Total Balance", b: "Everything together: the current value of coins you already bought PLUS the money set aside in pending orders." },
+    goal: { t: "Portfolio goal", b: "Set a peso target for your whole portfolio. The bar shows how close your Total Balance is to that goal." },
+    history: { t: "Portfolio history", b: "A line of your Total Balance over time. It records a point automatically as you use the app, so you can see your progress grow." }
   };
   function openHelp(key) {
     const h = HELP_TEXT[key];
@@ -882,13 +1050,20 @@
         if (a) a.textContent = fmtPlain(s.active);
         if (p) p.textContent = fmtPlain(s.pending);
 
-        // average buy price
+        // average buy price + DCA note (how market compares to your average)
         const avgEl = cardEl.querySelector('[data-role="avg"]');
         if (avgEl) {
           avgEl.style.display = "block";
-          avgEl.innerHTML = s.avgPrice != null
-            ? "Avg buy price: <b>" + fmtPeso(s.avgPrice) + "</b>"
-            : "";
+          if (s.avgPrice != null) {
+            let dca = "Avg buy price: <b>" + fmtPeso(s.avgPrice) + "</b>";
+            if (s.hasMarket) {
+              const mkt = market[coinId].price;
+              const gap = ((mkt - s.avgPrice) / s.avgPrice) * 100;
+              if (mkt < s.avgPrice) dca += " \u2014 market is " + Math.abs(gap).toFixed(1) + "% below your average (buying now lowers it)";
+              else dca += " \u2014 market is " + gap.toFixed(1) + "% above your average";
+            }
+            avgEl.innerHTML = dca;
+          } else avgEl.innerHTML = "";
         }
         // per-coin overall P/L (active only)
         const plEl = cardEl.querySelector('[data-role="coinpl"]');
@@ -902,6 +1077,9 @@
             plEl.textContent = (up ? "Up " : "Down ") + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%) overall";
           } else { plEl.textContent = ""; }
         }
+
+        // what-if calculator (per coin)
+        renderWhatIf(cardEl, coinId, s);
       }
     });
     document.getElementById("grandPending").textContent = fmtPlain(totalPending);
@@ -910,8 +1088,131 @@
     // Plain-language summary
     renderPlain(totalActiveInvested, totalCurrent, totalPending, anyMarket);
     // Total Balance = current value of active holdings + pending money set aside
+    const totalBalance = anyMarket ? (totalCurrent + totalPending) : totalPending;
     const balEl = document.getElementById("grandBalance");
-    if (balEl) balEl.textContent = anyMarket ? fmtPeso(totalCurrent + totalPending) : fmtPeso(totalPending);
+    if (balEl) balEl.textContent = fmtPeso(totalBalance);
+
+    // Goal progress, investment reminder, and portfolio history
+    renderGoal(totalBalance, anyMarket);
+    renderReminder(totalActiveInvested, totalPending);
+    if (anyMarket) recordHistory(totalBalance);
+    renderHistory();
+  }
+
+  // ---------- What-if calculator (#13) ----------
+  function renderWhatIf(cardEl, coinId, s) {
+    let box = cardEl.querySelector('[data-role="whatif"]');
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "whatif";
+      box.setAttribute("data-role", "whatif");
+      // insert right after the stat block
+      const stat = cardEl.querySelector(".coin-stat");
+      if (stat && stat.parentNode) stat.parentNode.insertBefore(box, stat.nextSibling);
+      else cardEl.appendChild(box);
+    }
+    if (!s.hasMarket || s.activeAmount <= 0) { box.innerHTML = ""; return; }
+    const mkt = market[coinId].price;
+    const target = whatIf[coinId] != null ? whatIf[coinId] : Math.round(mkt * 1.2); // default +20%
+    const projValue = s.activeAmount * target;
+    const diff = projValue - s.active;
+    const pct = s.active > 0 ? (diff / s.active) * 100 : 0;
+    const up = diff >= 0;
+    box.innerHTML =
+      '<div>What if the price reaches:</div>' +
+      '<div class="row2"><input type="text" inputmode="decimal" value="' + target + '" data-role="wi-input" /> ' +
+      '<span class="result ' + (up ? "up" : "down") + '">\u2192 ' + fmtPeso(projValue) +
+      ' (' + (up ? "+" : "\u2212") + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) +
+      ', ' + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + '%)</span></div>';
+    const inp = box.querySelector('[data-role="wi-input"]');
+    inp.oninput = () => {
+      whatIf[coinId] = num(inp.value);
+      // recompute just this box without a full re-render (keeps focus)
+      const t = num(inp.value), pv = s.activeAmount * t, d = pv - s.active, pc = s.active > 0 ? (d / s.active) * 100 : 0, u = d >= 0;
+      const res = box.querySelector(".result");
+      if (res) {
+        res.className = "result " + (u ? "up" : "down");
+        res.textContent = "\u2192 " + fmtPeso(pv) + " (" + (u ? "+" : "\u2212") + "\u20b1" + Math.abs(d).toLocaleString("en-US", { maximumFractionDigits: 2 }) + ", " + (u ? "+" : "\u2212") + Math.abs(pc).toFixed(1) + "%)";
+      }
+    };
+  }
+
+  // ---------- Goal progress (#16) ----------
+  function renderGoal(totalBalance, anyMarket) {
+    const fill = document.getElementById("goalFill");
+    const pctEl = document.getElementById("goalPct");
+    const goal = num(state.goal);
+    if (!goal || goal <= 0) {
+      if (fill) fill.style.width = "0%";
+      if (pctEl) pctEl.textContent = "Set a target to track your progress.";
+      return;
+    }
+    const pct = Math.max(0, Math.min(100, (totalBalance / goal) * 100));
+    if (fill) fill.style.width = pct.toFixed(1) + "%";
+    if (pctEl) pctEl.innerHTML = "<b>" + pct.toFixed(1) + "%</b> \u2014 " + fmtPeso(totalBalance) + " of " + fmtPeso(goal) +
+      (pct >= 100 ? " \ud83c\udf89 Goal reached!" : "");
+  }
+
+  // ---------- Investment reminder (#18) ----------
+  function renderReminder(activeInvested, pending) {
+    const el = document.getElementById("reminder");
+    if (!el) return;
+    const totalPut = activeInvested + pending;
+    el.innerHTML = "You've committed <b>" + fmtPeso(totalPut) + "</b> so far (" + fmtPeso(activeInvested) +
+      " bought + " + fmtPeso(pending) + " pending).<br>Only invest what you can afford to lose \u2014 crypto is volatile.";
+  }
+
+  // ---------- Portfolio history (#19) ----------
+  // Record at most one point per ~6 hours to keep the log small.
+  function recordHistory(totalBalance) {
+    if (!isFinite(totalBalance) || totalBalance <= 0) return;
+    if (!state.history) state.history = [];
+    const now = Date.now();
+    const last = state.history[state.history.length - 1];
+    if (last && (now - last.t) < 6 * 3600 * 1000) {
+      last.value = totalBalance; last.t = now; // update the latest point within the window
+    } else {
+      state.history.push({ t: now, value: totalBalance });
+    }
+    if (state.history.length > 180) state.history = state.history.slice(-180); // keep last ~180 points
+    saveState();
+  }
+
+  function renderHistory() {
+    const card = document.getElementById("historyCard");
+    const hist = state.history || [];
+    if (hist.length < 2) { if (card) card.style.display = "none"; return; }
+    if (card) card.style.display = "";
+    const canvas = document.getElementById("historyChart");
+    if (!canvas || typeof Chart === "undefined") return;
+    const labels = hist.map(h => new Date(h.t).toLocaleDateString([], { month: "short", day: "numeric" }));
+    const values = hist.map(h => h.value);
+    const up = values[values.length - 1] >= values[0];
+    if (historyChart) historyChart.destroy();
+    const ctx = canvas.getContext("2d");
+    const grad = ctx.createLinearGradient(0, 0, 0, 130);
+    grad.addColorStop(0, up ? "rgba(52,211,153,0.28)" : "rgba(255,107,107,0.28)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    historyChart = new Chart(ctx, {
+      type: "line",
+      data: { labels, datasets: [{ data: values, borderColor: up ? "#34d399" : "#ff6b6b",
+        backgroundColor: grad, borderWidth: 2, fill: true, pointRadius: 0, tension: 0.25 }] },
+      options: { responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: (it) => "\u20b1" + Number(it.parsed.y).toLocaleString("en-US", { maximumFractionDigits: 2 }) } } },
+        scales: { x: { grid: { display: false }, ticks: { color: "#8e8e93", font: { size: 9 }, maxTicksLimit: 5, maxRotation: 0 } },
+          y: { position: "right", grid: { color: "rgba(255,255,255,0.05)" },
+               ticks: { color: "#8e8e93", font: { size: 10 }, maxTicksLimit: 4,
+                        callback: (v) => "\u20b1" + Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }) } } }
+      }
+    });
+    const note = document.getElementById("historyNote");
+    if (note) {
+      const first = values[0], last = values[values.length - 1];
+      const diff = last - first, pct = first > 0 ? (diff / first) * 100 : 0;
+      note.innerHTML = "Since tracking started: <b style='color:" + (diff >= 0 ? "#34d399" : "#ff6b6b") + "'>" +
+        (diff >= 0 ? "+" : "\u2212") + fmtPeso(Math.abs(diff)).slice(1) + " (" + (diff >= 0 ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)</b>";
+    }
   }
 
   // ---------- Live prices ----------
@@ -949,7 +1250,9 @@
         }
       }
       // recompute rows
-      cardEl.querySelectorAll("tbody tr").forEach((tr, i) => updateRowComputed(coinId, i, tr));
+      cardEl.querySelectorAll("tbody tr[data-idx]").forEach(tr => {
+        updateRowComputed(coinId, parseInt(tr.getAttribute("data-idx"), 10), tr);
+      });
     });
     updateTotals();
   }
@@ -1014,27 +1317,70 @@
   function refreshRows(coinId) {
     const card = document.getElementById("chart_" + coinId);
     if (!card) return;
-    card.closest(".coin-card").querySelectorAll("tbody tr").forEach((tr, i) => updateRowComputed(coinId, i, tr));
+    card.closest(".coin-card").querySelectorAll("tbody tr[data-idx]").forEach(tr => {
+      updateRowComputed(coinId, parseInt(tr.getAttribute("data-idx"), 10), tr);
+    });
   }
 
-  // 30-day low/high for entry-zone suggestions (cached)
+  // 30-day low/high for entry-zone suggestions + 24h high/low (cached)
   async function loadStats(coinId) {
     try {
       const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=30");
-      const ys = (j.prices || []).map(p => p[1]).filter(v => isFinite(v));
-      if (!ys.length) return;
-      stats[coinId] = { low30: Math.min(...ys), high30: Math.max(...ys) };
+      const prices = (j.prices || []).filter(p => isFinite(p[1]));
+      if (!prices.length) return;
+      const ys = prices.map(p => p[1]);
+      // last 24h slice for the 24h high/low
+      const cutoff = Date.now() - 24 * 3600 * 1000;
+      const last24 = prices.filter(p => p[0] >= cutoff).map(p => p[1]);
+      const s = { low30: Math.min(...ys), high30: Math.max(...ys) };
+      if (last24.length) { s.low24 = Math.min(...last24); s.high24 = Math.max(...last24); }
+      stats[coinId] = s;
       cacheSet("stats_" + coinId, stats[coinId]);
       showRange(coinId);
+      show24(coinId);
       refreshRows(coinId);
     } catch (e) {}
   }
+
+  function show24(coinId) {
+    const card = document.getElementById("chart_" + coinId);
+    if (!card || !stats[coinId] || stats[coinId].high24 == null) return;
+    const el = card.closest(".coin-card").querySelector('[data-role="hl24"]');
+    if (el) el.innerHTML = "24h high: <b>" + fmtPeso(stats[coinId].high24) + "</b> &middot; low: <b>" + fmtPeso(stats[coinId].low24) + "</b>";
+  }
+
+  // Inline plugin: draws a dashed horizontal "break-even" line at the average buy price.
+  const breakEvenPlugin = {
+    id: "breakEven",
+    afterDatasetsDraw(chart, args, opts) {
+      const price = opts && opts.price;
+      if (!price || !isFinite(price)) return;
+      const y = chart.scales.y;
+      if (!y) return;
+      if (price < y.min || price > y.max) return; // off-chart, skip
+      const yPix = y.getPixelForValue(price);
+      const { left, right } = chart.chartArea;
+      const c = chart.ctx;
+      c.save();
+      c.setLineDash([5, 4]);
+      c.lineWidth = 1.5;
+      c.strokeStyle = "#f5c542";
+      c.beginPath(); c.moveTo(left, yPix); c.lineTo(right, yPix); c.stroke();
+      c.setLineDash([]);
+      c.fillStyle = "#f5c542";
+      c.font = "10px -apple-system, sans-serif";
+      c.textAlign = "left";
+      c.fillText("break-even \u20b1" + Number(price).toLocaleString("en-US", { maximumFractionDigits: 0 }), left + 4, yPix - 4);
+      c.restore();
+    }
+  };
 
   function drawChart(coinId, points, days, color, type) {
     const canvas = document.getElementById("chart_" + coinId);
     if (!canvas || typeof Chart === "undefined") return;
     if (charts[coinId]) { charts[coinId].destroy(); }
     const ctx = canvas.getContext("2d");
+    const breakEven = (sums(coinId).avgPrice) || null;  // average buy price for this coin
 
     // ----- Candlestick mode -----
     // Requires the financial chart plugin (auto-registers) + a time-scale date adapter.
@@ -1048,9 +1394,10 @@
             color: { up: "#34d399", down: "#ff6b6b", unchanged: "#8e8e93" },
             borderColor: { up: "#34d399", down: "#ff6b6b", unchanged: "#8e8e93" }
           }] },
+          plugins: [breakEvenPlugin],
           options: {
             responsive: true, maintainAspectRatio: false, animation: false,
-            plugins: { legend: { display: false },
+            plugins: { legend: { display: false }, breakEven: { price: breakEven },
               tooltip: { callbacks: {
                 label: (it) => {
                   const d = it.raw;
@@ -1096,10 +1443,11 @@
         data: yvals, borderColor: lineColor, backgroundColor: grad,
         borderWidth: 2, fill: true, pointRadius: 0, tension: 0.25
       }] },
+      plugins: [breakEvenPlugin],
       options: {
         responsive: true, maintainAspectRatio: false, animation: false,
         interaction: { mode: "index", intersect: false },
-        plugins: { legend: { display: false },
+        plugins: { legend: { display: false }, breakEven: { price: breakEven },
           tooltip: { callbacks: {
             title: (items) => new Date(stamps[items[0].dataIndex]).toLocaleString(),
             label: (item) => "\u20b1" + Number(item.parsed.y).toLocaleString("en-US", { maximumFractionDigits: 2 })
@@ -1268,7 +1616,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 17;
+  const APP_VERSION = 18;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1288,6 +1636,19 @@
   // Wire up lock UI
   document.getElementById("lockBtn").onclick = unlock;
   document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+
+  // Wire up goal input
+  (function () {
+    const gi = document.getElementById("goalInput");
+    if (gi) {
+      gi.value = state.goal || "";
+      gi.addEventListener("input", () => {
+        state.goal = gi.value;
+        saveState();
+        updateTotals();
+      });
+    }
+  })();
 
   // If already unlocked this session, skip the gate.
   if (sessionStorage.getItem("ctUnlocked") === "1") {
