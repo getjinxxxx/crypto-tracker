@@ -4,13 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#000000" />
-<title>crypto tracker</title>
+<title>Crypto Tracker</title>
 <style>
   :root {
     --bg: #000000;
-    --panel: #1c1c1e;
-    --panel-2: #2c2c2e;
-    --line: #2a2a2c;
+    --panel: #16161a;
+    --panel-2: #232329;
+    --line: #2a2a30;
     --text: #f2f2f7;
     --muted: #8e8e93;
     --gold: #d4a017;
@@ -26,13 +26,13 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--text);
-    max-width: 680px;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 12px 14px 60px;
-    line-height: 1.35;
+    padding: 14px 14px 60px;
+    line-height: 1.4;
   }
 
-  .top-title { text-align: center; font-size: 17px; font-weight: 700; margin: 6px 0 14px; }
+  .top-title { text-align: center; font-size: 18px; font-weight: 700; margin: 6px 0 16px; letter-spacing: .2px; }
 
   /* Live market prices */
   .market {
@@ -40,7 +40,8 @@
     margin-bottom: 16px;
   }
   .market .mc {
-    background: var(--panel); border-radius: 14px; padding: 10px 12px;
+    background: var(--panel); border-radius: 14px; padding: 10px 14px;
+    border: 1px solid var(--line);
   }
   .market .mc .n { font-size: 12px; color: var(--muted); }
   .market .mc .p { font-size: 16px; font-weight: 700; margin-top: 2px; }
@@ -50,6 +51,7 @@
   /* Summary card */
   .summary {
     background: var(--panel);
+    border: 1px solid var(--line);
     border-radius: 16px;
     padding: 14px 16px;
     margin-bottom: 22px;
@@ -62,28 +64,40 @@
   .summary .line .coin { font-weight: 600; }
   .summary .line .val { color: var(--gold-bright); font-weight: 700; font-size: 17px; }
 
-  /* Asset section */
-  .asset { margin-bottom: 26px; }
-  .asset-head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin-bottom: 8px; padding: 0 2px;
+  /* Asset card */
+  .asset {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 14px 8px;
+    margin-bottom: 18px;
   }
+  .asset-head {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .asset-head .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .asset-head .dot.btc { background: var(--btc); }
+  .asset-head .dot.eth { background: var(--eth); }
   .asset-head .name { font-size: 17px; font-weight: 700; }
-  .asset-head .stat { color: var(--gold-bright); font-size: 13px; }
-  .asset-head .stat .sep { color: var(--muted); }
+  .asset-head .stat { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
+  .asset-head .stat b { color: var(--gold-bright); }
 
-  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; }
+  table { width: 100%; border-collapse: collapse; min-width: 620px; }
   thead th {
-    text-align: right; color: var(--muted); font-weight: 500;
-    font-size: 11px; padding: 2px 6px 8px; text-transform: none; white-space: nowrap;
+    text-align: right; color: var(--muted); font-weight: 600;
+    font-size: 11px; padding: 4px 10px 10px; text-transform: uppercase; letter-spacing: .4px;
+    white-space: nowrap;
   }
   thead th.l { text-align: left; }
-  tbody td { padding: 10px 6px; border-top: 1px solid var(--line); vertical-align: middle; text-align: right; }
+  thead th.c { text-align: center; }
+  tbody td { padding: 11px 10px; border-top: 1px solid var(--line); vertical-align: middle; text-align: right; white-space: nowrap; }
   tbody tr:first-child td { border-top: none; }
 
-  td.chk { width: 30px; text-align: center; }
-  td.act { width: 26px; text-align: right; }
+  td.chk { width: 32px; text-align: center; padding-left: 0; padding-right: 4px; }
+  td.act { width: 30px; text-align: center; padding-right: 0; }
+  th.act { padding-right: 0; }
 
   /* circle checkbox */
   .circle {
@@ -97,12 +111,12 @@
   .circle.checked .tick { display: block; }
 
   .cell-input {
-    background: transparent; border: none; color: var(--text);
-    font: inherit; font-size: 16px; width: 100%; text-align: right; padding: 4px 2px;
-    border-radius: 6px;
+    background: transparent; border: 1px solid transparent; color: var(--text);
+    font: inherit; font-size: 16px; width: 96px; text-align: right; padding: 6px 8px;
+    border-radius: 8px;
   }
   .cell-input::placeholder { color: var(--muted); }
-  .cell-input:focus { outline: none; background: var(--panel-2); }
+  .cell-input:focus { outline: none; background: var(--panel-2); border-color: var(--gold); }
 
   .ro { font-size: 15px; color: var(--text); }        /* read-only value */
   .ro.small { font-size: 13px; }
@@ -112,18 +126,18 @@
 
   /* signal badges */
   .badge {
-    display: inline-block; font-size: 11px; font-weight: 700;
-    padding: 3px 8px; border-radius: 999px; white-space: nowrap;
-    color: #000;
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+    letter-spacing: .3px; text-transform: uppercase;
   }
-  .badge.b-take  { background: var(--green); color: #062b1c; }
+  .badge.b-take  { background: var(--green); color: #05261a; }
   .badge.b-near  { background: var(--gold-bright); color: #3a2e00; }
-  .badge.b-hold  { background: #3a3a3c; color: var(--text); }
+  .badge.b-hold  { background: #3a3a42; color: var(--text); }
   .badge.b-loss  { background: var(--red); color: #3a0b0b; }
-  .badge.b-abang { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
+  .badge.b-wait  { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 600; }
 
-  tr.abang .cell-input,
-  tr.abang .ro { text-decoration: line-through; color: var(--muted); }
+  tr.pending .cell-input,
+  tr.pending .ro { text-decoration: line-through; color: var(--muted); }
 
   .del {
     background: none; border: none; color: var(--muted);
@@ -134,127 +148,150 @@
   .add-row {
     display: flex; align-items: center; gap: 8px;
     background: none; border: none; color: var(--gold-bright);
-    font-size: 15px; padding: 12px 6px 4px; cursor: pointer;
+    font-size: 15px; padding: 12px 6px 6px; cursor: pointer;
   }
   .add-row .plus { font-size: 18px; }
 
   /* grand total */
   .grand {
-    border-top: 1px solid var(--line);
-    margin-top: 10px; padding-top: 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 16px;
   }
   .grand .row {
-    display: flex; justify-content: space-between; align-items: center; padding: 4px 0;
+    display: flex; justify-content: space-between; align-items: center; padding: 5px 0;
   }
+  .grand .row + .row { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 12px; }
   .grand .lbl { color: var(--muted); font-size: 14px; }
   .grand .val { color: var(--gold-bright); font-size: 18px; font-weight: 800; }
-  .grand .row.big .val { font-size: 20px; }
+  .grand .row.big .val { font-size: 21px; }
 
-  .hint { color: var(--muted); font-size: 12px; text-align: center; margin-top: 22px; padding: 0 10px; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center;
+    margin-top: 20px; font-size: 11px; color: var(--muted);
+  }
+  .legend .item { display: inline-flex; align-items: center; gap: 5px; }
+  .legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .legend .sw.take { background: var(--green); }
+  .legend .sw.near { background: var(--gold-bright); }
+  .legend .sw.hold { background: #3a3a42; }
+  .legend .sw.loss { background: var(--red); }
+
+  .hint { color: var(--muted); font-size: 11.5px; text-align: center; margin-top: 14px; padding: 0 10px; line-height: 1.5; }
 </style>
 </head>
 <body>
-  <div class="top-title">crypto tracker</div>
+  <div class="top-title">Crypto Tracker</div>
 
   <!-- LIVE MARKET PRICES -->
   <div class="market">
-    <div class="mc"><div class="n">BTC market</div><div class="p" id="mktBtc">&mdash;</div></div>
-    <div class="mc"><div class="n">ETH market</div><div class="p" id="mktEth">&mdash;</div></div>
+    <div class="mc"><div class="n">BTC market price</div><div class="p" id="mktBtc">&mdash;</div></div>
+    <div class="mc"><div class="n">ETH market price</div><div class="p" id="mktEth">&mdash;</div></div>
     <div id="mktStatus">Loading market prices&hellip;</div>
   </div>
 
-  <!-- SUMMARY: abang money per crypto -->
+  <!-- SUMMARY -->
   <div class="summary">
-    <div class="cap">pera na naka-abang (struck/pending), per crypto</div>
-    <div class="line"><span class="coin">BTC</span><span class="val" id="sumBtcAbang">0</span></div>
-    <div class="line"><span class="coin">ETH</span><span class="val" id="sumEthAbang">0</span></div>
+    <div class="cap">Pending money (waiting orders), per coin</div>
+    <div class="line"><span class="coin">BTC</span><span class="val" id="sumBtcPending">0</span></div>
+    <div class="line"><span class="coin">ETH</span><span class="val" id="sumEthPending">0</span></div>
   </div>
 
   <!-- BTC -->
   <div class="asset">
     <div class="asset-head">
+      <span class="dot btc"></span>
       <span class="name">BTC</span>
-      <span class="stat">Active: <b id="btcActive">0</b> <span class="sep">|</span> Abang: <b id="btcAbang">0</b></span>
+      <span class="stat">Active: <b id="btcActive">0</b> &middot; Pending: <b id="btcPending">0</b></span>
     </div>
     <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th class="chk"></th>
-          <th class="l">price</th>
-          <th>peso (&#8369;)</th>
-          <th>amount</th>
-          <th>current (&#8369;)</th>
-          <th>P/L</th>
-          <th class="l">signal</th>
-          <th class="act"></th>
-        </tr>
-      </thead>
-      <tbody id="btcRows"></tbody>
-    </table>
+      <table>
+        <thead>
+          <tr>
+            <th class="c"></th>
+            <th class="l">Entry Price</th>
+            <th>Invested (&#8369;)</th>
+            <th>Amount</th>
+            <th>Current (&#8369;)</th>
+            <th>P/L</th>
+            <th class="l">Signal</th>
+            <th class="act"></th>
+          </tr>
+        </thead>
+        <tbody id="btcRows"></tbody>
+      </table>
     </div>
-    <button class="add-row" onclick="addRow('btc')"><span class="plus">+</span> add BTC row</button>
+    <button class="add-row" onclick="addRow('btc')"><span class="plus">+</span> Add BTC row</button>
   </div>
 
   <!-- ETH -->
   <div class="asset">
     <div class="asset-head">
+      <span class="dot eth"></span>
       <span class="name">ETH</span>
-      <span class="stat">Active: <b id="ethActive">0</b> <span class="sep">|</span> Abang: <b id="ethAbang">0</b></span>
+      <span class="stat">Active: <b id="ethActive">0</b> &middot; Pending: <b id="ethPending">0</b></span>
     </div>
     <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th class="chk"></th>
-          <th class="l">price</th>
-          <th>peso (&#8369;)</th>
-          <th>amount</th>
-          <th>current (&#8369;)</th>
-          <th>P/L</th>
-          <th class="l">signal</th>
-          <th class="act"></th>
-        </tr>
-      </thead>
-      <tbody id="ethRows"></tbody>
-    </table>
+      <table>
+        <thead>
+          <tr>
+            <th class="c"></th>
+            <th class="l">Entry Price</th>
+            <th>Invested (&#8369;)</th>
+            <th>Amount</th>
+            <th>Current (&#8369;)</th>
+            <th>P/L</th>
+            <th class="l">Signal</th>
+            <th class="act"></th>
+          </tr>
+        </thead>
+        <tbody id="ethRows"></tbody>
+      </table>
     </div>
-    <button class="add-row" onclick="addRow('eth')"><span class="plus">+</span> add ETH row</button>
+    <button class="add-row" onclick="addRow('eth')"><span class="plus">+</span> Add ETH row</button>
   </div>
 
   <!-- GRAND TOTAL -->
   <div class="grand">
-    <div class="row"><span class="lbl">Total Abang na Pera (lahat ng crypto)</span><span class="val" id="grandAbang">0</span></div>
-    <div class="row big"><span class="lbl">Current Value ng Active (lahat)</span><span class="val" id="grandCurrent">&mdash;</span></div>
+    <div class="row"><span class="lbl">Total Pending Money (all coins)</span><span class="val" id="grandPending">0</span></div>
+    <div class="row big"><span class="lbl">Current Value of Active (all)</span><span class="val" id="grandCurrent">&mdash;</span></div>
+  </div>
+
+  <div class="legend">
+    <span class="item"><span class="sw take"></span> Take profit (&ge;+30%)</span>
+    <span class="item"><span class="sw near"></span> Getting close (+15&ndash;30%)</span>
+    <span class="item"><span class="sw hold"></span> Hold (0&ndash;15%)</span>
+    <span class="item"><span class="sw loss"></span> At a loss (&lt;0%)</span>
   </div>
 
   <div class="hint">
-    <b>peso (&#8369;)</b> lang ang editable &middot; <b>P/L</b> = current &minus; invested (berde = tubo, pula = lugi)<br>
-    Signal: <b>TAKE PROFIT</b> pag &ge;+30% &middot; <b>malapit na</b> pag +15&ndash;30% &middot; <b>hold</b> pag +0&ndash;15% &middot; <b>lugi</b> pag negative<br>
-    <span style="opacity:.8">Paalala: gabay lang ito base sa % gain, hindi financial advice. Ikaw pa rin ang magde-desisyon.</span>
+    Only <b>Invested (&#8369;)</b> is editable. Amount = Invested &divide; Entry Price. Current = Amount &times; live market price.<br>
+    Tap the circle to switch a row between <b>Active</b> (already bought) and <b>Pending</b> (waiting order).<br>
+    <span style="opacity:.8">Note: signals are a simple guide based on % gain, not financial advice. The decision is yours.</span>
   </div>
 
 <script>
-  // Each row: { price (entry price), peso (PHP invested), abang }
+  // Each row: { price (entry price), peso (PHP invested), pending }
   const DEFAULT_DATA = {
     btc: [
-      { price: "4911072.2", peso: 1998.81, abang: false }, // filled: 0.0004070 BTC
-      { price: "4910859.2", peso: 3000.04, abang: false }, // filled: 0.0006109 BTC
-      { price: "4500000",   peso: 2500,    abang: true },  // open order
-      { price: "4700000",   peso: 2500,    abang: true }   // open order
+      { price: "4911072.2", peso: 1998.81, pending: false }, // filled: 0.0004070 BTC
+      { price: "4910859.2", peso: 3000.04, pending: false }, // filled: 0.0006109 BTC
+      { price: "4500000",   peso: 2500,    pending: true },  // open order
+      { price: "4700000",   peso: 2500,    pending: true }   // open order
     ],
     eth: [
-      { price: "149750",   peso: 236.90, abang: false }, // filled: 0.001582 ETH
-      { price: "151936.4", peso: 221.68, abang: false }, // filled: 0.001459 ETH
-      { price: "150000",   peso: 2500,   abang: true },  // open order
-      { price: "147000",   peso: 2500,   abang: true },  // open order
-      { price: "137000",   peso: 2500,   abang: true },  // open order
-      { price: "146500",   peso: 2500,   abang: true }   // open order
+      { price: "149750",   peso: 236.90, pending: false }, // filled: 0.001582 ETH
+      { price: "151936.4", peso: 221.68, pending: false }, // filled: 0.001459 ETH
+      { price: "150000",   peso: 2500,   pending: true },  // open order
+      { price: "147000",   peso: 2500,   pending: true },  // open order
+      { price: "137000",   peso: 2500,   pending: true },  // open order
+      { price: "146500",   peso: 2500,   pending: true }   // open order
     ]
   };
 
   // Bump this whenever DEFAULT_DATA changes and you want it to replace old saved data.
-  const SEED_VERSION = 6;
+  const SEED_VERSION = 7;
   const STORAGE_KEY = "cryptoTrackerV2";
   const SEED_KEY = "cryptoTrackerSeed";
 
@@ -267,9 +304,10 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw && savedSeed >= SEED_VERSION) {
         const parsed = JSON.parse(raw);
-        // migrate any old "qty" field to "peso"
+        // migrate old field names
         ["btc", "eth"].forEach(a => (parsed[a] || []).forEach(r => {
           if (r.peso === undefined && r.qty !== undefined) r.peso = r.qty;
+          if (r.pending === undefined && r.abang !== undefined) r.pending = r.abang;
         }));
         return parsed;
       }
@@ -304,19 +342,20 @@
       tbody.innerHTML = "";
       data[asset].forEach((row, i) => {
         const tr = document.createElement("tr");
-        if (row.abang) tr.classList.add("abang");
+        if (row.pending) tr.classList.add("pending");
 
         // circle toggle
         const tdChk = document.createElement("td");
         tdChk.className = "chk";
         const circle = document.createElement("button");
-        circle.className = "circle" + (row.abang ? " checked" : "");
+        circle.className = "circle" + (row.pending ? " checked" : "");
         circle.innerHTML = '<span class="tick">&#10003;</span>';
-        circle.setAttribute("aria-label", "toggle abang");
-        circle.onclick = () => { data[asset][i].abang = !data[asset][i].abang; saveData(); render(); };
+        circle.setAttribute("aria-label", "toggle pending");
+        circle.title = row.pending ? "Pending order" : "Active (bought)";
+        circle.onclick = () => { data[asset][i].pending = !data[asset][i].pending; saveData(); render(); };
         tdChk.appendChild(circle);
 
-        // price (read-only display)
+        // entry price (read-only display)
         const tdPrice = document.createElement("td");
         tdPrice.style.textAlign = "left";
         const priceSpan = document.createElement("span");
@@ -324,7 +363,7 @@
         priceSpan.textContent = fmtPlain(num(row.price));
         tdPrice.appendChild(priceSpan);
 
-        // peso (EDITABLE)
+        // invested peso (EDITABLE)
         const tdPeso = document.createElement("td");
         const pesoInput = document.createElement("input");
         pesoInput.className = "cell-input";
@@ -375,10 +414,11 @@
         const del = document.createElement("button");
         del.className = "del";
         del.textContent = "\u00d7";
+        del.title = "Delete row";
         del.onclick = () => {
           const r = data[asset][i];
-          const label = (r.price ? "price " + r.price : "row") + (r.peso ? " \u00b7 \u20b1" + r.peso : "");
-          if (confirm("Burahin ang " + asset.toUpperCase() + " row na ito?\n(" + label + ")")) {
+          const label = (r.price ? "entry " + r.price : "row") + (r.peso ? " \u00b7 \u20b1" + r.peso : "");
+          if (confirm("Delete this " + asset.toUpperCase() + " row?\n(" + label + ")")) {
             data[asset].splice(i, 1);
             saveData();
             render();
@@ -396,11 +436,11 @@
 
   // Take-profit ladder thresholds (% gain).
   // >= TP_TAKE  -> "TAKE PROFIT"
-  // >= TP_NEAR  -> "malapit na"
-  // 0..TP_NEAR  -> "hold"
-  // < 0         -> "lugi"
+  // >= TP_NEAR  -> "CLOSE"
+  // 0..TP_NEAR  -> "HOLD"
+  // < 0         -> "LOSS"
   const TP_TAKE = 30;   // +30% or more -> strong take-profit
-  const TP_NEAR = 15;   // +15% to +30% -> consider
+  const TP_NEAR = 15;   // +15% to +30% -> getting close
 
   // Computes amount, current value, P/L, and take-profit signal for one row
   function updateRowComputed(asset, i, tr) {
@@ -434,15 +474,14 @@
 
     // P/L (peso + %) and signal
     if (plEl && sigEl) {
-      // reset
       plEl.classList.remove("up", "down");
       sigEl.className = "badge";
 
-      // Abang rows are pending orders (not bought yet) -> no P/L
-      if (row.abang) {
+      // Pending rows are open orders (not bought yet) -> no P/L
+      if (row.pending) {
         plEl.textContent = "\u2014";
-        sigEl.textContent = "abang";
-        sigEl.classList.add("b-abang");
+        sigEl.textContent = "Pending";
+        sigEl.classList.add("b-wait");
         return;
       }
 
@@ -463,53 +502,53 @@
 
       // Signal ladder
       if (pct >= TP_TAKE) {
-        sigEl.textContent = "TAKE PROFIT";
+        sigEl.textContent = "Take profit";
         sigEl.classList.add("b-take");
       } else if (pct >= TP_NEAR) {
-        sigEl.textContent = "malapit na";
+        sigEl.textContent = "Getting close";
         sigEl.classList.add("b-near");
       } else if (pct >= 0) {
-        sigEl.textContent = "hold";
+        sigEl.textContent = "Hold";
         sigEl.classList.add("b-hold");
       } else {
-        sigEl.textContent = "lugi";
+        sigEl.textContent = "At a loss";
         sigEl.classList.add("b-loss");
       }
     }
   }
 
   function addRow(asset) {
-    data[asset].push({ price: "", peso: 0, abang: false });
+    data[asset].push({ price: "", peso: 0, pending: false });
     saveData();
     render();
   }
 
   function sums(asset) {
-    let active = 0, abang = 0, activeCurrent = 0, hasMarket = market[asset] != null;
+    let active = 0, pending = 0, activeCurrent = 0, hasMarket = market[asset] != null;
     data[asset].forEach(r => {
       const peso = num(r.peso);
       const entry = num(r.price);
-      if (r.abang) {
-        abang += peso;
+      if (r.pending) {
+        pending += peso;
       } else {
         active += peso;
         if (hasMarket && entry > 0) activeCurrent += (peso / entry) * market[asset];
       }
     });
-    return { active, abang, activeCurrent, hasMarket };
+    return { active, pending, activeCurrent, hasMarket };
   }
 
   function updateTotals() {
     const b = sums("btc"), e = sums("eth");
     document.getElementById("btcActive").textContent = fmtPlain(b.active);
-    document.getElementById("btcAbang").textContent = fmtPlain(b.abang);
+    document.getElementById("btcPending").textContent = fmtPlain(b.pending);
     document.getElementById("ethActive").textContent = fmtPlain(e.active);
-    document.getElementById("ethAbang").textContent = fmtPlain(e.abang);
+    document.getElementById("ethPending").textContent = fmtPlain(e.pending);
 
-    document.getElementById("sumBtcAbang").textContent = fmtPlain(b.abang);
-    document.getElementById("sumEthAbang").textContent = fmtPlain(e.abang);
+    document.getElementById("sumBtcPending").textContent = fmtPlain(b.pending);
+    document.getElementById("sumEthPending").textContent = fmtPlain(e.pending);
 
-    document.getElementById("grandAbang").textContent = fmtPlain(b.abang + e.abang);
+    document.getElementById("grandPending").textContent = fmtPlain(b.pending + e.pending);
 
     if (b.hasMarket || e.hasMarket) {
       const totalCur = b.activeCurrent + e.activeCurrent;
@@ -553,8 +592,8 @@
       } catch (e2) {
         status.className = "err";
         status.textContent = /429/.test(e1.message)
-          ? "Rate-limited. Auto-retry mamaya."
-          : "Di ma-load ang market price. Auto-retry mamaya.";
+          ? "Rate-limited. Will auto-retry shortly."
+          : "Could not load market prices. Will auto-retry shortly.";
       }
     }
   }
