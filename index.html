@@ -118,7 +118,7 @@
 
   <!-- SUMMARY: abang money per crypto -->
   <div class="summary">
-    <div class="cap">pera na naka-abang (struck/pending), per crypto</div>
+    <div class="cap">pera na naka-abang (₱) &mdash; pending auto-buy pag umabot sa entry price, per crypto</div>
     <div class="line"><span class="coin">BTC</span><span class="val" id="sumBtcAbang">0</span></div>
     <div class="line"><span class="coin">ETH</span><span class="val" id="sumEthAbang">0</span></div>
   </div>
@@ -133,8 +133,8 @@
       <thead>
         <tr>
           <th class="chk"></th>
-          <th>price</th>
-          <th class="qty-col">qty</th>
+          <th>entry price</th>
+          <th class="qty-col">pera (&#8369;)</th>
           <th class="act"></th>
         </tr>
       </thead>
@@ -153,8 +153,8 @@
       <thead>
         <tr>
           <th class="chk"></th>
-          <th>price</th>
-          <th class="qty-col">qty</th>
+          <th>entry price</th>
+          <th class="qty-col">pera (&#8369;)</th>
           <th class="act"></th>
         </tr>
       </thead>
@@ -170,8 +170,9 @@
   </div>
 
   <div class="hint">
-    Active = binili mo na &middot; Abang = pang-buy pag nag-dip.<br>
-    I-tap ang bilog para gawing abang (struck). Auto-save sa device mo.
+    <b>entry price</b> = presyo ng crypto nung bumili ka &middot; <b>pera (&#8369;)</b> = perang ipinasok mo sa PHP<br>
+    <b>Active</b> = naipasok mo na (bumili ka na) &middot; <b>Abang</b> = pending, auto-buy pag umabot sa entry price &rarr; magiging active<br>
+    I-tap ang bilog para i-toggle active/abang. Auto-save sa device mo.
   </div>
 
 <script>
