@@ -231,7 +231,7 @@
   };
 
   // Bump this whenever DEFAULT_DATA changes and you want it to replace old saved data.
-  const SEED_VERSION = 4;
+  const SEED_VERSION = 5;
   const STORAGE_KEY = "cryptoTrackerV2";
   const SEED_KEY = "cryptoTrackerSeed";
 
@@ -337,7 +337,15 @@
         const del = document.createElement("button");
         del.className = "del";
         del.textContent = "\u00d7";
-        del.onclick = () => { data[asset].splice(i, 1); saveData(); render(); };
+        del.onclick = () => {
+          const r = data[asset][i];
+          const label = (r.price ? "price " + r.price : "row") + (r.peso ? " \u00b7 \u20b1" + r.peso : "");
+          if (confirm("Burahin ang " + asset.toUpperCase() + " row na ito?\n(" + label + ")")) {
+            data[asset].splice(i, 1);
+            saveData();
+            render();
+          }
+        };
         tdAct.appendChild(del);
 
         tr.append(tdChk, tdPrice, tdPeso, tdAmount, tdCur, tdAct);
