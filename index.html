@@ -3,243 +3,212 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#0b0e14" />
-<title>Crypto Holdings Tracker</title>
+<meta name="theme-color" content="#000000" />
+<title>crypto tracker</title>
 <style>
   :root {
-    --bg: #0b0e14;
-    --card: #151a24;
-    --card-2: #1c2331;
-    --line: #262f40;
-    --text: #e7ecf3;
-    --muted: #8b97ab;
-    --accent: #4f8cff;
-    --green: #34d399;
-    --amber: #fbbf24;
+    --bg: #000000;
+    --panel: #1c1c1e;
+    --panel-2: #2c2c2e;
+    --line: #2a2a2c;
+    --text: #f2f2f7;
+    --muted: #8e8e93;
+    --gold: #d4a017;
+    --gold-bright: #f5c542;
+    --danger: #ff6b6b;
     --btc: #f7931a;
     --eth: #627eea;
-    --danger: #f87171;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; padding: 0; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: var(--bg);
     color: var(--text);
-    padding: 16px;
-    padding-bottom: 60px;
-    max-width: 720px;
+    max-width: 640px;
     margin: 0 auto;
-    line-height: 1.4;
+    padding: 12px 14px 60px;
+    line-height: 1.35;
   }
-  h1 { font-size: 22px; margin: 4px 0 2px; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
 
-  /* Live prices */
-  .prices {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-  .price-card {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 12px 14px;
-  }
-  .price-card .name { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-  .dot.btc { background: var(--btc); }
-  .dot.eth { background: var(--eth); }
-  .price-card .php { font-size: 19px; font-weight: 700; margin-top: 4px; }
-  .price-card .usd { font-size: 13px; color: var(--muted); }
-  #priceStatus { grid-column: 1 / -1; font-size: 12px; color: var(--muted); text-align: center; }
-  #priceStatus.error { color: var(--danger); }
-  #refreshBtn {
-    grid-column: 1 / -1;
-    background: var(--card-2);
-    color: var(--text);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 9px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  #refreshBtn:active { background: var(--line); }
+  .top-title { text-align: center; font-size: 17px; font-weight: 700; margin: 6px 0 14px; }
 
-  /* Summary */
+  /* Summary card */
   .summary {
-    background: linear-gradient(135deg, #1a2436, #141b28);
-    border: 1px solid var(--line);
+    background: var(--panel);
     border-radius: 16px;
     padding: 14px 16px;
-    margin-bottom: 18px;
+    margin-bottom: 22px;
   }
-  .summary h2 { font-size: 14px; margin: 0 0 10px; color: var(--muted); font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
-  .sumrow { display: flex; justify-content: space-between; padding: 5px 0; font-size: 15px; }
-  .sumrow.total { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; font-weight: 700; font-size: 17px; }
-  .tag-active { color: var(--green); }
-  .tag-abang { color: var(--amber); }
+  .summary .cap { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .summary .line {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; font-size: 16px;
+  }
+  .summary .line .coin { font-weight: 600; }
+  .summary .line .val { color: var(--gold-bright); font-weight: 700; font-size: 17px; }
 
-  /* Asset blocks */
-  .asset {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 14px;
-    margin-bottom: 16px;
+  /* Asset section */
+  .asset { margin-bottom: 26px; }
+  .asset-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 8px; padding: 0 2px;
   }
-  .asset-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .asset-head .label { font-size: 17px; font-weight: 700; }
-  .asset-sub { margin-left: auto; font-size: 12px; color: var(--muted); text-align: right; }
+  .asset-head .name { font-size: 17px; font-weight: 700; }
+  .asset-head .stat { color: var(--gold-bright); font-size: 13px; }
+  .asset-head .stat .sep { color: var(--muted); }
 
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 6px; font-size: 14px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
-  td.num, th.num { text-align: right; }
-  tr.abang td:not(.chk):not(.act) { text-decoration: line-through; color: var(--muted); }
-  td .cell-input {
-    background: transparent;
-    border: none;
-    color: inherit;
-    font: inherit;
-    width: 100%;
-    text-align: right;
-    padding: 2px;
-    border-radius: 6px;
+  thead th {
+    text-align: left; color: var(--muted); font-weight: 500;
+    font-size: 12px; padding: 2px 6px 8px; text-transform: none;
   }
-  td .cell-input.label-input { text-align: left; }
-  td .cell-input:focus { outline: none; background: var(--card-2); }
-  input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--amber); }
-  td.chk { width: 36px; text-align: center; }
-  td.act { width: 30px; text-align: center; }
-  .del { background: none; border: none; color: var(--danger); font-size: 18px; cursor: pointer; opacity: .7; }
-  .del:active { opacity: 1; }
+  thead th.qty-col { }
+  tbody td { padding: 10px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+  tbody tr:first-child td { border-top: none; }
 
-  .asset-foot { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; }
+  td.chk { width: 34px; }
+  td.act { width: 30px; text-align: right; }
+
+  /* circle checkbox */
+  .circle {
+    width: 24px; height: 24px; border-radius: 50%;
+    border: 2px solid var(--gold); background: transparent;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; padding: 0; flex: none;
+  }
+  .circle.checked { background: var(--gold); border-color: var(--gold); }
+  .circle .tick { display: none; color: #000; font-size: 14px; font-weight: 900; line-height: 1; }
+  .circle.checked .tick { display: block; }
+
+  .cell-input {
+    background: transparent; border: none; color: var(--text);
+    font: inherit; font-size: 18px; width: 100%; padding: 2px 0;
+  }
+  .cell-input::placeholder { color: var(--muted); }
+  .cell-input:focus { outline: none; }
+  tr.abang .cell-input { text-decoration: line-through; color: var(--muted); }
+
+  .del {
+    background: none; border: none; color: var(--muted);
+    font-size: 20px; cursor: pointer; line-height: 1; padding: 2px 4px;
+  }
+  .del:active { color: var(--danger); }
+
   .add-row {
-    margin-top: 8px;
-    background: var(--card-2);
-    color: var(--accent);
-    border: 1px dashed var(--line);
-    border-radius: 10px;
-    padding: 8px;
-    width: 100%;
-    font-size: 14px;
-    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    background: none; border: none; color: var(--gold-bright);
+    font-size: 15px; padding: 12px 6px 4px; cursor: pointer;
   }
+  .add-row .plus { font-size: 18px; }
 
-  .foot-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 20px; }
-  .foot-note b { color: var(--amber); }
+  /* grand total */
+  .grand {
+    border-top: 1px solid var(--line);
+    margin-top: 10px; padding-top: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .grand .lbl { color: var(--muted); font-size: 15px; }
+  .grand .val { color: var(--gold-bright); font-size: 20px; font-weight: 800; }
+
+  .hint { color: var(--muted); font-size: 12px; text-align: center; margin-top: 22px; padding: 0 10px; }
 </style>
 </head>
 <body>
-  <h1>Crypto Holdings Tracker</h1>
-  <div class="sub">BTC / ETH holdings &middot; i-check ang row para gawing <span class="tag-abang">abang</span> (naghihintay bumagsak ang presyo)</div>
+  <div class="top-title">crypto tracker</div>
 
-  <!-- LIVE PRICES -->
-  <div class="prices">
-    <div class="price-card">
-      <div class="name"><span class="dot btc"></span> Bitcoin (BTC)</div>
-      <div class="php" id="btcPhp">—</div>
-      <div class="usd" id="btcUsd">—</div>
-    </div>
-    <div class="price-card">
-      <div class="name"><span class="dot eth"></span> Ethereum (ETH)</div>
-      <div class="php" id="ethPhp">—</div>
-      <div class="usd" id="ethUsd">—</div>
-    </div>
-    <div id="priceStatus">Loading live prices…</div>
-    <button id="refreshBtn" onclick="loadPrices()">↻ Refresh prices</button>
-  </div>
-
-  <!-- SUMMARY -->
+  <!-- SUMMARY: abang money per crypto -->
   <div class="summary">
-    <h2>Summary</h2>
-    <div class="sumrow"><span class="tag-active">● Active (BTC)</span><span id="sumActiveBtc">0</span></div>
-    <div class="sumrow"><span class="tag-abang">● Abang (BTC)</span><span id="sumAbangBtc">0</span></div>
-    <div class="sumrow"><span class="tag-active">● Active (ETH)</span><span id="sumActiveEth">0</span></div>
-    <div class="sumrow"><span class="tag-abang">● Abang (ETH)</span><span id="sumAbangEth">0</span></div>
-    <div class="sumrow total"><span>Est. Total Value (PHP)</span><span id="sumTotalPhp">—</span></div>
+    <div class="cap">pera na naka-abang (struck/pending), per crypto</div>
+    <div class="line"><span class="coin">BTC</span><span class="val" id="sumBtcAbang">0</span></div>
+    <div class="line"><span class="coin">ETH</span><span class="val" id="sumEthAbang">0</span></div>
   </div>
 
-  <!-- BTC ASSET -->
-  <div class="asset" data-asset="btc">
+  <!-- BTC -->
+  <div class="asset">
     <div class="asset-head">
-      <span class="dot btc"></span>
-      <span class="label">Bitcoin</span>
-      <span class="asset-sub">Active: <b id="btcActive">0</b> &middot; Abang: <b id="btcAbang">0</b></span>
+      <span class="name">BTC</span>
+      <span class="stat">Active: <b id="btcActive">0</b> <span class="sep">|</span> Abang: <b id="btcAbang">0</b></span>
     </div>
     <table>
       <thead>
         <tr>
-          <th class="chk">Abang</th>
-          <th>Label / Note</th>
-          <th class="num">Amount (BTC)</th>
+          <th class="chk"></th>
+          <th>price</th>
+          <th class="qty-col">qty</th>
           <th class="act"></th>
         </tr>
       </thead>
       <tbody id="btcRows"></tbody>
     </table>
-    <button class="add-row" onclick="addRow('btc')">+ Add BTC entry</button>
+    <button class="add-row" onclick="addRow('btc')"><span class="plus">+</span> add BTC row</button>
   </div>
 
-  <!-- ETH ASSET -->
-  <div class="asset" data-asset="eth">
+  <!-- ETH -->
+  <div class="asset">
     <div class="asset-head">
-      <span class="dot eth"></span>
-      <span class="label">Ethereum</span>
-      <span class="asset-sub">Active: <b id="ethActive">0</b> &middot; Abang: <b id="ethAbang">0</b></span>
+      <span class="name">ETH</span>
+      <span class="stat">Active: <b id="ethActive">0</b> <span class="sep">|</span> Abang: <b id="ethAbang">0</b></span>
     </div>
     <table>
       <thead>
         <tr>
-          <th class="chk">Abang</th>
-          <th>Label / Note</th>
-          <th class="num">Amount (ETH)</th>
+          <th class="chk"></th>
+          <th>price</th>
+          <th class="qty-col">qty</th>
           <th class="act"></th>
         </tr>
       </thead>
       <tbody id="ethRows"></tbody>
     </table>
-    <button class="add-row" onclick="addRow('eth')">+ Add ETH entry</button>
+    <button class="add-row" onclick="addRow('eth')"><span class="plus">+</span> add ETH row</button>
   </div>
 
-  <div class="foot-note">
-    Auto-saved sa device mo (localStorage). Ang naka-check na row = <b>abang</b> (struck-through).<br>
-    Live prices: CoinGecko API.
+  <!-- GRAND TOTAL -->
+  <div class="grand">
+    <span class="lbl">Total Abang na Pera (lahat ng crypto)</span>
+    <span class="val" id="grandAbang">0</span>
+  </div>
+
+  <div class="hint">
+    Active = binili mo na &middot; Abang = pang-buy pag nag-dip.<br>
+    I-tap ang bilog para gawing abang (struck). Auto-save sa device mo.
   </div>
 
 <script>
-  // ---------- Data model ----------
-  // Each row: { label, amount, abang (bool) }
+  // Each row: { price, qty, abang }
   const DEFAULT_DATA = {
     btc: [
-      { label: "Main holding", amount: 0.05, abang: false },
-      { label: "Abang - hintay dip", amount: 0.02, abang: true }
+      { price: "911072.2", qty: 2500, abang: false },
+      { price: "910859.2", qty: 2500, abang: false },
+      { price: "500000",   qty: 2500, abang: true },
+      { price: "700000",   qty: 2500, abang: true }
     ],
     eth: [
-      { label: "Main holding", amount: 0.5, abang: false },
-      { label: "Abang - hintay dip", amount: 0.3, abang: true }
+      { price: "149750", qty: 500,  abang: false },
+      { price: "150000", qty: 2500, abang: true },
+      { price: "147000", qty: 2500, abang: true },
+      { price: "137000", qty: 2500, abang: true },
+      { price: "146500", qty: 2500, abang: true }
     ]
   };
 
   let data = loadData();
-  let prices = { btc: { php: null, usd: null }, eth: { php: null, usd: null } };
 
   function loadData() {
     try {
-      const raw = localStorage.getItem("cryptoTrackerData");
+      const raw = localStorage.getItem("cryptoTrackerV2");
       if (raw) return JSON.parse(raw);
     } catch (e) {}
     return JSON.parse(JSON.stringify(DEFAULT_DATA));
   }
   function saveData() {
-    try { localStorage.setItem("cryptoTrackerData", JSON.stringify(data)); } catch (e) {}
+    try { localStorage.setItem("cryptoTrackerV2", JSON.stringify(data)); } catch (e) {}
   }
 
-  // ---------- Rendering ----------
+  function fmt(n) {
+    return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  }
+
   function render() {
     ["btc", "eth"].forEach(asset => {
       const tbody = document.getElementById(asset + "Rows");
@@ -248,49 +217,48 @@
         const tr = document.createElement("tr");
         if (row.abang) tr.classList.add("abang");
 
-        // checkbox
+        // circle checkbox
         const tdChk = document.createElement("td");
         tdChk.className = "chk";
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = row.abang;
-        cb.onchange = () => { data[asset][i].abang = cb.checked; saveData(); render(); };
-        tdChk.appendChild(cb);
+        const circle = document.createElement("button");
+        circle.className = "circle" + (row.abang ? " checked" : "");
+        circle.innerHTML = '<span class="tick">&#10003;</span>';
+        circle.setAttribute("aria-label", "toggle abang");
+        circle.onclick = () => { data[asset][i].abang = !data[asset][i].abang; saveData(); render(); };
+        tdChk.appendChild(circle);
 
-        // label
-        const tdLabel = document.createElement("td");
-        const labelInput = document.createElement("input");
-        labelInput.className = "cell-input label-input";
-        labelInput.value = row.label;
-        labelInput.placeholder = "Label / note";
-        labelInput.oninput = () => { data[asset][i].label = labelInput.value; saveData(); };
-        tdLabel.appendChild(labelInput);
+        // price
+        const tdPrice = document.createElement("td");
+        const priceInput = document.createElement("input");
+        priceInput.className = "cell-input";
+        priceInput.type = "text";
+        priceInput.inputMode = "decimal";
+        priceInput.value = row.price;
+        priceInput.placeholder = "price";
+        priceInput.oninput = () => { data[asset][i].price = priceInput.value; saveData(); };
+        tdPrice.appendChild(priceInput);
 
-        // amount
-        const tdAmt = document.createElement("td");
-        tdAmt.className = "num";
-        const amtInput = document.createElement("input");
-        amtInput.className = "cell-input";
-        amtInput.type = "text";
-        amtInput.inputMode = "decimal";
-        amtInput.value = row.amount;
-        amtInput.oninput = () => {
-          data[asset][i].amount = parseFloat(amtInput.value) || 0;
-          saveData(); updateTotals();
-        };
-        tdAmt.appendChild(amtInput);
+        // qty
+        const tdQty = document.createElement("td");
+        const qtyInput = document.createElement("input");
+        qtyInput.className = "cell-input";
+        qtyInput.type = "text";
+        qtyInput.inputMode = "decimal";
+        qtyInput.value = row.qty;
+        qtyInput.placeholder = "qty";
+        qtyInput.oninput = () => { data[asset][i].qty = parseFloat(qtyInput.value) || 0; saveData(); updateTotals(); };
+        tdQty.appendChild(qtyInput);
 
         // delete
         const tdAct = document.createElement("td");
         tdAct.className = "act";
         const del = document.createElement("button");
         del.className = "del";
-        del.textContent = "×";
-        del.title = "Delete row";
+        del.textContent = "\u00d7";
         del.onclick = () => { data[asset].splice(i, 1); saveData(); render(); };
         tdAct.appendChild(del);
 
-        tr.append(tdChk, tdLabel, tdAmt, tdAct);
+        tr.append(tdChk, tdPrice, tdQty, tdAct);
         tbody.appendChild(tr);
       });
     });
@@ -298,134 +266,34 @@
   }
 
   function addRow(asset) {
-    data[asset].push({ label: "", amount: 0, abang: false });
+    data[asset].push({ price: "", qty: 0, abang: false });
     saveData();
     render();
   }
 
-  // ---------- Totals ----------
   function sums(asset) {
     let active = 0, abang = 0;
     data[asset].forEach(r => {
-      const a = parseFloat(r.amount) || 0;
-      if (r.abang) abang += a; else active += a;
+      const q = parseFloat(r.qty) || 0;
+      if (r.abang) abang += q; else active += q;
     });
     return { active, abang };
   }
 
-  function fmtCoin(n) {
-    return Number(n).toLocaleString("en-US", { maximumFractionDigits: 8 });
-  }
-  function fmtPhp(n) {
-    if (n == null || isNaN(n)) return "—";
-    return "₱" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
-  }
-  function fmtUsd(n) {
-    if (n == null || isNaN(n)) return "—";
-    return "$" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
-  }
-
   function updateTotals() {
     const b = sums("btc"), e = sums("eth");
-    document.getElementById("btcActive").textContent = fmtCoin(b.active);
-    document.getElementById("btcAbang").textContent = fmtCoin(b.abang);
-    document.getElementById("ethActive").textContent = fmtCoin(e.active);
-    document.getElementById("ethAbang").textContent = fmtCoin(e.abang);
+    document.getElementById("btcActive").textContent = fmt(b.active);
+    document.getElementById("btcAbang").textContent = fmt(b.abang);
+    document.getElementById("ethActive").textContent = fmt(e.active);
+    document.getElementById("ethAbang").textContent = fmt(e.abang);
 
-    document.getElementById("sumActiveBtc").textContent = fmtCoin(b.active) + " BTC";
-    document.getElementById("sumAbangBtc").textContent = fmtCoin(b.abang) + " BTC";
-    document.getElementById("sumActiveEth").textContent = fmtCoin(e.active) + " ETH";
-    document.getElementById("sumAbangEth").textContent = fmtCoin(e.abang) + " ETH";
+    document.getElementById("sumBtcAbang").textContent = fmt(b.abang);
+    document.getElementById("sumEthAbang").textContent = fmt(e.abang);
 
-    // Total value (active + abang) using live PHP price if available
-    let totalPhp = null;
-    if (prices.btc.php != null && prices.eth.php != null) {
-      const btcTotal = (b.active + b.abang) * prices.btc.php;
-      const ethTotal = (e.active + e.abang) * prices.eth.php;
-      totalPhp = btcTotal + ethTotal;
-    }
-    document.getElementById("sumTotalPhp").textContent = fmtPhp(totalPhp);
+    document.getElementById("grandAbang").textContent = fmt(b.abang + e.abang);
   }
 
-  // ---------- Live prices ----------
-  async function loadPrices() {
-    const status = document.getElementById("priceStatus");
-    status.className = "";
-    status.textContent = "Loading live prices…";
-
-    // Two data sources: CoinGecko primary, then a fallback that also gives PHP+USD.
-    const sources = [
-      {
-        name: "CoinGecko",
-        url: "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=php,usd",
-        parse: (j) => ({
-          btc: { php: j.bitcoin.php, usd: j.bitcoin.usd },
-          eth: { php: j.ethereum.php, usd: j.ethereum.usd }
-        })
-      },
-      {
-        name: "Coinbase+FX",
-        // Coinbase gives USD spot; convert to PHP using an FX rate.
-        url: null,
-        custom: async () => {
-          const [btcUsdRes, ethUsdRes, fxRes] = await Promise.all([
-            fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot", { cache: "no-store" }),
-            fetch("https://api.coinbase.com/v2/prices/ETH-USD/spot", { cache: "no-store" }),
-            fetch("https://api.coinbase.com/v2/exchange-rates?currency=USD", { cache: "no-store" })
-          ]);
-          if (!btcUsdRes.ok || !ethUsdRes.ok || !fxRes.ok) throw new Error("HTTP fallback");
-          const btcUsd = parseFloat((await btcUsdRes.json()).data.amount);
-          const ethUsd = parseFloat((await ethUsdRes.json()).data.amount);
-          const usdToPhp = parseFloat((await fxRes.json()).data.rates.PHP);
-          return {
-            btc: { php: btcUsd * usdToPhp, usd: btcUsd },
-            eth: { php: ethUsd * usdToPhp, usd: ethUsd }
-          };
-        }
-      }
-    ];
-
-    let lastErr = null;
-    for (const src of sources) {
-      try {
-        let parsed;
-        if (src.custom) {
-          parsed = await src.custom();
-        } else {
-          const res = await fetch(src.url, { cache: "no-store" });
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          parsed = src.parse(await res.json());
-        }
-        prices.btc.php = parsed.btc.php; prices.btc.usd = parsed.btc.usd;
-        prices.eth.php = parsed.eth.php; prices.eth.usd = parsed.eth.usd;
-
-        document.getElementById("btcPhp").textContent = fmtPhp(prices.btc.php);
-        document.getElementById("btcUsd").textContent = fmtUsd(prices.btc.usd);
-        document.getElementById("ethPhp").textContent = fmtPhp(prices.eth.php);
-        document.getElementById("ethUsd").textContent = fmtUsd(prices.eth.usd);
-
-        status.className = "";
-        status.textContent = "Updated " + new Date().toLocaleTimeString() + " · " + src.name;
-        updateTotals();
-        return; // success, stop trying sources
-      } catch (err) {
-        lastErr = err;
-      }
-    }
-
-    // All sources failed
-    status.className = "error";
-    const msg = (lastErr && /429/.test(lastErr.message))
-      ? "Rate-limited (masyadong madalas). Susubukan ulit mamaya, o tap Refresh."
-      : "Could not load live prices" + (lastErr ? " (" + lastErr.message + ")" : "") + ". Tap Refresh to retry.";
-    status.textContent = msg;
-  }
-
-  // ---------- Init ----------
   render();
-  loadPrices();
-  // auto refresh every 2 minutes (para hindi ma-rate-limit ang free API)
-  setInterval(loadPrices, 120000);
 </script>
 </body>
 </html>
