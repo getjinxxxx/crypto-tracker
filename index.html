@@ -16,6 +16,8 @@
     --gold: #d4a017;
     --gold-bright: #f5c542;
     --danger: #ff6b6b;
+    --green: #34d399;
+    --red: #ff6b6b;
     --btc: #f7931a;
     --eth: #627eea;
   }
@@ -24,13 +26,26 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--text);
-    max-width: 640px;
+    max-width: 680px;
     margin: 0 auto;
     padding: 12px 14px 60px;
     line-height: 1.35;
   }
 
   .top-title { text-align: center; font-size: 17px; font-weight: 700; margin: 6px 0 14px; }
+
+  /* Live market prices */
+  .market {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 16px;
+  }
+  .market .mc {
+    background: var(--panel); border-radius: 14px; padding: 10px 12px;
+  }
+  .market .mc .n { font-size: 12px; color: var(--muted); }
+  .market .mc .p { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  #mktStatus { grid-column: 1 / -1; font-size: 11px; color: var(--muted); text-align: center; }
+  #mktStatus.err { color: var(--danger); }
 
   /* Summary card */
   .summary {
@@ -59,38 +74,47 @@
 
   table { width: 100%; border-collapse: collapse; }
   thead th {
-    text-align: left; color: var(--muted); font-weight: 500;
-    font-size: 12px; padding: 2px 6px 8px; text-transform: none;
+    text-align: right; color: var(--muted); font-weight: 500;
+    font-size: 11px; padding: 2px 6px 8px; text-transform: none; white-space: nowrap;
   }
-  thead th.qty-col { }
-  tbody td { padding: 10px 6px; border-top: 1px solid var(--line); vertical-align: middle; }
+  thead th.l { text-align: left; }
+  tbody td { padding: 10px 6px; border-top: 1px solid var(--line); vertical-align: middle; text-align: right; }
   tbody tr:first-child td { border-top: none; }
 
-  td.chk { width: 34px; }
-  td.act { width: 30px; text-align: right; }
+  td.chk { width: 30px; text-align: center; }
+  td.act { width: 26px; text-align: right; }
 
   /* circle checkbox */
   .circle {
-    width: 24px; height: 24px; border-radius: 50%;
+    width: 22px; height: 22px; border-radius: 50%;
     border: 2px solid var(--gold); background: transparent;
     display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer; padding: 0; flex: none;
   }
   .circle.checked { background: var(--gold); border-color: var(--gold); }
-  .circle .tick { display: none; color: #000; font-size: 14px; font-weight: 900; line-height: 1; }
+  .circle .tick { display: none; color: #000; font-size: 13px; font-weight: 900; line-height: 1; }
   .circle.checked .tick { display: block; }
 
   .cell-input {
     background: transparent; border: none; color: var(--text);
-    font: inherit; font-size: 18px; width: 100%; padding: 2px 0;
+    font: inherit; font-size: 16px; width: 100%; text-align: right; padding: 4px 2px;
+    border-radius: 6px;
   }
   .cell-input::placeholder { color: var(--muted); }
-  .cell-input:focus { outline: none; }
-  tr.abang .cell-input { text-decoration: line-through; color: var(--muted); }
+  .cell-input:focus { outline: none; background: var(--panel-2); }
+
+  .ro { font-size: 15px; color: var(--text); }        /* read-only value */
+  .ro.small { font-size: 13px; }
+  .ro.muted { color: var(--muted); }
+  .cur.up { color: var(--green); }
+  .cur.down { color: var(--red); }
+
+  tr.abang .cell-input,
+  tr.abang .ro { text-decoration: line-through; color: var(--muted); }
 
   .del {
     background: none; border: none; color: var(--muted);
-    font-size: 20px; cursor: pointer; line-height: 1; padding: 2px 4px;
+    font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 2px;
   }
   .del:active { color: var(--danger); }
 
@@ -105,16 +129,26 @@
   .grand {
     border-top: 1px solid var(--line);
     margin-top: 10px; padding-top: 16px;
-    display: flex; justify-content: space-between; align-items: center;
   }
-  .grand .lbl { color: var(--muted); font-size: 15px; }
-  .grand .val { color: var(--gold-bright); font-size: 20px; font-weight: 800; }
+  .grand .row {
+    display: flex; justify-content: space-between; align-items: center; padding: 4px 0;
+  }
+  .grand .lbl { color: var(--muted); font-size: 14px; }
+  .grand .val { color: var(--gold-bright); font-size: 18px; font-weight: 800; }
+  .grand .row.big .val { font-size: 20px; }
 
   .hint { color: var(--muted); font-size: 12px; text-align: center; margin-top: 22px; padding: 0 10px; }
 </style>
 </head>
 <body>
   <div class="top-title">crypto tracker</div>
+
+  <!-- LIVE MARKET PRICES -->
+  <div class="market">
+    <div class="mc"><div class="n">BTC market</div><div class="p" id="mktBtc">&mdash;</div></div>
+    <div class="mc"><div class="n">ETH market</div><div class="p" id="mktEth">&mdash;</div></div>
+    <div id="mktStatus">Loading market prices&hellip;</div>
+  </div>
 
   <!-- SUMMARY: abang money per crypto -->
   <div class="summary">
@@ -133,8 +167,10 @@
       <thead>
         <tr>
           <th class="chk"></th>
-          <th>price</th>
-          <th class="qty-col">qty</th>
+          <th class="l">price</th>
+          <th>peso (&#8369;)</th>
+          <th>amount</th>
+          <th>current (&#8369;)</th>
           <th class="act"></th>
         </tr>
       </thead>
@@ -153,8 +189,10 @@
       <thead>
         <tr>
           <th class="chk"></th>
-          <th>price</th>
-          <th class="qty-col">qty</th>
+          <th class="l">price</th>
+          <th>peso (&#8369;)</th>
+          <th>amount</th>
+          <th>current (&#8369;)</th>
           <th class="act"></th>
         </tr>
       </thead>
@@ -165,45 +203,54 @@
 
   <!-- GRAND TOTAL -->
   <div class="grand">
-    <span class="lbl">Total Abang na Pera (lahat ng crypto)</span>
-    <span class="val" id="grandAbang">0</span>
+    <div class="row"><span class="lbl">Total Abang na Pera (lahat ng crypto)</span><span class="val" id="grandAbang">0</span></div>
+    <div class="row big"><span class="lbl">Current Value ng Active (lahat)</span><span class="val" id="grandCurrent">&mdash;</span></div>
   </div>
 
+  <div class="hint">
+    <b>peso (&#8369;)</b> lang ang editable &middot; <b>amount</b> = peso &divide; price &middot; <b>current</b> = amount &times; live market price<br>
+    I-tap ang bilog para i-toggle active/abang. Auto-save sa device mo.
+  </div>
 
 <script>
-  // Each row: { price, qty, abang }
+  // Each row: { price (entry price), peso (PHP invested), abang }
   const DEFAULT_DATA = {
     btc: [
-      { price: "911072.2", qty: 2500, abang: false },
-      { price: "910859.2", qty: 2500, abang: false },
-      { price: "500000",   qty: 2500, abang: true },
-      { price: "700000",   qty: 2500, abang: true }
+      { price: "911072.2", peso: 2500, abang: false },
+      { price: "910859.2", peso: 2500, abang: false },
+      { price: "500000",   peso: 2500, abang: true },
+      { price: "700000",   peso: 2500, abang: true }
     ],
     eth: [
-      { price: "149750", qty: 500,  abang: false },
-      { price: "150000", qty: 2500, abang: true },
-      { price: "147000", qty: 2500, abang: true },
-      { price: "137000", qty: 2500, abang: true },
-      { price: "146500", qty: 2500, abang: true }
+      { price: "149750", peso: 500,  abang: false },
+      { price: "150000", peso: 2500, abang: true },
+      { price: "147000", peso: 2500, abang: true },
+      { price: "137000", peso: 2500, abang: true },
+      { price: "146500", peso: 2500, abang: true }
     ]
   };
 
   // Bump this whenever DEFAULT_DATA changes and you want it to replace old saved data.
-  const SEED_VERSION = 3;
+  const SEED_VERSION = 4;
   const STORAGE_KEY = "cryptoTrackerV2";
   const SEED_KEY = "cryptoTrackerSeed";
 
   let data = loadData();
+  let market = { btc: null, eth: null }; // live PHP price per coin
 
   function loadData() {
     try {
       const savedSeed = parseInt(localStorage.getItem(SEED_KEY) || "0", 10);
       const raw = localStorage.getItem(STORAGE_KEY);
-      // If the built-in default data is newer than what's saved, use the default
-      // (this loads your real entries even if an older version was cached).
-      if (raw && savedSeed >= SEED_VERSION) return JSON.parse(raw);
+      if (raw && savedSeed >= SEED_VERSION) {
+        const parsed = JSON.parse(raw);
+        // migrate any old "qty" field to "peso"
+        ["btc", "eth"].forEach(a => (parsed[a] || []).forEach(r => {
+          if (r.peso === undefined && r.qty !== undefined) r.peso = r.qty;
+        }));
+        return parsed;
+      }
     } catch (e) {}
-    // Seed with the real default data and record the seed version.
     const seeded = JSON.parse(JSON.stringify(DEFAULT_DATA));
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
@@ -215,8 +262,17 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
   }
 
-  function fmt(n) {
+  function num(v) { return parseFloat(v) || 0; }
+  function fmtPeso(n) {
+    if (n == null || isNaN(n)) return "\u2014";
+    return "\u20b1" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  }
+  function fmtPlain(n) {
     return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  }
+  function fmtAmount(n) {
+    if (!isFinite(n)) return "\u2014";
+    return Number(n).toLocaleString("en-US", { maximumFractionDigits: 8 });
   }
 
   function render() {
@@ -227,7 +283,7 @@
         const tr = document.createElement("tr");
         if (row.abang) tr.classList.add("abang");
 
-        // circle checkbox
+        // circle toggle
         const tdChk = document.createElement("td");
         tdChk.className = "chk";
         const circle = document.createElement("button");
@@ -237,27 +293,43 @@
         circle.onclick = () => { data[asset][i].abang = !data[asset][i].abang; saveData(); render(); };
         tdChk.appendChild(circle);
 
-        // price
+        // price (read-only display)
         const tdPrice = document.createElement("td");
-        const priceInput = document.createElement("input");
-        priceInput.className = "cell-input";
-        priceInput.type = "text";
-        priceInput.inputMode = "decimal";
-        priceInput.value = row.price;
-        priceInput.placeholder = "price";
-        priceInput.oninput = () => { data[asset][i].price = priceInput.value; saveData(); };
-        tdPrice.appendChild(priceInput);
+        tdPrice.style.textAlign = "left";
+        const priceSpan = document.createElement("span");
+        priceSpan.className = "ro";
+        priceSpan.textContent = fmtPlain(num(row.price));
+        tdPrice.appendChild(priceSpan);
 
-        // qty
-        const tdQty = document.createElement("td");
-        const qtyInput = document.createElement("input");
-        qtyInput.className = "cell-input";
-        qtyInput.type = "text";
-        qtyInput.inputMode = "decimal";
-        qtyInput.value = row.qty;
-        qtyInput.placeholder = "qty";
-        qtyInput.oninput = () => { data[asset][i].qty = parseFloat(qtyInput.value) || 0; saveData(); updateTotals(); };
-        tdQty.appendChild(qtyInput);
+        // peso (EDITABLE)
+        const tdPeso = document.createElement("td");
+        const pesoInput = document.createElement("input");
+        pesoInput.className = "cell-input";
+        pesoInput.type = "text";
+        pesoInput.inputMode = "decimal";
+        pesoInput.value = row.peso;
+        pesoInput.placeholder = "0";
+        pesoInput.oninput = () => {
+          data[asset][i].peso = num(pesoInput.value);
+          saveData();
+          updateRowComputed(asset, i, tr);
+          updateTotals();
+        };
+        tdPeso.appendChild(pesoInput);
+
+        // amount (read-only, computed)
+        const tdAmount = document.createElement("td");
+        const amountSpan = document.createElement("span");
+        amountSpan.className = "ro small muted";
+        amountSpan.setAttribute("data-role", "amount");
+        tdAmount.appendChild(amountSpan);
+
+        // current value (read-only, computed w/ live price)
+        const tdCur = document.createElement("td");
+        const curSpan = document.createElement("span");
+        curSpan.className = "ro small cur";
+        curSpan.setAttribute("data-role", "current");
+        tdCur.appendChild(curSpan);
 
         // delete
         const tdAct = document.createElement("td");
@@ -268,42 +340,132 @@
         del.onclick = () => { data[asset].splice(i, 1); saveData(); render(); };
         tdAct.appendChild(del);
 
-        tr.append(tdChk, tdPrice, tdQty, tdAct);
+        tr.append(tdChk, tdPrice, tdPeso, tdAmount, tdCur, tdAct);
         tbody.appendChild(tr);
+        updateRowComputed(asset, i, tr);
       });
     });
     updateTotals();
   }
 
+  // Computes amount + current value for one row
+  function updateRowComputed(asset, i, tr) {
+    const row = data[asset][i];
+    const entry = num(row.price);
+    const peso = num(row.peso);
+    const amount = entry > 0 ? peso / entry : 0;   // crypto units
+    const amountEl = tr.querySelector('[data-role="amount"]');
+    const curEl = tr.querySelector('[data-role="current"]');
+
+    if (amountEl) amountEl.textContent = entry > 0 ? fmtAmount(amount) : "\u2014";
+
+    if (curEl) {
+      const mkt = market[asset];
+      if (mkt != null && entry > 0) {
+        const cur = amount * mkt;   // current PHP value
+        curEl.textContent = fmtPeso(cur);
+        curEl.classList.remove("up", "down");
+        if (cur > peso) curEl.classList.add("up");
+        else if (cur < peso) curEl.classList.add("down");
+      } else {
+        curEl.textContent = "\u2014";
+        curEl.classList.remove("up", "down");
+      }
+    }
+  }
+
   function addRow(asset) {
-    data[asset].push({ price: "", qty: 0, abang: false });
+    data[asset].push({ price: "", peso: 0, abang: false });
     saveData();
     render();
   }
 
   function sums(asset) {
-    let active = 0, abang = 0;
+    let active = 0, abang = 0, activeCurrent = 0, hasMarket = market[asset] != null;
     data[asset].forEach(r => {
-      const q = parseFloat(r.qty) || 0;
-      if (r.abang) abang += q; else active += q;
+      const peso = num(r.peso);
+      const entry = num(r.price);
+      if (r.abang) {
+        abang += peso;
+      } else {
+        active += peso;
+        if (hasMarket && entry > 0) activeCurrent += (peso / entry) * market[asset];
+      }
     });
-    return { active, abang };
+    return { active, abang, activeCurrent, hasMarket };
   }
 
   function updateTotals() {
     const b = sums("btc"), e = sums("eth");
-    document.getElementById("btcActive").textContent = fmt(b.active);
-    document.getElementById("btcAbang").textContent = fmt(b.abang);
-    document.getElementById("ethActive").textContent = fmt(e.active);
-    document.getElementById("ethAbang").textContent = fmt(e.abang);
+    document.getElementById("btcActive").textContent = fmtPlain(b.active);
+    document.getElementById("btcAbang").textContent = fmtPlain(b.abang);
+    document.getElementById("ethActive").textContent = fmtPlain(e.active);
+    document.getElementById("ethAbang").textContent = fmtPlain(e.abang);
 
-    document.getElementById("sumBtcAbang").textContent = fmt(b.abang);
-    document.getElementById("sumEthAbang").textContent = fmt(e.abang);
+    document.getElementById("sumBtcAbang").textContent = fmtPlain(b.abang);
+    document.getElementById("sumEthAbang").textContent = fmtPlain(e.abang);
 
-    document.getElementById("grandAbang").textContent = fmt(b.abang + e.abang);
+    document.getElementById("grandAbang").textContent = fmtPlain(b.abang + e.abang);
+
+    if (b.hasMarket || e.hasMarket) {
+      const totalCur = b.activeCurrent + e.activeCurrent;
+      document.getElementById("grandCurrent").textContent = fmtPeso(totalCur);
+    } else {
+      document.getElementById("grandCurrent").textContent = "\u2014";
+    }
+  }
+
+  // ---------- Live market prices (CoinGecko primary, Coinbase+FX fallback) ----------
+  async function loadMarket() {
+    const status = document.getElementById("mktStatus");
+    status.className = "";
+    status.textContent = "Loading market prices\u2026";
+
+    // Source 1: CoinGecko
+    try {
+      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=php", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const j = await res.json();
+      market.btc = j.bitcoin.php;
+      market.eth = j.ethereum.php;
+      applyMarket("CoinGecko");
+      return;
+    } catch (e1) {
+      // Source 2: Coinbase (USD) + FX to PHP
+      try {
+        const [b, et, fx] = await Promise.all([
+          fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot", { cache: "no-store" }),
+          fetch("https://api.coinbase.com/v2/prices/ETH-USD/spot", { cache: "no-store" }),
+          fetch("https://api.coinbase.com/v2/exchange-rates?currency=USD", { cache: "no-store" })
+        ]);
+        if (!b.ok || !et.ok || !fx.ok) throw new Error("fallback HTTP");
+        const btcUsd = parseFloat((await b.json()).data.amount);
+        const ethUsd = parseFloat((await et.json()).data.amount);
+        const usdPhp = parseFloat((await fx.json()).data.rates.PHP);
+        market.btc = btcUsd * usdPhp;
+        market.eth = ethUsd * usdPhp;
+        applyMarket("Coinbase");
+        return;
+      } catch (e2) {
+        status.className = "err";
+        status.textContent = /429/.test(e1.message)
+          ? "Rate-limited. Auto-retry mamaya."
+          : "Di ma-load ang market price. Auto-retry mamaya.";
+      }
+    }
+  }
+
+  function applyMarket(srcName) {
+    document.getElementById("mktBtc").textContent = fmtPeso(market.btc);
+    document.getElementById("mktEth").textContent = fmtPeso(market.eth);
+    document.getElementById("mktStatus").className = "";
+    document.getElementById("mktStatus").textContent = "Updated " + new Date().toLocaleTimeString() + " \u00b7 " + srcName;
+    render(); // recompute current values
   }
 
   render();
+  loadMarket();
+  setInterval(loadMarket, 120000); // refresh every 2 min
 </script>
 </body>
 </html>
