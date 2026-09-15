@@ -1523,6 +1523,15 @@
   let dbRef = null;
   let applyingRemote = false;   // guard: don't echo remote updates back to cloud
   let saveTimer = null;
+  // Unique id for THIS device/tab, so we can ignore cloud echoes of our own writes.
+  const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
+  let lastLocalWrite = 0;
+
+  // True while the user is actively typing in a field (so we don't re-render and steal focus).
+  function isTyping() {
+    const a = document.activeElement;
+    return a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA");
+  }
 
   function setSyncStatus(msg) {
     const el = document.getElementById("syncStatus");
@@ -1536,17 +1545,24 @@
       db = firebase.database();
       dbRef = db.ref("tracker/state");
 
-      // Realtime listener: whenever the cloud data changes (any device), apply it here.
+      // Realtime listener: whenever the cloud data changes on ANOTHER device, apply it here.
       dbRef.on("value", (snap) => {
         const remote = snap.val();
         if (remote && remote.state) {
+          // Ignore echoes of our own writes (same client) — prevents re-render while typing.
+          if (remote.client === CLIENT_ID) {
+            const when = remote.updatedAt ? new Date(remote.updatedAt).toLocaleTimeString() : "";
+            setSyncStatus("Saved to cloud \u2601 " + when);
+            return;
+          }
+          // A genuine update from another device. Apply it, but don't interrupt typing.
           applyingRemote = true;
           state = remote.state;
           try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
-          render();
+          if (!isTyping()) render();
           applyingRemote = false;
           const when = remote.updatedAt ? new Date(remote.updatedAt).toLocaleTimeString() : "";
-          setSyncStatus("Synced " + when + " \u2601");
+          setSyncStatus("Synced from another device " + when + " \u2601");
         } else {
           // No cloud data yet -> push our current (seeded/local) state up once.
           cloudSave(true);
@@ -1563,7 +1579,8 @@
     if (!dbRef || applyingRemote) return;
     clearTimeout(saveTimer);
     const doSave = () => {
-      dbRef.set({ state: state, updatedAt: Date.now() })
+      lastLocalWrite = Date.now();
+      dbRef.set({ state: state, updatedAt: lastLocalWrite, client: CLIENT_ID })
         .then(() => setSyncStatus("Saved to cloud \u2601 " + new Date().toLocaleTimeString()))
         .catch(() => setSyncStatus("Save failed (saved locally). Will retry on next change."));
     };
@@ -1616,7 +1633,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 18;
+  const APP_VERSION = 19;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
