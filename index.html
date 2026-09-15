@@ -212,6 +212,12 @@
   .plain .big-pl.down { color: var(--red); }
   .plain .pl-note { color: var(--muted); font-size: 12px; margin-top: 6px; }
   .plain.empty-note { color: var(--muted); font-size: 13px; }
+  .plain .per-coin { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .plain .pc-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 3px 0; }
+  .plain .pc-row .pc-name { font-weight: 600; }
+  .plain .pc-row .pc-val.up { color: var(--green); }
+  .plain .pc-row .pc-val.down { color: var(--red); }
+  .plain .pc-row .pc-val.muted { color: var(--muted); }
 
   /* Help "?" icon + tooltip */
   .help {
@@ -973,24 +979,53 @@
       return;
     }
     box.className = "plain";
+    let html = "";
     if (invested > 0 && hasMarket) {
       const diff = current - invested;
       const pct = invested > 0 ? (diff / invested) * 100 : 0;
       const up = diff >= 0;
       const word = up ? "up" : "down";
-      box.innerHTML =
+      html =
         '<div class="pl-line">You invested <span class="amt">' + fmtPeso(invested) + '</span> in coins you already bought.<br>' +
         'Right now it\u2019s worth <span class="amt">' + fmtPeso(current) + '</span>.</div>' +
         '<div class="big-pl ' + (up ? "up" : "down") + '">You are ' + word + ' ' + fmtPeso(Math.abs(diff)) +
         ' (' + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + '%)</div>' +
         (pending > 0 ? '<div class="pl-note">Plus ' + fmtPeso(pending) + ' set aside in pending (waiting) orders.</div>' : '');
     } else if (invested > 0) {
-      box.innerHTML = '<div class="pl-line">You invested <span class="amt">' + fmtPeso(invested) + '</span> so far.</div>' +
+      html = '<div class="pl-line">You invested <span class="amt">' + fmtPeso(invested) + '</span> so far.</div>' +
         '<div class="pl-note">Waiting for live prices to compute current value\u2026</div>';
     } else {
-      box.innerHTML = '<div class="pl-line">You have <span class="amt">' + fmtPeso(pending) + '</span> set aside in pending (waiting) orders.</div>' +
+      html = '<div class="pl-line">You have <span class="amt">' + fmtPeso(pending) + '</span> set aside in pending (waiting) orders.</div>' +
         '<div class="pl-note">Nothing bought yet \u2014 these are orders waiting to fill.</div>';
     }
+
+    // Per-coin profit/loss breakdown (BTC, ETH, and any future coins)
+    html += buildPerCoinBreakdown();
+    box.innerHTML = html;
+  }
+
+  // Builds a per-coin "each coin: up/down X (Y%)" list for the summary card.
+  function buildPerCoinBreakdown() {
+    const lines = state.coins.map(coinId => {
+      const lib = libById(coinId) || { sym: coinId };
+      const s = sums(coinId);
+      let valHtml;
+      if (s.active <= 0) {
+        valHtml = '<span class="pc-val muted">no active buys</span>';
+      } else if (!s.hasMarket) {
+        valHtml = '<span class="pc-val muted">\u2014</span>';
+      } else {
+        const diff = s.activeCurrent - s.active;
+        const pct = s.active > 0 ? (diff / s.active) * 100 : 0;
+        const up = diff >= 0;
+        valHtml = '<span class="pc-val ' + (up ? "up" : "down") + '">' +
+          (up ? "\u25b2 up " : "\u25bc down ") + fmtPeso(Math.abs(diff)) +
+          " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)</span>";
+      }
+      return '<div class="pc-row"><span class="pc-name">' + lib.sym + '</span>' + valHtml + '</div>';
+    }).join("");
+    if (!lines) return "";
+    return '<div class="per-coin"><div class="pl-note" style="margin:0 0 4px">Profit / loss per coin (active holdings):</div>' + lines + '</div>';
   }
 
   // ---------- Help / glossary ----------
@@ -1643,7 +1678,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 20;
+  const APP_VERSION = 21;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
