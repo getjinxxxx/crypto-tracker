@@ -15,6 +15,9 @@
 <meta name="apple-mobile-web-app-title" content="Crypto Tracker" />
 <title>Crypto Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
@@ -387,6 +390,7 @@
   let market = {};   // coinId -> { price, change24h }
   let charts = {};   // coinId -> Chart instance
   let ranges = {};   // coinId -> selected range in days
+  let chartTypes = {}; // coinId -> "line" | "candle"
   let stats = {};    // coinId -> { low30, high30 } for entry-zone suggestions
 
   function loadState() {
@@ -473,8 +477,9 @@
 
   function applyCachedChart(coinId) {
     const days = ranges[coinId] || 7;
-    const c = cacheGet("chart_" + coinId + "_" + days);
-    if (c && c.v && c.v.length) drawChart(coinId, c.v, days, (libById(coinId) || {}).color);
+    const type = chartTypes[coinId] || "line";
+    const c = cacheGet("chart_" + coinId + "_" + days + "_" + type);
+    if (c && c.v && c.v.length) drawChart(coinId, c.v, days, (libById(coinId) || {}).color, type);
     else setChartStatus(coinId, "Loading chart\u2026");
   }
   function applyCachedStats(coinId) {
@@ -519,6 +524,24 @@
       tabs.appendChild(b);
     });
 
+    // chart-type toggle (Line / Candles)
+    const typeTabs = document.createElement("div");
+    typeTabs.className = "range-tabs";
+    [["line","Line"],["candle","Candles"]].forEach(([type, label]) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      if ((chartTypes[coinId] || "line") === type) b.classList.add("active");
+      b.onclick = () => {
+        chartTypes[coinId] = type;
+        typeTabs.querySelectorAll("button").forEach(bb => bb.classList.remove("active"));
+        b.classList.add("active");
+        applyCachedChart(coinId);
+        taskQueue.push(() => loadChart(coinId));
+        runQueue();
+      };
+      typeTabs.appendChild(b);
+    });
+
     // chart
     const chartBox = document.createElement("div");
     chartBox.className = "chart-box";
@@ -528,6 +551,7 @@
 
     card.appendChild(chartBox);
     card.appendChild(tabs);
+    card.appendChild(typeTabs);
 
     // per-coin stat line
     const stat = document.createElement("div");
@@ -949,19 +973,28 @@
     const canvas = document.getElementById("chart_" + coinId);
     if (!canvas) return;
     const days = ranges[coinId] || 7;
+    const type = chartTypes[coinId] || "line";
     const lib = libById(coinId) || { color: "#888" };
+    const cacheKey = "chart_" + coinId + "_" + days + "_" + type;
     try {
-      const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + days);
-      const raw = (j.prices || []);
-      if (!raw.length) throw new Error("no data");
-      const points = raw.map(p => ({ t: p[0], y: p[1] }));
-      cacheSet("chart_" + coinId + "_" + days, points);
+      let points;
+      if (type === "candle") {
+        // OHLC: [ time, open, high, low, close ]
+        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/ohlc?vs_currency=php&days=" + days);
+        if (!Array.isArray(j) || !j.length) throw new Error("no data");
+        points = j.map(p => ({ t: p[0], o: p[1], h: p[2], l: p[3], c: p[4] }));
+      } else {
+        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + days);
+        const raw = (j.prices || []);
+        if (!raw.length) throw new Error("no data");
+        points = raw.map(p => ({ t: p[0], y: p[1] }));
+      }
+      cacheSet(cacheKey, points);
       clearChartStatus(coinId);
-      drawChart(coinId, points, days, lib.color);
+      drawChart(coinId, points, days, lib.color, type);
     } catch (e) {
-      // use cache if available, else show a friendly message
-      const c = cacheGet("chart_" + coinId + "_" + days);
-      if (c && c.v && c.v.length) { clearChartStatus(coinId); drawChart(coinId, c.v, days, lib.color); }
+      const c = cacheGet(cacheKey);
+      if (c && c.v && c.v.length) { clearChartStatus(coinId); drawChart(coinId, c.v, days, lib.color, type); }
       else setChartStatus(coinId, "Chart unavailable right now (rate-limited). Will retry.", true);
     }
   }
@@ -991,78 +1024,87 @@
     } catch (e) {}
   }
 
-  function drawChart(coinId, points, days, color) {
+  function drawChart(coinId, points, days, color, type) {
     const canvas = document.getElementById("chart_" + coinId);
     if (!canvas || typeof Chart === "undefined") return;
-    const first = points[0].y, last = points[points.length - 1].y;
+    if (charts[coinId]) { charts[coinId].destroy(); }
+    const ctx = canvas.getContext("2d");
+
+    // ----- Candlestick mode -----
+    // Requires the financial chart plugin + a time-scale date adapter (both via CDN).
+    const financialOk = Chart.registry && Chart.registry.getController && (() => { try { return !!Chart.registry.getController("candlestick"); } catch (e) { return false; } })();
+    if (type === "candle" && points.length && points[0].o != null && financialOk) {
+      const data = points.map(p => ({ x: p.t, o: p.o, h: p.h, l: p.l, c: p.c }));
+      charts[coinId] = new Chart(ctx, {
+        type: "candlestick",
+        data: { datasets: [{
+          data: data,
+          color: { up: "#34d399", down: "#ff6b6b", unchanged: "#8e8e93" },
+          borderColor: { up: "#34d399", down: "#ff6b6b", unchanged: "#8e8e93" }
+        }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: {
+              label: (it) => {
+                const d = it.raw;
+                return ["O \u20b1" + fmtN(d.o), "H \u20b1" + fmtN(d.h), "L \u20b1" + fmtN(d.l), "C \u20b1" + fmtN(d.c)];
+              }
+            } } },
+          scales: {
+            x: { type: "time", time: { unit: days <= 1 ? "hour" : days <= 7 ? "day" : "week" },
+                 grid: { display: false }, ticks: { color: "#8e8e93", font: { size: 9 }, maxTicksLimit: 5, maxRotation: 0 } },
+            y: { position: "right", grid: { color: "rgba(255,255,255,0.05)" },
+                 ticks: { color: "#8e8e93", font: { size: 10 }, maxTicksLimit: 4,
+                          callback: (v) => "\u20b1" + Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }) } }
+          }
+        }
+      });
+      return;
+    }
+
+    // ----- Line mode (default; also fallback if candles unavailable) -----
+    // Use category labels so we don't require the time adapter here.
+    const yvals = points.map(p => (p.y != null ? p.y : p.c)); // support OHLC data too
+    const first = yvals[0], last = yvals[yvals.length - 1];
     const up = last >= first;
     const lineColor = up ? "#34d399" : "#ff6b6b";
-
-    // Build simple category labels (time-of-day for 24h, else date) so we
-    // don't depend on the time-scale date adapter being available.
     const labels = points.map(p => {
       const d = new Date(p.t);
       return days <= 1
         ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         : d.toLocaleDateString([], { month: "short", day: "numeric" });
     });
-    const values = points.map(p => p.y);
     const stamps = points.map(p => p.t);
-
-    if (charts[coinId]) { charts[coinId].destroy(); }
-
-    const ctx = canvas.getContext("2d");
     const grad = ctx.createLinearGradient(0, 0, 0, 150);
     grad.addColorStop(0, (up ? "rgba(52,211,153,0.28)" : "rgba(255,107,107,0.28)"));
     grad.addColorStop(1, "rgba(0,0,0,0)");
 
     charts[coinId] = new Chart(ctx, {
       type: "line",
-      data: {
-        labels: labels,
-        datasets: [{
-          data: values,
-          borderColor: lineColor,
-          backgroundColor: grad,
-          borderWidth: 2,
-          fill: true,
-          pointRadius: 0,
-          tension: 0.25
-        }]
-      },
+      data: { labels: labels, datasets: [{
+        data: yvals, borderColor: lineColor, backgroundColor: grad,
+        borderWidth: 2, fill: true, pointRadius: 0, tension: 0.25
+      }] },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
+        responsive: true, maintainAspectRatio: false, animation: false,
         interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              title: (items) => new Date(stamps[items[0].dataIndex]).toLocaleString(),
-              label: (item) => "\u20b1" + Number(item.parsed.y).toLocaleString("en-US", { maximumFractionDigits: 2 })
-            }
-          }
-        },
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: {
+            title: (items) => new Date(stamps[items[0].dataIndex]).toLocaleString(),
+            label: (item) => "\u20b1" + Number(item.parsed.y).toLocaleString("en-US", { maximumFractionDigits: 2 })
+          } } },
         scales: {
-          x: {
-            display: true,
-            grid: { display: false },
-            ticks: { color: "#8e8e93", font: { size: 9 }, maxTicksLimit: 5, maxRotation: 0, autoSkip: true }
-          },
-          y: {
-            display: true,
-            position: "right",
-            grid: { color: "rgba(255,255,255,0.05)" },
-            ticks: {
-              color: "#8e8e93", font: { size: 10 }, maxTicksLimit: 4,
-              callback: (v) => "\u20b1" + Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 })
-            }
-          }
+          x: { display: true, grid: { display: false },
+               ticks: { color: "#8e8e93", font: { size: 9 }, maxTicksLimit: 5, maxRotation: 0, autoSkip: true } },
+          y: { display: true, position: "right", grid: { color: "rgba(255,255,255,0.05)" },
+               ticks: { color: "#8e8e93", font: { size: 10 }, maxTicksLimit: 4,
+                        callback: (v) => "\u20b1" + Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }) } }
         }
       }
     });
   }
+  function fmtN(n) { return Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }); }
 
   // ---------- Add / remove coins ----------
   function openAddCoin() { document.getElementById("addCoinModal").classList.add("show"); document.getElementById("coinSearch").value = ""; renderCoinOptions(); }
@@ -1216,7 +1258,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 15;
+  const APP_VERSION = 16;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
