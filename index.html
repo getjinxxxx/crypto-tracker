@@ -249,7 +249,8 @@
   <!-- GRAND TOTAL -->
   <div class="grand">
     <div class="row"><span class="lbl">Total Pending Money (all coins)</span><span class="val" id="grandPending">0</span></div>
-    <div class="row big"><span class="lbl">Current Value of Active (all)</span><span class="val" id="grandCurrent">&mdash;</span></div>
+    <div class="row"><span class="lbl">Current Value of Active (all)</span><span class="val" id="grandCurrent">&mdash;</span></div>
+    <div class="row big"><span class="lbl">Total Balance (active + pending)</span><span class="val" id="grandBalance">&mdash;</span></div>
   </div>
 
   <div class="legend">
@@ -731,6 +732,9 @@
     });
     document.getElementById("grandPending").textContent = fmtPlain(totalPending);
     document.getElementById("grandCurrent").textContent = anyMarket ? fmtPeso(totalCurrent) : "\u2014";
+    // Total Balance = current value of active holdings + pending money set aside
+    const balEl = document.getElementById("grandBalance");
+    if (balEl) balEl.textContent = anyMarket ? fmtPeso(totalCurrent + totalPending) : fmtPeso(totalPending);
   }
 
   // ---------- Live prices ----------
