@@ -72,7 +72,8 @@
   .asset-head .stat { color: var(--gold-bright); font-size: 13px; }
   .asset-head .stat .sep { color: var(--muted); }
 
-  table { width: 100%; border-collapse: collapse; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
   thead th {
     text-align: right; color: var(--muted); font-weight: 500;
     font-size: 11px; padding: 2px 6px 8px; text-transform: none; white-space: nowrap;
@@ -106,8 +107,20 @@
   .ro { font-size: 15px; color: var(--text); }        /* read-only value */
   .ro.small { font-size: 13px; }
   .ro.muted { color: var(--muted); }
-  .cur.up { color: var(--green); }
-  .cur.down { color: var(--red); }
+  .cur.up, .ro.up { color: var(--green); }
+  .cur.down, .ro.down { color: var(--red); }
+
+  /* signal badges */
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+    color: #000;
+  }
+  .badge.b-take  { background: var(--green); color: #062b1c; }
+  .badge.b-near  { background: var(--gold-bright); color: #3a2e00; }
+  .badge.b-hold  { background: #3a3a3c; color: var(--text); }
+  .badge.b-loss  { background: var(--red); color: #3a0b0b; }
+  .badge.b-abang { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
 
   tr.abang .cell-input,
   tr.abang .ro { text-decoration: line-through; color: var(--muted); }
@@ -163,6 +176,7 @@
       <span class="name">BTC</span>
       <span class="stat">Active: <b id="btcActive">0</b> <span class="sep">|</span> Abang: <b id="btcAbang">0</b></span>
     </div>
+    <div class="table-wrap">
     <table>
       <thead>
         <tr>
@@ -171,11 +185,14 @@
           <th>peso (&#8369;)</th>
           <th>amount</th>
           <th>current (&#8369;)</th>
+          <th>P/L</th>
+          <th class="l">signal</th>
           <th class="act"></th>
         </tr>
       </thead>
       <tbody id="btcRows"></tbody>
     </table>
+    </div>
     <button class="add-row" onclick="addRow('btc')"><span class="plus">+</span> add BTC row</button>
   </div>
 
@@ -185,6 +202,7 @@
       <span class="name">ETH</span>
       <span class="stat">Active: <b id="ethActive">0</b> <span class="sep">|</span> Abang: <b id="ethAbang">0</b></span>
     </div>
+    <div class="table-wrap">
     <table>
       <thead>
         <tr>
@@ -193,11 +211,14 @@
           <th>peso (&#8369;)</th>
           <th>amount</th>
           <th>current (&#8369;)</th>
+          <th>P/L</th>
+          <th class="l">signal</th>
           <th class="act"></th>
         </tr>
       </thead>
       <tbody id="ethRows"></tbody>
     </table>
+    </div>
     <button class="add-row" onclick="addRow('eth')"><span class="plus">+</span> add ETH row</button>
   </div>
 
@@ -208,8 +229,9 @@
   </div>
 
   <div class="hint">
-    <b>peso (&#8369;)</b> lang ang editable &middot; <b>amount</b> = peso &divide; price &middot; <b>current</b> = amount &times; live market price<br>
-    I-tap ang bilog para i-toggle active/abang. Auto-save sa device mo.
+    <b>peso (&#8369;)</b> lang ang editable &middot; <b>P/L</b> = current &minus; invested (berde = tubo, pula = lugi)<br>
+    Signal: <b>TAKE PROFIT</b> pag &ge;+30% &middot; <b>malapit na</b> pag +15&ndash;30% &middot; <b>hold</b> pag +0&ndash;15% &middot; <b>lugi</b> pag negative<br>
+    <span style="opacity:.8">Paalala: gabay lang ito base sa % gain, hindi financial advice. Ikaw pa rin ang magde-desisyon.</span>
   </div>
 
 <script>
@@ -332,6 +354,21 @@
         curSpan.setAttribute("data-role", "current");
         tdCur.appendChild(curSpan);
 
+        // P/L (profit/loss in PHP + %)
+        const tdPl = document.createElement("td");
+        const plSpan = document.createElement("span");
+        plSpan.className = "ro small";
+        plSpan.setAttribute("data-role", "pl");
+        tdPl.appendChild(plSpan);
+
+        // signal badge
+        const tdSig = document.createElement("td");
+        tdSig.style.textAlign = "left";
+        const sigSpan = document.createElement("span");
+        sigSpan.className = "badge";
+        sigSpan.setAttribute("data-role", "signal");
+        tdSig.appendChild(sigSpan);
+
         // delete
         const tdAct = document.createElement("td");
         tdAct.className = "act";
@@ -349,7 +386,7 @@
         };
         tdAct.appendChild(del);
 
-        tr.append(tdChk, tdPrice, tdPeso, tdAmount, tdCur, tdAct);
+        tr.append(tdChk, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdSig, tdAct);
         tbody.appendChild(tr);
         updateRowComputed(asset, i, tr);
       });
@@ -357,7 +394,15 @@
     updateTotals();
   }
 
-  // Computes amount + current value for one row
+  // Take-profit ladder thresholds (% gain).
+  // >= TP_TAKE  -> "TAKE PROFIT"
+  // >= TP_NEAR  -> "malapit na"
+  // 0..TP_NEAR  -> "hold"
+  // < 0         -> "lugi"
+  const TP_TAKE = 30;   // +30% or more -> strong take-profit
+  const TP_NEAR = 15;   // +15% to +30% -> consider
+
+  // Computes amount, current value, P/L, and take-profit signal for one row
   function updateRowComputed(asset, i, tr) {
     const row = data[asset][i];
     const entry = num(row.price);
@@ -365,13 +410,18 @@
     const amount = entry > 0 ? peso / entry : 0;   // crypto units
     const amountEl = tr.querySelector('[data-role="amount"]');
     const curEl = tr.querySelector('[data-role="current"]');
+    const plEl = tr.querySelector('[data-role="pl"]');
+    const sigEl = tr.querySelector('[data-role="signal"]');
 
     if (amountEl) amountEl.textContent = entry > 0 ? fmtAmount(amount) : "\u2014";
 
+    const mkt = market[asset];
+    const canCompute = mkt != null && entry > 0 && peso > 0;
+
+    // current value
     if (curEl) {
-      const mkt = market[asset];
-      if (mkt != null && entry > 0) {
-        const cur = amount * mkt;   // current PHP value
+      if (canCompute) {
+        const cur = amount * mkt;
         curEl.textContent = fmtPeso(cur);
         curEl.classList.remove("up", "down");
         if (cur > peso) curEl.classList.add("up");
@@ -379,6 +429,51 @@
       } else {
         curEl.textContent = "\u2014";
         curEl.classList.remove("up", "down");
+      }
+    }
+
+    // P/L (peso + %) and signal
+    if (plEl && sigEl) {
+      // reset
+      plEl.classList.remove("up", "down");
+      sigEl.className = "badge";
+
+      // Abang rows are pending orders (not bought yet) -> no P/L
+      if (row.abang) {
+        plEl.textContent = "\u2014";
+        sigEl.textContent = "abang";
+        sigEl.classList.add("b-abang");
+        return;
+      }
+
+      if (!canCompute) {
+        plEl.textContent = "\u2014";
+        sigEl.textContent = "\u2014";
+        return;
+      }
+
+      const cur = amount * mkt;
+      const diff = cur - peso;              // peso profit/loss
+      const pct = (diff / peso) * 100;      // percent
+
+      const sign = diff >= 0 ? "+" : "\u2212";
+      plEl.textContent = sign + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 })
+                       + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
+      plEl.classList.add(diff >= 0 ? "up" : "down");
+
+      // Signal ladder
+      if (pct >= TP_TAKE) {
+        sigEl.textContent = "TAKE PROFIT";
+        sigEl.classList.add("b-take");
+      } else if (pct >= TP_NEAR) {
+        sigEl.textContent = "malapit na";
+        sigEl.classList.add("b-near");
+      } else if (pct >= 0) {
+        sigEl.textContent = "hold";
+        sigEl.classList.add("b-hold");
+      } else {
+        sigEl.textContent = "lugi";
+        sigEl.classList.add("b-loss");
       }
     }
   }
