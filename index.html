@@ -196,6 +196,38 @@
   body.locked { overflow: hidden; }
   #app.hidden { display: none; }
 
+  /* Plain-language summary */
+  .plain {
+    background: linear-gradient(135deg, #1a2436, #141b28);
+    border: 1px solid var(--line); border-radius: 16px;
+    padding: 16px 18px; margin-bottom: 18px;
+  }
+  .plain .pl-line { font-size: 15px; line-height: 1.6; }
+  .plain .pl-line .amt { font-weight: 700; }
+  .plain .big-pl { font-size: 22px; font-weight: 800; margin-top: 8px; }
+  .plain .big-pl.up { color: var(--green); }
+  .plain .big-pl.down { color: var(--red); }
+  .plain .pl-note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .plain.empty-note { color: var(--muted); font-size: 13px; }
+
+  /* Help "?" icon + tooltip */
+  .help {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--muted);
+    color: var(--muted); font-size: 10px; font-weight: 700; cursor: pointer;
+    margin-left: 4px; vertical-align: middle; line-height: 1; flex: none;
+  }
+  .help:active { background: var(--panel-2); }
+
+  /* Help modal */
+  #helpModal .modal { max-width: 360px; }
+  #helpModal h3 { margin-bottom: 8px; }
+  #helpModal .help-body { font-size: 14px; line-height: 1.55; color: var(--text); }
+  .avg-line { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .avg-line b { color: var(--text); }
+  .coin-pl { font-size: 12px; margin-top: 2px; }
+  .coin-pl.up { color: var(--green); } .coin-pl.down { color: var(--red); }
+
   /* Modal */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none;
@@ -243,9 +275,12 @@
   <div id="app" class="hidden">
   <div class="top-title">Crypto Tracker</div>
 
+  <!-- PLAIN-LANGUAGE SUMMARY -->
+  <div class="plain" id="plainSummary"></div>
+
   <!-- SUMMARY -->
   <div class="summary">
-    <div class="cap">Pending money (waiting orders), per coin</div>
+    <div class="cap">Pending money (waiting orders), per coin <span class="help" data-help="pending">?</span></div>
     <div id="summaryLines"></div>
   </div>
 
@@ -257,9 +292,9 @@
 
   <!-- GRAND TOTAL -->
   <div class="grand">
-    <div class="row"><span class="lbl">Total Pending Money (all coins)</span><span class="val" id="grandPending">0</span></div>
-    <div class="row"><span class="lbl">Current Value of Active (all)</span><span class="val" id="grandCurrent">&mdash;</span></div>
-    <div class="row big"><span class="lbl">Total Balance (active + pending)</span><span class="val" id="grandBalance">&mdash;</span></div>
+    <div class="row"><span class="lbl">Total Pending Money (all coins) <span class="help" data-help="pending">?</span></span><span class="val" id="grandPending">0</span></div>
+    <div class="row"><span class="lbl">Current Value of Active (all) <span class="help" data-help="current">?</span></span><span class="val" id="grandCurrent">&mdash;</span></div>
+    <div class="row big"><span class="lbl">Total Balance (active + pending) <span class="help" data-help="balance">?</span></span><span class="val" id="grandBalance">&mdash;</span></div>
   </div>
 
   <div class="legend">
@@ -281,6 +316,15 @@
   <div class="sync-status" id="syncStatus" style="text-align:center;font-size:11px;color:var(--muted);margin-top:10px"></div>
 
   </div><!-- /#app -->
+
+  <!-- HELP MODAL -->
+  <div class="modal-overlay" id="helpModal">
+    <div class="modal">
+      <h3 id="helpTitle">Help</h3>
+      <div class="help-body" id="helpBody"></div>
+      <button class="close-btn" onclick="closeHelp()">Got it</button>
+    </div>
+  </div>
 
   <!-- ADD COIN MODAL -->
   <div class="modal-overlay" id="addCoinModal">
@@ -489,6 +533,8 @@
     const stat = document.createElement("div");
     stat.className = "coin-stat";
     stat.innerHTML = 'Active: <b data-role="active">0</b> &middot; Pending: <b data-role="pending">0</b>' +
+      '<span class="avg-line" data-role="avg"></span>' +
+      '<span class="coin-pl" data-role="coinpl"></span>' +
       '<span data-role="range" style="display:block;margin-top:2px"></span>';
     card.appendChild(stat);
 
@@ -498,8 +544,14 @@
     const table = document.createElement("table");
     table.innerHTML =
       '<thead><tr>' +
-      '<th class="c"></th><th class="l">Entry Price</th><th>Invested (\u20b1)</th>' +
-      '<th>Amount</th><th>Current (\u20b1)</th><th>P/L</th><th class="l">Signal</th><th class="act"></th>' +
+      '<th class="c"></th>' +
+      '<th class="l">Entry Price <span class="help" data-help="entry">?</span></th>' +
+      '<th>Invested (\u20b1) <span class="help" data-help="invested">?</span></th>' +
+      '<th>Amount <span class="help" data-help="amount">?</span></th>' +
+      '<th>Current (\u20b1) <span class="help" data-help="current">?</span></th>' +
+      '<th>P/L <span class="help" data-help="pl">?</span></th>' +
+      '<th class="l">Signal <span class="help" data-help="signal">?</span></th>' +
+      '<th class="act"></th>' +
       '</tr></thead><tbody></tbody>';
     const tbody = table.querySelector("tbody");
     (state.rows[coinId] || []).forEach((row, i) => tbody.appendChild(buildRow(coinId, row, i)));
@@ -696,7 +748,7 @@
   }
 
   function sums(coinId) {
-    let active = 0, pending = 0, activeCurrent = 0;
+    let active = 0, pending = 0, activeCurrent = 0, activeAmount = 0;
     const mkt = market[coinId] ? market[coinId].price : null;
     (state.rows[coinId] || []).forEach(r => {
       const peso = num(r.peso);
@@ -704,10 +756,71 @@
       // active rows with no typed entry price use the live market price
       const entry = typedEntry > 0 ? typedEntry : (mkt != null ? mkt : 0);
       if (r.pending) pending += peso;
-      else { active += peso; if (mkt != null && entry > 0) activeCurrent += (peso / entry) * mkt; }
+      else {
+        active += peso;
+        if (entry > 0) activeAmount += peso / entry;             // total crypto units bought
+        if (mkt != null && entry > 0) activeCurrent += (peso / entry) * mkt;
+      }
     });
-    return { active, pending, activeCurrent, hasMarket: mkt != null };
+    // average buy price = total pesos invested / total units bought
+    const avgPrice = activeAmount > 0 ? active / activeAmount : null;
+    return { active, pending, activeCurrent, activeAmount, avgPrice, hasMarket: mkt != null };
   }
+
+  // Plain-language "you invested X, now worth Y, up/down Z" summary
+  function renderPlain(invested, current, pending, hasMarket) {
+    const box = document.getElementById("plainSummary");
+    if (!box) return;
+    if (invested <= 0 && pending <= 0) {
+      box.className = "plain empty-note";
+      box.textContent = "Add your buys below to see a simple summary here.";
+      return;
+    }
+    box.className = "plain";
+    if (invested > 0 && hasMarket) {
+      const diff = current - invested;
+      const pct = invested > 0 ? (diff / invested) * 100 : 0;
+      const up = diff >= 0;
+      const word = up ? "up" : "down";
+      box.innerHTML =
+        '<div class="pl-line">You invested <span class="amt">' + fmtPeso(invested) + '</span> in coins you already bought.<br>' +
+        'Right now it\u2019s worth <span class="amt">' + fmtPeso(current) + '</span>.</div>' +
+        '<div class="big-pl ' + (up ? "up" : "down") + '">You are ' + word + ' ' + fmtPeso(Math.abs(diff)) +
+        ' (' + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + '%)</div>' +
+        (pending > 0 ? '<div class="pl-note">Plus ' + fmtPeso(pending) + ' set aside in pending (waiting) orders.</div>' : '');
+    } else if (invested > 0) {
+      box.innerHTML = '<div class="pl-line">You invested <span class="amt">' + fmtPeso(invested) + '</span> so far.</div>' +
+        '<div class="pl-note">Waiting for live prices to compute current value\u2026</div>';
+    } else {
+      box.innerHTML = '<div class="pl-line">You have <span class="amt">' + fmtPeso(pending) + '</span> set aside in pending (waiting) orders.</div>' +
+        '<div class="pl-note">Nothing bought yet \u2014 these are orders waiting to fill.</div>';
+    }
+  }
+
+  // ---------- Help / glossary ----------
+  const HELP_TEXT = {
+    entry: { t: "Entry Price", b: "The price of the coin when you bought (or plan to buy) it. In peso per 1 whole coin." },
+    invested: { t: "Invested (\u20b1)", b: "The peso amount you put into this row. This is the only field you edit \u2014 the rest are calculated for you." },
+    amount: { t: "Amount", b: "How much of the coin you got, in coin units. It\u2019s your Invested peso divided by the Entry Price." },
+    current: { t: "Current (\u20b1)", b: "What your coins in this row are worth right now, using the live market price. Green means it went up, red means down." },
+    pl: { t: "P/L (Profit / Loss)", b: "Current value minus what you invested. Green = you\u2019re earning, red = you\u2019re losing (for now). For pending orders, it shows how far the price must drop to reach your target." },
+    signal: { t: "Signal", b: "A simple guide.\n\nFor coins you bought: Take profit (\u2265+30%), Getting close (+15\u201330%), Hold (0\u201315%), At a loss (below 0%).\n\nFor pending orders: Ready to buy, Good dip entry (near recent low), Fair entry (mid), High entry (near recent high), Deep dip target (below the last 30 days).\n\nNot financial advice \u2014 just a guide." },
+    pending: { t: "Pending money", b: "Money set aside for orders that are still waiting to buy at your target price. You haven\u2019t actually bought these yet." },
+    balance: { t: "Total Balance", b: "Everything together: the current value of coins you already bought PLUS the money set aside in pending orders." }
+  };
+  function openHelp(key) {
+    const h = HELP_TEXT[key];
+    if (!h) return;
+    document.getElementById("helpTitle").textContent = h.t;
+    document.getElementById("helpBody").innerText = h.b;
+    document.getElementById("helpModal").classList.add("show");
+  }
+  function closeHelp() { document.getElementById("helpModal").classList.remove("show"); }
+  // delegate clicks on any ? icon
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest(".help");
+    if (el) { e.preventDefault(); openHelp(el.getAttribute("data-help")); }
+  });
 
   function renderSummary() {
     const box = document.getElementById("summaryLines");
@@ -724,10 +837,11 @@
   }
 
   function updateTotals() {
-    let totalPending = 0, totalCurrent = 0, anyMarket = false;
+    let totalPending = 0, totalCurrent = 0, totalActiveInvested = 0, anyMarket = false;
     state.coins.forEach(coinId => {
       const s = sums(coinId);
       totalPending += s.pending;
+      totalActiveInvested += s.active;
       if (s.hasMarket) { anyMarket = true; totalCurrent += s.activeCurrent; }
       // per-card stat
       const card = document.getElementById("chart_" + coinId);
@@ -737,10 +851,34 @@
         const p = cardEl.querySelector('[data-role="pending"]');
         if (a) a.textContent = fmtPlain(s.active);
         if (p) p.textContent = fmtPlain(s.pending);
+
+        // average buy price
+        const avgEl = cardEl.querySelector('[data-role="avg"]');
+        if (avgEl) {
+          avgEl.style.display = "block";
+          avgEl.innerHTML = s.avgPrice != null
+            ? "Avg buy price: <b>" + fmtPeso(s.avgPrice) + "</b>"
+            : "";
+        }
+        // per-coin overall P/L (active only)
+        const plEl = cardEl.querySelector('[data-role="coinpl"]');
+        if (plEl) {
+          if (s.hasMarket && s.active > 0) {
+            const diff = s.activeCurrent - s.active;
+            const pct = (diff / s.active) * 100;
+            const up = diff >= 0;
+            plEl.style.display = "block";
+            plEl.className = "coin-pl " + (up ? "up" : "down");
+            plEl.textContent = (up ? "Up " : "Down ") + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%) overall";
+          } else { plEl.textContent = ""; }
+        }
       }
     });
     document.getElementById("grandPending").textContent = fmtPlain(totalPending);
     document.getElementById("grandCurrent").textContent = anyMarket ? fmtPeso(totalCurrent) : "\u2014";
+
+    // Plain-language summary
+    renderPlain(totalActiveInvested, totalCurrent, totalPending, anyMarket);
     // Total Balance = current value of active holdings + pending money set aside
     const balEl = document.getElementById("grandBalance");
     if (balEl) balEl.textContent = anyMarket ? fmtPeso(totalCurrent + totalPending) : fmtPeso(totalPending);
@@ -1078,7 +1216,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 14;
+  const APP_VERSION = 15;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
