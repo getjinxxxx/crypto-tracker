@@ -72,7 +72,10 @@
     border-radius: 999px; font-size: 12px; padding: 4px 12px; cursor: pointer;
   }
   .range-tabs button.active { background: var(--gold); color: #000; border-color: var(--gold); font-weight: 700; }
-  .chart-status { text-align: center; font-size: 11px; color: var(--muted); height: 150px; display: flex; align-items: center; justify-content: center; }
+  .chart-status {
+    position: absolute; inset: 0; text-align: center; font-size: 11px; color: var(--muted);
+    display: flex; align-items: center; justify-content: center; padding: 0 20px;
+  }
   .chart-status.err { color: var(--danger); }
 
   .coin-stat { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
@@ -318,12 +321,67 @@
     state.coins.forEach(coinId => container.appendChild(buildCoinCard(coinId)));
     renderSummary();
     updateTotals();
-    // (re)load charts + 30d stats for entry suggestions
+    // Show any cached chart/stats immediately, then refresh from network (queued).
     state.coins.forEach(coinId => {
       if (!ranges[coinId]) ranges[coinId] = 7;
-      loadChart(coinId);
-      if (!stats[coinId]) loadStats(coinId);
+      applyCachedChart(coinId);
+      applyCachedStats(coinId);
     });
+    queueDataLoads();
+  }
+
+  // ---------- Request queue (avoids hammering the rate-limited free API) ----------
+  let taskQueue = [];
+  let queueRunning = false;
+
+  function queueDataLoads() {
+    // rebuild queue: prices first, then per-coin chart + stats
+    taskQueue = [];
+    taskQueue.push(() => loadPrices());
+    state.coins.forEach(coinId => {
+      taskQueue.push(() => loadChart(coinId));
+      if (!stats[coinId]) taskQueue.push(() => loadStats(coinId));
+    });
+    runQueue();
+  }
+
+  async function runQueue() {
+    if (queueRunning) return;
+    queueRunning = true;
+    while (taskQueue.length) {
+      const task = taskQueue.shift();
+      try { await task(); } catch (e) {}
+      // small gap between requests to stay under the free rate limit
+      await sleep(700);
+    }
+    queueRunning = false;
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // fetch with one retry on 429 (rate limit)
+  async function fetchJson(url) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) return res.json();
+      if (res.status === 429 && attempt === 0) { await sleep(2500); continue; }
+      throw new Error("HTTP " + res.status);
+    }
+  }
+
+  // ---------- Cache helpers ----------
+  function cacheSet(key, val) { try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v: val })); } catch (e) {} }
+  function cacheGet(key) { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+
+  function applyCachedChart(coinId) {
+    const days = ranges[coinId] || 7;
+    const c = cacheGet("chart_" + coinId + "_" + days);
+    if (c && c.v && c.v.length) drawChart(coinId, c.v, days, (libById(coinId) || {}).color);
+    else setChartStatus(coinId, "Loading chart\u2026");
+  }
+  function applyCachedStats(coinId) {
+    const c = cacheGet("stats_" + coinId);
+    if (c && c.v) { stats[coinId] = c.v; showRange(coinId); refreshRows(coinId); }
   }
 
   function buildCoinCard(coinId) {
@@ -350,7 +408,16 @@
       const b = document.createElement("button");
       b.textContent = label;
       if ((ranges[coinId] || 7) === days) b.classList.add("active");
-      b.onclick = () => { ranges[coinId] = days; render(); };
+      b.onclick = () => {
+        ranges[coinId] = days;
+        // update tab styles without full re-render
+        tabs.querySelectorAll("button").forEach(bb => bb.classList.remove("active"));
+        b.classList.add("active");
+        // show cached chart for this range instantly, then queue a refresh
+        applyCachedChart(coinId);
+        taskQueue.push(() => loadChart(coinId));
+        runQueue();
+      };
       tabs.appendChild(b);
     });
 
@@ -610,15 +677,16 @@
     if (!state.coins.length) return;
     const ids = state.coins.join(",");
     try {
-      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=php&include_24hr_change=true", { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const j = await res.json();
+      const j = await fetchJson("https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=php&include_24hr_change=true");
       state.coins.forEach(coinId => {
         if (j[coinId]) market[coinId] = { price: j[coinId].php, change24h: j[coinId].php_24h_change };
       });
+      cacheSet("prices", market);
       applyPrices();
     } catch (e) {
-      // best-effort; charts still try independently
+      // fall back to cached prices so values/charts aren't blank
+      const c = cacheGet("prices");
+      if (c && c.v) { market = Object.assign(market, c.v); applyPrices(); }
     }
   }
 
@@ -645,43 +713,69 @@
   }
 
   // ---------- Charts (per coin) ----------
+  function setChartStatus(coinId, msg, isErr) {
+    const canvas = document.getElementById("chart_" + coinId);
+    if (!canvas) return;
+    const box = canvas.parentElement;
+    // only show a status overlay if there's no chart drawn yet
+    if (charts[coinId]) return;
+    let s = box.querySelector(".chart-status");
+    if (!s) { s = document.createElement("div"); s.className = "chart-status"; box.appendChild(s); }
+    s.textContent = msg;
+    s.classList.toggle("err", !!isErr);
+    canvas.style.display = "none";
+  }
+  function clearChartStatus(coinId) {
+    const canvas = document.getElementById("chart_" + coinId);
+    if (!canvas) return;
+    const s = canvas.parentElement.querySelector(".chart-status");
+    if (s) s.remove();
+    canvas.style.display = "";
+  }
+
   async function loadChart(coinId) {
     const canvas = document.getElementById("chart_" + coinId);
     if (!canvas) return;
     const days = ranges[coinId] || 7;
     const lib = libById(coinId) || { color: "#888" };
     try {
-      const res = await fetch("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + days, { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const j = await res.json();
+      const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + days);
       const raw = (j.prices || []);
       if (!raw.length) throw new Error("no data");
       const points = raw.map(p => ({ t: p[0], y: p[1] }));
+      cacheSet("chart_" + coinId + "_" + days, points);
+      clearChartStatus(coinId);
       drawChart(coinId, points, days, lib.color);
     } catch (e) {
-      // leave canvas empty on failure; price still shows
+      // use cache if available, else show a friendly message
+      const c = cacheGet("chart_" + coinId + "_" + days);
+      if (c && c.v && c.v.length) { clearChartStatus(coinId); drawChart(coinId, c.v, days, lib.color); }
+      else setChartStatus(coinId, "Chart unavailable right now (rate-limited). Will retry.", true);
     }
   }
 
-  // 30-day low/high for entry-zone suggestions (fetched once per coin, cached)
+  function showRange(coinId) {
+    const card = document.getElementById("chart_" + coinId);
+    if (!card || !stats[coinId]) return;
+    const rangeEl = card.closest(".coin-card").querySelector('[data-role="range"]');
+    if (rangeEl) rangeEl.innerHTML = "30d range: <b>" + fmtPeso(stats[coinId].low30) + "</b> &ndash; <b>" + fmtPeso(stats[coinId].high30) + "</b> (entry suggestion basis)";
+  }
+  function refreshRows(coinId) {
+    const card = document.getElementById("chart_" + coinId);
+    if (!card) return;
+    card.closest(".coin-card").querySelectorAll("tbody tr").forEach((tr, i) => updateRowComputed(coinId, i, tr));
+  }
+
+  // 30-day low/high for entry-zone suggestions (cached)
   async function loadStats(coinId) {
     try {
-      const res = await fetch("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=30", { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const j = await res.json();
+      const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=30");
       const ys = (j.prices || []).map(p => p[1]).filter(v => isFinite(v));
       if (!ys.length) return;
       stats[coinId] = { low30: Math.min(...ys), high30: Math.max(...ys) };
-      // refresh pending-row indicators + show the 30d range basis
-      const card = document.getElementById("chart_" + coinId);
-      if (card) {
-        const cardEl = card.closest(".coin-card");
-        cardEl.querySelectorAll("tbody tr").forEach((tr, i) => updateRowComputed(coinId, i, tr));
-        const rangeEl = cardEl.querySelector('[data-role="range"]');
-        if (rangeEl) {
-          rangeEl.innerHTML = "30d range: <b>" + fmtPeso(stats[coinId].low30) + "</b> &ndash; <b>" + fmtPeso(stats[coinId].high30) + "</b> (entry suggestion basis)";
-        }
-      }
+      cacheSet("stats_" + coinId, stats[coinId]);
+      showRange(coinId);
+      refreshRows(coinId);
     } catch (e) {}
   }
 
@@ -789,8 +883,7 @@
     ranges[coinId] = 7;
     saveState();
     closeAddCoin();
-    render();
-    loadPrices();
+    render(); // render() triggers queueDataLoads()
   }
 
   function removeCoin(coinId) {
@@ -804,10 +897,11 @@
   }
 
   // ---------- Init ----------
-  render();
-  loadPrices();
-  setInterval(loadPrices, 120000);              // prices every 2 min
-  setInterval(() => state.coins.forEach(loadChart), 300000); // charts every 5 min
+  render(); // render() triggers queueDataLoads()
+  // refresh prices every 2 min (queued so it won't collide with chart loads)
+  setInterval(() => { taskQueue.push(() => loadPrices()); runQueue(); }, 120000);
+  // refresh charts every 5 min
+  setInterval(() => { state.coins.forEach(coinId => taskQueue.push(() => loadChart(coinId))); runQueue(); }, 300000);
 </script>
 </body>
 </html>
