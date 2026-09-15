@@ -216,22 +216,23 @@
   // Each row: { price (entry price), peso (PHP invested), abang }
   const DEFAULT_DATA = {
     btc: [
-      { price: "911072.2", peso: 2500, abang: false },
-      { price: "910859.2", peso: 2500, abang: false },
-      { price: "500000",   peso: 2500, abang: true },
-      { price: "700000",   peso: 2500, abang: true }
+      { price: "4911072.2", peso: 1998.81, abang: false }, // filled: 0.0004070 BTC
+      { price: "4910859.2", peso: 3000.04, abang: false }, // filled: 0.0006109 BTC
+      { price: "4500000",   peso: 2500,    abang: true },  // open order
+      { price: "4700000",   peso: 2500,    abang: true }   // open order
     ],
     eth: [
-      { price: "149750", peso: 500,  abang: false },
-      { price: "150000", peso: 2500, abang: true },
-      { price: "147000", peso: 2500, abang: true },
-      { price: "137000", peso: 2500, abang: true },
-      { price: "146500", peso: 2500, abang: true }
+      { price: "149750",   peso: 236.90, abang: false }, // filled: 0.001582 ETH
+      { price: "151936.4", peso: 221.68, abang: false }, // filled: 0.001459 ETH
+      { price: "150000",   peso: 2500,   abang: true },  // open order
+      { price: "147000",   peso: 2500,   abang: true },  // open order
+      { price: "137000",   peso: 2500,   abang: true },  // open order
+      { price: "146500",   peso: 2500,   abang: true }   // open order
     ]
   };
 
   // Bump this whenever DEFAULT_DATA changes and you want it to replace old saved data.
-  const SEED_VERSION = 5;
+  const SEED_VERSION = 6;
   const STORAGE_KEY = "cryptoTrackerV2";
   const SEED_KEY = "cryptoTrackerSeed";
 
