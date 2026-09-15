@@ -476,13 +476,20 @@
     circle.onclick = () => { state.rows[coinId][i].pending = !state.rows[coinId][i].pending; saveState(); render(); };
     tdChk.appendChild(circle);
 
-    // entry price (read-only)
+    // entry price (editable). If left blank, the current market price is used.
     const tdPrice = document.createElement("td");
     tdPrice.style.textAlign = "left";
-    const priceSpan = document.createElement("span");
-    priceSpan.className = "ro";
-    priceSpan.textContent = fmtPlain(num(row.price));
-    tdPrice.appendChild(priceSpan);
+    const priceInput = document.createElement("input");
+    priceInput.className = "cell-input";
+    priceInput.style.textAlign = "left";
+    priceInput.type = "text"; priceInput.inputMode = "decimal";
+    priceInput.value = row.price;
+    priceInput.placeholder = "market";
+    priceInput.oninput = () => {
+      state.rows[coinId][i].price = priceInput.value;
+      saveState(); updateRowComputed(coinId, i, tr); updateTotals();
+    };
+    tdPrice.appendChild(priceInput);
 
     // invested (editable)
     const tdPeso = document.createElement("td");
@@ -538,13 +545,16 @@
   function updateRowComputed(coinId, i, tr) {
     const row = state.rows[coinId][i];
     if (!row) return;
-    const entry = num(row.price), peso = num(row.peso);
+    const peso = num(row.peso);
+    const mkt = market[coinId] ? market[coinId].price : null;
+    // If no entry price was typed, use the live market price as the entry.
+    const typedEntry = num(row.price);
+    const entry = typedEntry > 0 ? typedEntry : (mkt != null ? mkt : 0);
     const amount = entry > 0 ? peso / entry : 0;
     const amountEl = tr.querySelector('[data-role="amount"]');
     const curEl = tr.querySelector('[data-role="current"]');
     const plEl = tr.querySelector('[data-role="pl"]');
     const sigEl = tr.querySelector('[data-role="signal"]');
-    const mkt = market[coinId] ? market[coinId].price : null;
     const canCompute = mkt != null && entry > 0 && peso > 0;
 
     if (amountEl) amountEl.textContent = entry > 0 ? fmtAmount(amount) : "\u2014";
@@ -563,16 +573,21 @@
       sigEl.className = "badge";
 
       // ----- PENDING rows: show distance-to-target + entry-zone suggestion -----
+      // Use the TYPED target price here (a pending order waits for a specific price).
       if (row.pending) {
+        const target = typedEntry; // do not use market fallback for a waiting target
+        if (target <= 0) {
+          plEl.textContent = "\u2014";
+          sigEl.textContent = "Set target"; sigEl.classList.add("b-wait");
+          return;
+        }
         // "P/L" column shows how far the market is from your target entry.
-        if (mkt != null && entry > 0) {
-          const gap = ((mkt - entry) / entry) * 100; // market vs target
-          if (mkt <= entry) {
-            // market has reached (or dropped below) your target -> should fill
+        if (mkt != null) {
+          const gap = ((mkt - target) / target) * 100; // market vs target
+          if (mkt <= target) {
             plEl.textContent = "target hit";
             plEl.classList.add("up");
           } else {
-            // market still above target -> price must drop this much to trigger
             plEl.textContent = "\u2193 " + Math.abs(gap).toFixed(1) + "% to target";
           }
         } else {
@@ -581,14 +596,13 @@
 
         // Signal badge = entry-zone verdict using 30d low/high.
         const st = stats[coinId];
-        if (mkt != null && entry > 0 && mkt <= entry) {
+        if (mkt != null && mkt <= target) {
           sigEl.textContent = "Ready to buy";
           sigEl.classList.add("b-take");
-        } else if (st && entry > 0) {
+        } else if (st) {
           const range = st.high30 - st.low30;
-          // position of target within the last 30 days: 0 = at the low, 1 = at the high
-          const posn = range > 0 ? (entry - st.low30) / range : 0.5;
-          if (entry < st.low30 * 0.985) {
+          const posn = range > 0 ? (target - st.low30) / range : 0.5;
+          if (target < st.low30 * 0.985) {
             // target is below anything seen in 30d -> may never fill soon
             sigEl.textContent = "Deep dip target";
             sigEl.classList.add("b-wait");
@@ -631,7 +645,10 @@
     let active = 0, pending = 0, activeCurrent = 0;
     const mkt = market[coinId] ? market[coinId].price : null;
     (state.rows[coinId] || []).forEach(r => {
-      const peso = num(r.peso), entry = num(r.price);
+      const peso = num(r.peso);
+      const typedEntry = num(r.price);
+      // active rows with no typed entry price use the live market price
+      const entry = typedEntry > 0 ? typedEntry : (mkt != null ? mkt : 0);
       if (r.pending) pending += peso;
       else { active += peso; if (mkt != null && entry > 0) activeCurrent += (peso / entry) * mkt; }
     });
