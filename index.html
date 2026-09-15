@@ -352,33 +352,80 @@
     const status = document.getElementById("priceStatus");
     status.className = "";
     status.textContent = "Loading live prices…";
-    try {
-      const url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=php,usd";
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const j = await res.json();
-      prices.btc.php = j.bitcoin.php;  prices.btc.usd = j.bitcoin.usd;
-      prices.eth.php = j.ethereum.php; prices.eth.usd = j.ethereum.usd;
 
-      document.getElementById("btcPhp").textContent = fmtPhp(prices.btc.php);
-      document.getElementById("btcUsd").textContent = fmtUsd(prices.btc.usd);
-      document.getElementById("ethPhp").textContent = fmtPhp(prices.eth.php);
-      document.getElementById("ethUsd").textContent = fmtUsd(prices.eth.usd);
+    // Two data sources: CoinGecko primary, then a fallback that also gives PHP+USD.
+    const sources = [
+      {
+        name: "CoinGecko",
+        url: "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=php,usd",
+        parse: (j) => ({
+          btc: { php: j.bitcoin.php, usd: j.bitcoin.usd },
+          eth: { php: j.ethereum.php, usd: j.ethereum.usd }
+        })
+      },
+      {
+        name: "Coinbase+FX",
+        // Coinbase gives USD spot; convert to PHP using an FX rate.
+        url: null,
+        custom: async () => {
+          const [btcUsdRes, ethUsdRes, fxRes] = await Promise.all([
+            fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot", { cache: "no-store" }),
+            fetch("https://api.coinbase.com/v2/prices/ETH-USD/spot", { cache: "no-store" }),
+            fetch("https://api.coinbase.com/v2/exchange-rates?currency=USD", { cache: "no-store" })
+          ]);
+          if (!btcUsdRes.ok || !ethUsdRes.ok || !fxRes.ok) throw new Error("HTTP fallback");
+          const btcUsd = parseFloat((await btcUsdRes.json()).data.amount);
+          const ethUsd = parseFloat((await ethUsdRes.json()).data.amount);
+          const usdToPhp = parseFloat((await fxRes.json()).data.rates.PHP);
+          return {
+            btc: { php: btcUsd * usdToPhp, usd: btcUsd },
+            eth: { php: ethUsd * usdToPhp, usd: ethUsd }
+          };
+        }
+      }
+    ];
 
-      const now = new Date();
-      status.textContent = "Updated " + now.toLocaleTimeString();
-      updateTotals();
-    } catch (err) {
-      status.className = "error";
-      status.textContent = "Could not load live prices (" + err.message + "). Tap Refresh to retry.";
+    let lastErr = null;
+    for (const src of sources) {
+      try {
+        let parsed;
+        if (src.custom) {
+          parsed = await src.custom();
+        } else {
+          const res = await fetch(src.url, { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          parsed = src.parse(await res.json());
+        }
+        prices.btc.php = parsed.btc.php; prices.btc.usd = parsed.btc.usd;
+        prices.eth.php = parsed.eth.php; prices.eth.usd = parsed.eth.usd;
+
+        document.getElementById("btcPhp").textContent = fmtPhp(prices.btc.php);
+        document.getElementById("btcUsd").textContent = fmtUsd(prices.btc.usd);
+        document.getElementById("ethPhp").textContent = fmtPhp(prices.eth.php);
+        document.getElementById("ethUsd").textContent = fmtUsd(prices.eth.usd);
+
+        status.className = "";
+        status.textContent = "Updated " + new Date().toLocaleTimeString() + " · " + src.name;
+        updateTotals();
+        return; // success, stop trying sources
+      } catch (err) {
+        lastErr = err;
+      }
     }
+
+    // All sources failed
+    status.className = "error";
+    const msg = (lastErr && /429/.test(lastErr.message))
+      ? "Rate-limited (masyadong madalas). Susubukan ulit mamaya, o tap Refresh."
+      : "Could not load live prices" + (lastErr ? " (" + lastErr.message + ")" : "") + ". Tap Refresh to retry.";
+    status.textContent = msg;
   }
 
   // ---------- Init ----------
   render();
   loadPrices();
-  // auto refresh every 60s
-  setInterval(loadPrices, 60000);
+  // auto refresh every 2 minutes (para hindi ma-rate-limit ang free API)
+  setInterval(loadPrices, 120000);
 </script>
 </body>
 </html>
