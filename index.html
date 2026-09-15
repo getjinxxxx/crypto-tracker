@@ -192,17 +192,31 @@
     ]
   };
 
+  // Bump this whenever DEFAULT_DATA changes and you want it to replace old saved data.
+  const SEED_VERSION = 3;
+  const STORAGE_KEY = "cryptoTrackerV2";
+  const SEED_KEY = "cryptoTrackerSeed";
+
   let data = loadData();
 
   function loadData() {
     try {
-      const raw = localStorage.getItem("cryptoTrackerV2");
-      if (raw) return JSON.parse(raw);
+      const savedSeed = parseInt(localStorage.getItem(SEED_KEY) || "0", 10);
+      const raw = localStorage.getItem(STORAGE_KEY);
+      // If the built-in default data is newer than what's saved, use the default
+      // (this loads your real entries even if an older version was cached).
+      if (raw && savedSeed >= SEED_VERSION) return JSON.parse(raw);
     } catch (e) {}
-    return JSON.parse(JSON.stringify(DEFAULT_DATA));
+    // Seed with the real default data and record the seed version.
+    const seeded = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+      localStorage.setItem(SEED_KEY, String(SEED_VERSION));
+    } catch (e) {}
+    return seeded;
   }
   function saveData() {
-    try { localStorage.setItem("cryptoTrackerV2", JSON.stringify(data)); } catch (e) {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
   }
 
   function fmt(n) {
