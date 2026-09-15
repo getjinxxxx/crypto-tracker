@@ -1,0 +1,11 @@
+{
+  "name": "Crypto Tracker",
+  "short_name": "Crypto Tracker",
+  "description": "Personal BTC/ETH holdings tracker with live prices and charts",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait"
+}
