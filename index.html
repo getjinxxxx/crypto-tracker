@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#000000" />
 <title>Crypto Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #000000;
@@ -18,15 +19,14 @@
     --danger: #ff6b6b;
     --green: #34d399;
     --red: #ff6b6b;
-    --btc: #f7931a;
-    --eth: #627eea;
+    --accent: #4f8cff;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; background: var(--bg); }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--text);
-    max-width: 760px;
+    max-width: 820px;
     margin: 0 auto;
     padding: 14px 14px 60px;
     line-height: 1.4;
@@ -34,223 +34,175 @@
 
   .top-title { text-align: center; font-size: 18px; font-weight: 700; margin: 6px 0 16px; letter-spacing: .2px; }
 
-  /* Live market prices */
-  .market {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-    margin-bottom: 16px;
-  }
-  .market .mc {
-    background: var(--panel); border-radius: 14px; padding: 10px 14px;
-    border: 1px solid var(--line);
-  }
-  .market .mc .n { font-size: 12px; color: var(--muted); }
-  .market .mc .p { font-size: 16px; font-weight: 700; margin-top: 2px; }
-  #mktStatus { grid-column: 1 / -1; font-size: 11px; color: var(--muted); text-align: center; }
-  #mktStatus.err { color: var(--danger); }
-
-  /* Summary card */
+  /* Summary */
   .summary {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 14px 16px;
-    margin-bottom: 22px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 14px 16px; margin-bottom: 22px;
   }
   .summary .cap { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
-  .summary .line {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 0; font-size: 16px;
-  }
+  .summary .line { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 16px; }
   .summary .line .coin { font-weight: 600; }
   .summary .line .val { color: var(--gold-bright); font-weight: 700; font-size: 17px; }
+  .summary .empty { color: var(--muted); font-size: 13px; }
 
-  /* Asset card */
-  .asset {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 14px 14px 8px;
-    margin-bottom: 18px;
+  /* Coin card */
+  .coin-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 14px 14px 8px; margin-bottom: 18px;
   }
-  .asset-head {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 10px;
+  .coin-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .coin-head .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .coin-head .name { font-size: 18px; font-weight: 700; }
+  .coin-head .sym { color: var(--muted); font-size: 13px; }
+  .coin-head .price-box { margin-left: auto; text-align: right; }
+  .coin-head .price { font-size: 17px; font-weight: 700; }
+  .coin-head .chg { font-size: 12px; }
+  .coin-head .chg.up { color: var(--green); }
+  .coin-head .chg.down { color: var(--red); }
+  .coin-head .remove-coin {
+    background: none; border: none; color: var(--muted); font-size: 18px;
+    cursor: pointer; padding: 2px 4px; margin-left: 6px;
   }
-  .asset-head .dot { width: 10px; height: 10px; border-radius: 50%; }
-  .asset-head .dot.btc { background: var(--btc); }
-  .asset-head .dot.eth { background: var(--eth); }
-  .asset-head .name { font-size: 17px; font-weight: 700; }
-  .asset-head .stat { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
-  .asset-head .stat b { color: var(--gold-bright); }
 
+  /* Chart */
+  .chart-box { position: relative; height: 150px; margin-bottom: 6px; }
+  .range-tabs { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+  .range-tabs button {
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; font-size: 12px; padding: 4px 12px; cursor: pointer;
+  }
+  .range-tabs button.active { background: var(--gold); color: #000; border-color: var(--gold); font-weight: 700; }
+  .chart-status { text-align: center; font-size: 11px; color: var(--muted); height: 150px; display: flex; align-items: center; justify-content: center; }
+  .chart-status.err { color: var(--danger); }
+
+  .coin-stat { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .coin-stat b { color: var(--gold-bright); }
+
+  /* Table */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; }
   table { width: 100%; border-collapse: collapse; min-width: 620px; }
   thead th {
-    text-align: right; color: var(--muted); font-weight: 600;
-    font-size: 11px; padding: 4px 10px 10px; text-transform: uppercase; letter-spacing: .4px;
-    white-space: nowrap;
+    text-align: right; color: var(--muted); font-weight: 600; font-size: 11px;
+    padding: 4px 10px 10px; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
   }
   thead th.l { text-align: left; }
   thead th.c { text-align: center; }
   tbody td { padding: 11px 10px; border-top: 1px solid var(--line); vertical-align: middle; text-align: right; white-space: nowrap; }
   tbody tr:first-child td { border-top: none; }
-
   td.chk { width: 32px; text-align: center; padding-left: 0; padding-right: 4px; }
   td.act { width: 30px; text-align: center; padding-right: 0; }
   th.act { padding-right: 0; }
 
-  /* circle checkbox */
   .circle {
-    width: 22px; height: 22px; border-radius: 50%;
-    border: 2px solid var(--gold); background: transparent;
-    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--gold);
+    background: transparent; display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer; padding: 0; flex: none;
   }
   .circle.checked { background: var(--gold); border-color: var(--gold); }
-  .circle .tick { display: none; color: #000; font-size: 13px; font-weight: 900; line-height: 1; }
+  .circle .tick { display: none; color: #000; font-size: 13px; font-weight: 900; }
   .circle.checked .tick { display: block; }
 
   .cell-input {
     background: transparent; border: 1px solid transparent; color: var(--text);
-    font: inherit; font-size: 16px; width: 96px; text-align: right; padding: 6px 8px;
-    border-radius: 8px;
+    font: inherit; font-size: 16px; width: 96px; text-align: right; padding: 6px 8px; border-radius: 8px;
   }
   .cell-input::placeholder { color: var(--muted); }
   .cell-input:focus { outline: none; background: var(--panel-2); border-color: var(--gold); }
 
-  .ro { font-size: 15px; color: var(--text); }        /* read-only value */
+  .ro { font-size: 15px; color: var(--text); }
   .ro.small { font-size: 13px; }
   .ro.muted { color: var(--muted); }
   .cur.up, .ro.up { color: var(--green); }
   .cur.down, .ro.down { color: var(--red); }
 
-  /* signal badges */
   .badge {
-    display: inline-block; font-size: 10px; font-weight: 700;
-    padding: 4px 9px; border-radius: 999px; white-space: nowrap;
-    letter-spacing: .3px; text-transform: uppercase;
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: 999px;
+    white-space: nowrap; letter-spacing: .3px; text-transform: uppercase;
   }
-  .badge.b-take  { background: var(--green); color: #05261a; }
-  .badge.b-near  { background: var(--gold-bright); color: #3a2e00; }
-  .badge.b-hold  { background: #3a3a42; color: var(--text); }
-  .badge.b-loss  { background: var(--red); color: #3a0b0b; }
-  .badge.b-wait  { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 600; }
+  .badge.b-take { background: var(--green); color: #05261a; }
+  .badge.b-near { background: var(--gold-bright); color: #3a2e00; }
+  .badge.b-hold { background: #3a3a42; color: var(--text); }
+  .badge.b-loss { background: var(--red); color: #3a0b0b; }
+  .badge.b-wait { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 600; }
 
-  tr.pending .cell-input,
-  tr.pending .ro { text-decoration: line-through; color: var(--muted); }
+  tr.pending .cell-input, tr.pending .ro { text-decoration: line-through; color: var(--muted); }
 
-  .del {
-    background: none; border: none; color: var(--muted);
-    font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 2px;
-  }
+  .del { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px; }
   .del:active { color: var(--danger); }
 
   .add-row {
-    display: flex; align-items: center; gap: 8px;
-    background: none; border: none; color: var(--gold-bright);
-    font-size: 15px; padding: 12px 6px 6px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; background: none; border: none;
+    color: var(--gold-bright); font-size: 15px; padding: 12px 6px 6px; cursor: pointer;
   }
   .add-row .plus { font-size: 18px; }
 
-  /* grand total */
-  .grand {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 14px 16px;
+  /* Add coin */
+  .add-coin-btn {
+    width: 100%; background: var(--panel-2); color: var(--accent); border: 1px dashed var(--line);
+    border-radius: 14px; padding: 14px; font-size: 15px; cursor: pointer; margin-bottom: 22px;
   }
-  .grand .row {
-    display: flex; justify-content: space-between; align-items: center; padding: 5px 0;
-  }
+
+  /* Grand total */
+  .grand { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+  .grand .row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; }
   .grand .row + .row { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 12px; }
   .grand .lbl { color: var(--muted); font-size: 14px; }
   .grand .val { color: var(--gold-bright); font-size: 18px; font-weight: 800; }
   .grand .row.big .val { font-size: 21px; }
 
-  .legend {
-    display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center;
-    margin-top: 20px; font-size: 11px; color: var(--muted);
-  }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center; margin-top: 20px; font-size: 11px; color: var(--muted); }
   .legend .item { display: inline-flex; align-items: center; gap: 5px; }
   .legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-  .legend .sw.take { background: var(--green); }
-  .legend .sw.near { background: var(--gold-bright); }
-  .legend .sw.hold { background: #3a3a42; }
-  .legend .sw.loss { background: var(--red); }
+  .legend .sw.take { background: var(--green); } .legend .sw.near { background: var(--gold-bright); }
+  .legend .sw.hold { background: #3a3a42; } .legend .sw.loss { background: var(--red); }
 
   .hint { color: var(--muted); font-size: 11.5px; text-align: center; margin-top: 14px; padding: 0 10px; line-height: 1.5; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none;
+    align-items: center; justify-content: center; padding: 20px; z-index: 100;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    width: 100%; max-width: 420px; max-height: 80vh; overflow-y: auto; padding: 18px;
+  }
+  .modal h3 { margin: 0 0 4px; font-size: 17px; }
+  .modal .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .modal input.search {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px 12px; font-size: 15px; margin-bottom: 12px;
+  }
+  .modal input.search:focus { outline: none; border-color: var(--gold); }
+  .coin-option {
+    display: flex; align-items: center; gap: 10px; padding: 11px 10px; border-radius: 10px; cursor: pointer;
+  }
+  .coin-option:hover, .coin-option:active { background: var(--panel-2); }
+  .coin-option .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .coin-option .co-name { font-weight: 600; }
+  .coin-option .co-sym { color: var(--muted); font-size: 12px; }
+  .coin-option .added { margin-left: auto; color: var(--muted); font-size: 11px; }
+  .modal .close-btn {
+    width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 11px; font-size: 15px; cursor: pointer; margin-top: 10px;
+  }
 </style>
 </head>
 <body>
   <div class="top-title">Crypto Tracker</div>
 
-  <!-- LIVE MARKET PRICES -->
-  <div class="market">
-    <div class="mc"><div class="n">BTC market price</div><div class="p" id="mktBtc">&mdash;</div></div>
-    <div class="mc"><div class="n">ETH market price</div><div class="p" id="mktEth">&mdash;</div></div>
-    <div id="mktStatus">Loading market prices&hellip;</div>
-  </div>
-
   <!-- SUMMARY -->
   <div class="summary">
     <div class="cap">Pending money (waiting orders), per coin</div>
-    <div class="line"><span class="coin">BTC</span><span class="val" id="sumBtcPending">0</span></div>
-    <div class="line"><span class="coin">ETH</span><span class="val" id="sumEthPending">0</span></div>
+    <div id="summaryLines"></div>
   </div>
 
-  <!-- BTC -->
-  <div class="asset">
-    <div class="asset-head">
-      <span class="dot btc"></span>
-      <span class="name">BTC</span>
-      <span class="stat">Active: <b id="btcActive">0</b> &middot; Pending: <b id="btcPending">0</b></span>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th class="c"></th>
-            <th class="l">Entry Price</th>
-            <th>Invested (&#8369;)</th>
-            <th>Amount</th>
-            <th>Current (&#8369;)</th>
-            <th>P/L</th>
-            <th class="l">Signal</th>
-            <th class="act"></th>
-          </tr>
-        </thead>
-        <tbody id="btcRows"></tbody>
-      </table>
-    </div>
-    <button class="add-row" onclick="addRow('btc')"><span class="plus">+</span> Add BTC row</button>
-  </div>
+  <!-- COIN CARDS render here -->
+  <div id="coinCards"></div>
 
-  <!-- ETH -->
-  <div class="asset">
-    <div class="asset-head">
-      <span class="dot eth"></span>
-      <span class="name">ETH</span>
-      <span class="stat">Active: <b id="ethActive">0</b> &middot; Pending: <b id="ethPending">0</b></span>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th class="c"></th>
-            <th class="l">Entry Price</th>
-            <th>Invested (&#8369;)</th>
-            <th>Amount</th>
-            <th>Current (&#8369;)</th>
-            <th>P/L</th>
-            <th class="l">Signal</th>
-            <th class="act"></th>
-          </tr>
-        </thead>
-        <tbody id="ethRows"></tbody>
-      </table>
-    </div>
-    <button class="add-row" onclick="addRow('eth')"><span class="plus">+</span> Add ETH row</button>
-  </div>
+  <!-- ADD COIN -->
+  <button class="add-coin-btn" onclick="openAddCoin()">+ Add cryptocurrency</button>
 
   <!-- GRAND TOTAL -->
   <div class="grand">
@@ -267,348 +219,520 @@
 
   <div class="hint">
     Only <b>Invested (&#8369;)</b> is editable. Amount = Invested &divide; Entry Price. Current = Amount &times; live market price.<br>
-    Tap the circle to switch a row between <b>Active</b> (already bought) and <b>Pending</b> (waiting order).<br>
+    Tap the circle to switch a row between <b>Active</b> (already bought) and <b>Pending</b> (waiting order). The chart shows the recent price trend.<br>
     <span style="opacity:.8">Note: signals are a simple guide based on % gain, not financial advice. The decision is yours.</span>
   </div>
 
+  <!-- ADD COIN MODAL -->
+  <div class="modal-overlay" id="addCoinModal">
+    <div class="modal">
+      <h3>Add cryptocurrency</h3>
+      <div class="sub">Pick a coin. Live price and chart load automatically.</div>
+      <input class="search" id="coinSearch" placeholder="Search (e.g. Solana, XRP)&hellip;" oninput="renderCoinOptions()" />
+      <div id="coinOptions"></div>
+      <button class="close-btn" onclick="closeAddCoin()">Close</button>
+    </div>
+  </div>
+
 <script>
-  // Each row: { price (entry price), peso (PHP invested), pending }
-  const DEFAULT_DATA = {
-    btc: [
-      { price: "4911072.2", peso: 1998.81, pending: false }, // filled: 0.0004070 BTC
-      { price: "4910859.2", peso: 3000.04, pending: false }, // filled: 0.0006109 BTC
-      { price: "4500000",   peso: 2500,    pending: true },  // open order
-      { price: "4700000",   peso: 2500,    pending: true }   // open order
-    ],
-    eth: [
-      { price: "149750",   peso: 236.90, pending: false }, // filled: 0.001582 ETH
-      { price: "151936.4", peso: 221.68, pending: false }, // filled: 0.001459 ETH
-      { price: "150000",   peso: 2500,   pending: true },  // open order
-      { price: "147000",   peso: 2500,   pending: true },  // open order
-      { price: "137000",   peso: 2500,   pending: true },  // open order
-      { price: "146500",   peso: 2500,   pending: true }   // open order
-    ]
+  // ---------- Coin registry (CoinGecko ids) ----------
+  // Available coins the user can add. id = CoinGecko API id.
+  const COIN_LIBRARY = [
+    { id: "bitcoin",      sym: "BTC",  name: "Bitcoin",     color: "#f7931a" },
+    { id: "ethereum",     sym: "ETH",  name: "Ethereum",    color: "#627eea" },
+    { id: "solana",       sym: "SOL",  name: "Solana",      color: "#14f195" },
+    { id: "ripple",       sym: "XRP",  name: "XRP",         color: "#25a768" },
+    { id: "binancecoin",  sym: "BNB",  name: "BNB",         color: "#f0b90b" },
+    { id: "cardano",      sym: "ADA",  name: "Cardano",     color: "#0033ad" },
+    { id: "dogecoin",     sym: "DOGE", name: "Dogecoin",    color: "#c2a633" },
+    { id: "polkadot",     sym: "DOT",  name: "Polkadot",    color: "#e6007a" },
+    { id: "avalanche-2",  sym: "AVAX", name: "Avalanche",   color: "#e84142" },
+    { id: "chainlink",    sym: "LINK", name: "Chainlink",   color: "#2a5ada" },
+    { id: "matic-network",sym: "MATIC",name: "Polygon",     color: "#8247e5" },
+    { id: "litecoin",     sym: "LTC",  name: "Litecoin",    color: "#a6a9aa" }
+  ];
+  function libById(id) { return COIN_LIBRARY.find(c => c.id === id); }
+
+  // ---------- Data model ----------
+  // state.coins: ordered list of coin ids being tracked
+  // state.rows[coinId]: array of { price, peso, pending }
+  const DEFAULT_STATE = {
+    coins: ["bitcoin", "ethereum"],
+    rows: {
+      bitcoin: [
+        { price: "4911072.2", peso: 1998.81, pending: false },
+        { price: "4910859.2", peso: 3000.04, pending: false },
+        { price: "4500000",   peso: 2500,    pending: true },
+        { price: "4700000",   peso: 2500,    pending: true }
+      ],
+      ethereum: [
+        { price: "149750",   peso: 236.90, pending: false },
+        { price: "151936.4", peso: 221.68, pending: false },
+        { price: "150000",   peso: 2500,   pending: true },
+        { price: "147000",   peso: 2500,   pending: true },
+        { price: "137000",   peso: 2500,   pending: true },
+        { price: "146500",   peso: 2500,   pending: true }
+      ]
+    }
   };
 
-  // Bump this whenever DEFAULT_DATA changes and you want it to replace old saved data.
-  const SEED_VERSION = 7;
-  const STORAGE_KEY = "cryptoTrackerV2";
+  const SEED_VERSION = 8;
+  const STORAGE_KEY = "cryptoTrackerState";
   const SEED_KEY = "cryptoTrackerSeed";
 
-  let data = loadData();
-  let market = { btc: null, eth: null }; // live PHP price per coin
+  let state = loadState();
+  let market = {};   // coinId -> { price, change24h }
+  let charts = {};   // coinId -> Chart instance
+  let ranges = {};   // coinId -> selected range in days
 
-  function loadData() {
+  function loadState() {
     try {
       const savedSeed = parseInt(localStorage.getItem(SEED_KEY) || "0", 10);
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw && savedSeed >= SEED_VERSION) {
-        const parsed = JSON.parse(raw);
-        // migrate old field names
-        ["btc", "eth"].forEach(a => (parsed[a] || []).forEach(r => {
-          if (r.peso === undefined && r.qty !== undefined) r.peso = r.qty;
-          if (r.pending === undefined && r.abang !== undefined) r.pending = r.abang;
-        }));
-        return parsed;
-      }
+      if (raw && savedSeed >= SEED_VERSION) return JSON.parse(raw);
     } catch (e) {}
-    const seeded = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    const seeded = JSON.parse(JSON.stringify(DEFAULT_STATE));
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       localStorage.setItem(SEED_KEY, String(SEED_VERSION));
     } catch (e) {}
     return seeded;
   }
-  function saveData() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
   }
 
   function num(v) { return parseFloat(v) || 0; }
-  function fmtPeso(n) {
-    if (n == null || isNaN(n)) return "\u2014";
-    return "\u20b1" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
-  }
-  function fmtPlain(n) {
-    return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
-  }
-  function fmtAmount(n) {
-    if (!isFinite(n)) return "\u2014";
-    return Number(n).toLocaleString("en-US", { maximumFractionDigits: 8 });
-  }
+  function fmtPeso(n) { if (n == null || isNaN(n)) return "\u2014"; return "\u20b1" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }); }
+  function fmtPlain(n) { return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 }); }
+  function fmtAmount(n) { if (!isFinite(n)) return "\u2014"; return Number(n).toLocaleString("en-US", { maximumFractionDigits: 8 }); }
 
+  // ---------- Rendering ----------
   function render() {
-    ["btc", "eth"].forEach(asset => {
-      const tbody = document.getElementById(asset + "Rows");
-      tbody.innerHTML = "";
-      data[asset].forEach((row, i) => {
-        const tr = document.createElement("tr");
-        if (row.pending) tr.classList.add("pending");
-
-        // circle toggle
-        const tdChk = document.createElement("td");
-        tdChk.className = "chk";
-        const circle = document.createElement("button");
-        circle.className = "circle" + (row.pending ? " checked" : "");
-        circle.innerHTML = '<span class="tick">&#10003;</span>';
-        circle.setAttribute("aria-label", "toggle pending");
-        circle.title = row.pending ? "Pending order" : "Active (bought)";
-        circle.onclick = () => { data[asset][i].pending = !data[asset][i].pending; saveData(); render(); };
-        tdChk.appendChild(circle);
-
-        // entry price (read-only display)
-        const tdPrice = document.createElement("td");
-        tdPrice.style.textAlign = "left";
-        const priceSpan = document.createElement("span");
-        priceSpan.className = "ro";
-        priceSpan.textContent = fmtPlain(num(row.price));
-        tdPrice.appendChild(priceSpan);
-
-        // invested peso (EDITABLE)
-        const tdPeso = document.createElement("td");
-        const pesoInput = document.createElement("input");
-        pesoInput.className = "cell-input";
-        pesoInput.type = "text";
-        pesoInput.inputMode = "decimal";
-        pesoInput.value = row.peso;
-        pesoInput.placeholder = "0";
-        pesoInput.oninput = () => {
-          data[asset][i].peso = num(pesoInput.value);
-          saveData();
-          updateRowComputed(asset, i, tr);
-          updateTotals();
-        };
-        tdPeso.appendChild(pesoInput);
-
-        // amount (read-only, computed)
-        const tdAmount = document.createElement("td");
-        const amountSpan = document.createElement("span");
-        amountSpan.className = "ro small muted";
-        amountSpan.setAttribute("data-role", "amount");
-        tdAmount.appendChild(amountSpan);
-
-        // current value (read-only, computed w/ live price)
-        const tdCur = document.createElement("td");
-        const curSpan = document.createElement("span");
-        curSpan.className = "ro small cur";
-        curSpan.setAttribute("data-role", "current");
-        tdCur.appendChild(curSpan);
-
-        // P/L (profit/loss in PHP + %)
-        const tdPl = document.createElement("td");
-        const plSpan = document.createElement("span");
-        plSpan.className = "ro small";
-        plSpan.setAttribute("data-role", "pl");
-        tdPl.appendChild(plSpan);
-
-        // signal badge
-        const tdSig = document.createElement("td");
-        tdSig.style.textAlign = "left";
-        const sigSpan = document.createElement("span");
-        sigSpan.className = "badge";
-        sigSpan.setAttribute("data-role", "signal");
-        tdSig.appendChild(sigSpan);
-
-        // delete
-        const tdAct = document.createElement("td");
-        tdAct.className = "act";
-        const del = document.createElement("button");
-        del.className = "del";
-        del.textContent = "\u00d7";
-        del.title = "Delete row";
-        del.onclick = () => {
-          const r = data[asset][i];
-          const label = (r.price ? "entry " + r.price : "row") + (r.peso ? " \u00b7 \u20b1" + r.peso : "");
-          if (confirm("Delete this " + asset.toUpperCase() + " row?\n(" + label + ")")) {
-            data[asset].splice(i, 1);
-            saveData();
-            render();
-          }
-        };
-        tdAct.appendChild(del);
-
-        tr.append(tdChk, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdSig, tdAct);
-        tbody.appendChild(tr);
-        updateRowComputed(asset, i, tr);
-      });
-    });
+    const container = document.getElementById("coinCards");
+    container.innerHTML = "";
+    state.coins.forEach(coinId => container.appendChild(buildCoinCard(coinId)));
+    renderSummary();
     updateTotals();
+    // (re)load charts
+    state.coins.forEach(coinId => {
+      if (!ranges[coinId]) ranges[coinId] = 7;
+      loadChart(coinId);
+    });
   }
 
-  // Take-profit ladder thresholds (% gain).
-  // >= TP_TAKE  -> "TAKE PROFIT"
-  // >= TP_NEAR  -> "CLOSE"
-  // 0..TP_NEAR  -> "HOLD"
-  // < 0         -> "LOSS"
-  const TP_TAKE = 30;   // +30% or more -> strong take-profit
-  const TP_NEAR = 15;   // +15% to +30% -> getting close
+  function buildCoinCard(coinId) {
+    const lib = libById(coinId) || { sym: coinId, name: coinId, color: "#888" };
+    const card = document.createElement("div");
+    card.className = "coin-card";
 
-  // Computes amount, current value, P/L, and take-profit signal for one row
-  function updateRowComputed(asset, i, tr) {
-    const row = data[asset][i];
-    const entry = num(row.price);
-    const peso = num(row.peso);
-    const amount = entry > 0 ? peso / entry : 0;   // crypto units
+    // header
+    const head = document.createElement("div");
+    head.className = "coin-head";
+    head.innerHTML =
+      '<span class="dot" style="background:' + lib.color + '"></span>' +
+      '<div><div class="name">' + lib.name + '</div><div class="sym">' + lib.sym + '</div></div>' +
+      '<div class="price-box"><div class="price" data-role="price">\u2014</div>' +
+      '<div class="chg" data-role="chg"></div></div>' +
+      '<button class="remove-coin" title="Remove coin">\u00d7</button>';
+    head.querySelector(".remove-coin").onclick = () => removeCoin(coinId);
+    card.appendChild(head);
+
+    // range tabs
+    const tabs = document.createElement("div");
+    tabs.className = "range-tabs";
+    [[1,"24h"],[7,"7d"],[30,"30d"]].forEach(([days, label]) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      if ((ranges[coinId] || 7) === days) b.classList.add("active");
+      b.onclick = () => { ranges[coinId] = days; render(); };
+      tabs.appendChild(b);
+    });
+
+    // chart
+    const chartBox = document.createElement("div");
+    chartBox.className = "chart-box";
+    const canvas = document.createElement("canvas");
+    canvas.id = "chart_" + coinId;
+    chartBox.appendChild(canvas);
+
+    card.appendChild(chartBox);
+    card.appendChild(tabs);
+
+    // per-coin stat line
+    const stat = document.createElement("div");
+    stat.className = "coin-stat";
+    stat.innerHTML = 'Active: <b data-role="active">0</b> &middot; Pending: <b data-role="pending">0</b>';
+    card.appendChild(stat);
+
+    // table
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    const table = document.createElement("table");
+    table.innerHTML =
+      '<thead><tr>' +
+      '<th class="c"></th><th class="l">Entry Price</th><th>Invested (\u20b1)</th>' +
+      '<th>Amount</th><th>Current (\u20b1)</th><th>P/L</th><th class="l">Signal</th><th class="act"></th>' +
+      '</tr></thead><tbody></tbody>';
+    const tbody = table.querySelector("tbody");
+    (state.rows[coinId] || []).forEach((row, i) => tbody.appendChild(buildRow(coinId, row, i)));
+    wrap.appendChild(table);
+    card.appendChild(wrap);
+
+    // add row
+    const addBtn = document.createElement("button");
+    addBtn.className = "add-row";
+    addBtn.innerHTML = '<span class="plus">+</span> Add ' + lib.sym + ' row';
+    addBtn.onclick = () => addRow(coinId);
+    card.appendChild(addBtn);
+
+    return card;
+  }
+
+  function buildRow(coinId, row, i) {
+    const tr = document.createElement("tr");
+    if (row.pending) tr.classList.add("pending");
+
+    // circle
+    const tdChk = document.createElement("td");
+    tdChk.className = "chk";
+    const circle = document.createElement("button");
+    circle.className = "circle" + (row.pending ? " checked" : "");
+    circle.innerHTML = '<span class="tick">\u2713</span>';
+    circle.title = row.pending ? "Pending order" : "Active (bought)";
+    circle.onclick = () => { state.rows[coinId][i].pending = !state.rows[coinId][i].pending; saveState(); render(); };
+    tdChk.appendChild(circle);
+
+    // entry price (read-only)
+    const tdPrice = document.createElement("td");
+    tdPrice.style.textAlign = "left";
+    const priceSpan = document.createElement("span");
+    priceSpan.className = "ro";
+    priceSpan.textContent = fmtPlain(num(row.price));
+    tdPrice.appendChild(priceSpan);
+
+    // invested (editable)
+    const tdPeso = document.createElement("td");
+    const pesoInput = document.createElement("input");
+    pesoInput.className = "cell-input";
+    pesoInput.type = "text"; pesoInput.inputMode = "decimal";
+    pesoInput.value = row.peso; pesoInput.placeholder = "0";
+    pesoInput.oninput = () => {
+      state.rows[coinId][i].peso = num(pesoInput.value);
+      saveState(); updateRowComputed(coinId, i, tr); updateTotals();
+    };
+    tdPeso.appendChild(pesoInput);
+
+    // amount / current / pl / signal
+    const tdAmount = td('ro small muted', 'amount');
+    const tdCur    = td('ro small cur', 'current');
+    const tdPl     = td('ro small', 'pl');
+    const tdSig = document.createElement("td");
+    tdSig.style.textAlign = "left";
+    const sigSpan = document.createElement("span");
+    sigSpan.className = "badge"; sigSpan.setAttribute("data-role", "signal");
+    tdSig.appendChild(sigSpan);
+
+    // delete
+    const tdAct = document.createElement("td");
+    tdAct.className = "act";
+    const del = document.createElement("button");
+    del.className = "del"; del.textContent = "\u00d7"; del.title = "Delete row";
+    del.onclick = () => {
+      const r = state.rows[coinId][i];
+      const label = (r.price ? "entry " + r.price : "row") + (r.peso ? " \u00b7 \u20b1" + r.peso : "");
+      if (confirm("Delete this row?\n(" + label + ")")) {
+        state.rows[coinId].splice(i, 1); saveState(); render();
+      }
+    };
+    tdAct.appendChild(del);
+
+    tr.append(tdChk, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdSig, tdAct);
+    setTimeout(() => updateRowComputed(coinId, i, tr), 0);
+    return tr;
+  }
+
+  function td(cls, role) {
+    const el = document.createElement("td");
+    const span = document.createElement("span");
+    span.className = cls; span.setAttribute("data-role", role);
+    el.appendChild(span);
+    return el;
+  }
+
+  const TP_TAKE = 30, TP_NEAR = 15;
+
+  function updateRowComputed(coinId, i, tr) {
+    const row = state.rows[coinId][i];
+    if (!row) return;
+    const entry = num(row.price), peso = num(row.peso);
+    const amount = entry > 0 ? peso / entry : 0;
     const amountEl = tr.querySelector('[data-role="amount"]');
     const curEl = tr.querySelector('[data-role="current"]');
     const plEl = tr.querySelector('[data-role="pl"]');
     const sigEl = tr.querySelector('[data-role="signal"]');
+    const mkt = market[coinId] ? market[coinId].price : null;
+    const canCompute = mkt != null && entry > 0 && peso > 0;
 
     if (amountEl) amountEl.textContent = entry > 0 ? fmtAmount(amount) : "\u2014";
 
-    const mkt = market[asset];
-    const canCompute = mkt != null && entry > 0 && peso > 0;
-
-    // current value
     if (curEl) {
       if (canCompute) {
         const cur = amount * mkt;
         curEl.textContent = fmtPeso(cur);
         curEl.classList.remove("up", "down");
-        if (cur > peso) curEl.classList.add("up");
-        else if (cur < peso) curEl.classList.add("down");
-      } else {
-        curEl.textContent = "\u2014";
-        curEl.classList.remove("up", "down");
-      }
+        curEl.classList.add(cur >= peso ? "up" : "down");
+      } else { curEl.textContent = "\u2014"; curEl.classList.remove("up", "down"); }
     }
 
-    // P/L (peso + %) and signal
     if (plEl && sigEl) {
       plEl.classList.remove("up", "down");
       sigEl.className = "badge";
-
-      // Pending rows are open orders (not bought yet) -> no P/L
-      if (row.pending) {
-        plEl.textContent = "\u2014";
-        sigEl.textContent = "Pending";
-        sigEl.classList.add("b-wait");
-        return;
-      }
-
-      if (!canCompute) {
-        plEl.textContent = "\u2014";
-        sigEl.textContent = "\u2014";
-        return;
-      }
-
-      const cur = amount * mkt;
-      const diff = cur - peso;              // peso profit/loss
-      const pct = (diff / peso) * 100;      // percent
-
+      if (row.pending) { plEl.textContent = "\u2014"; sigEl.textContent = "Pending"; sigEl.classList.add("b-wait"); return; }
+      if (!canCompute) { plEl.textContent = "\u2014"; sigEl.textContent = "\u2014"; return; }
+      const cur = amount * mkt, diff = cur - peso, pct = (diff / peso) * 100;
       const sign = diff >= 0 ? "+" : "\u2212";
-      plEl.textContent = sign + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 })
-                       + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
+      plEl.textContent = sign + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
       plEl.classList.add(diff >= 0 ? "up" : "down");
-
-      // Signal ladder
-      if (pct >= TP_TAKE) {
-        sigEl.textContent = "Take profit";
-        sigEl.classList.add("b-take");
-      } else if (pct >= TP_NEAR) {
-        sigEl.textContent = "Getting close";
-        sigEl.classList.add("b-near");
-      } else if (pct >= 0) {
-        sigEl.textContent = "Hold";
-        sigEl.classList.add("b-hold");
-      } else {
-        sigEl.textContent = "At a loss";
-        sigEl.classList.add("b-loss");
-      }
+      if (pct >= TP_TAKE) { sigEl.textContent = "Take profit"; sigEl.classList.add("b-take"); }
+      else if (pct >= TP_NEAR) { sigEl.textContent = "Getting close"; sigEl.classList.add("b-near"); }
+      else if (pct >= 0) { sigEl.textContent = "Hold"; sigEl.classList.add("b-hold"); }
+      else { sigEl.textContent = "At a loss"; sigEl.classList.add("b-loss"); }
     }
   }
 
-  function addRow(asset) {
-    data[asset].push({ price: "", peso: 0, pending: false });
-    saveData();
-    render();
+  function addRow(coinId) {
+    if (!state.rows[coinId]) state.rows[coinId] = [];
+    state.rows[coinId].push({ price: "", peso: 0, pending: false });
+    saveState(); render();
   }
 
-  function sums(asset) {
-    let active = 0, pending = 0, activeCurrent = 0, hasMarket = market[asset] != null;
-    data[asset].forEach(r => {
-      const peso = num(r.peso);
-      const entry = num(r.price);
-      if (r.pending) {
-        pending += peso;
-      } else {
-        active += peso;
-        if (hasMarket && entry > 0) activeCurrent += (peso / entry) * market[asset];
-      }
+  function sums(coinId) {
+    let active = 0, pending = 0, activeCurrent = 0;
+    const mkt = market[coinId] ? market[coinId].price : null;
+    (state.rows[coinId] || []).forEach(r => {
+      const peso = num(r.peso), entry = num(r.price);
+      if (r.pending) pending += peso;
+      else { active += peso; if (mkt != null && entry > 0) activeCurrent += (peso / entry) * mkt; }
     });
-    return { active, pending, activeCurrent, hasMarket };
+    return { active, pending, activeCurrent, hasMarket: mkt != null };
+  }
+
+  function renderSummary() {
+    const box = document.getElementById("summaryLines");
+    box.innerHTML = "";
+    if (!state.coins.length) { box.innerHTML = '<div class="empty">No coins yet. Tap "Add cryptocurrency" below.</div>'; return; }
+    state.coins.forEach(coinId => {
+      const lib = libById(coinId) || { sym: coinId };
+      const s = sums(coinId);
+      const line = document.createElement("div");
+      line.className = "line";
+      line.innerHTML = '<span class="coin">' + lib.sym + '</span><span class="val">' + fmtPlain(s.pending) + '</span>';
+      box.appendChild(line);
+    });
   }
 
   function updateTotals() {
-    const b = sums("btc"), e = sums("eth");
-    document.getElementById("btcActive").textContent = fmtPlain(b.active);
-    document.getElementById("btcPending").textContent = fmtPlain(b.pending);
-    document.getElementById("ethActive").textContent = fmtPlain(e.active);
-    document.getElementById("ethPending").textContent = fmtPlain(e.pending);
-
-    document.getElementById("sumBtcPending").textContent = fmtPlain(b.pending);
-    document.getElementById("sumEthPending").textContent = fmtPlain(e.pending);
-
-    document.getElementById("grandPending").textContent = fmtPlain(b.pending + e.pending);
-
-    if (b.hasMarket || e.hasMarket) {
-      const totalCur = b.activeCurrent + e.activeCurrent;
-      document.getElementById("grandCurrent").textContent = fmtPeso(totalCur);
-    } else {
-      document.getElementById("grandCurrent").textContent = "\u2014";
-    }
+    let totalPending = 0, totalCurrent = 0, anyMarket = false;
+    state.coins.forEach(coinId => {
+      const s = sums(coinId);
+      totalPending += s.pending;
+      if (s.hasMarket) { anyMarket = true; totalCurrent += s.activeCurrent; }
+      // per-card stat
+      const card = document.getElementById("chart_" + coinId);
+      if (card) {
+        const cardEl = card.closest(".coin-card");
+        const a = cardEl.querySelector('[data-role="active"]');
+        const p = cardEl.querySelector('[data-role="pending"]');
+        if (a) a.textContent = fmtPlain(s.active);
+        if (p) p.textContent = fmtPlain(s.pending);
+      }
+    });
+    document.getElementById("grandPending").textContent = fmtPlain(totalPending);
+    document.getElementById("grandCurrent").textContent = anyMarket ? fmtPeso(totalCurrent) : "\u2014";
   }
 
-  // ---------- Live market prices (CoinGecko primary, Coinbase+FX fallback) ----------
-  async function loadMarket() {
-    const status = document.getElementById("mktStatus");
-    status.className = "";
-    status.textContent = "Loading market prices\u2026";
-
-    // Source 1: CoinGecko
+  // ---------- Live prices ----------
+  async function loadPrices() {
+    if (!state.coins.length) return;
+    const ids = state.coins.join(",");
     try {
-      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=php", { cache: "no-store" });
+      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=php&include_24hr_change=true", { cache: "no-store" });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const j = await res.json();
-      market.btc = j.bitcoin.php;
-      market.eth = j.ethereum.php;
-      applyMarket("CoinGecko");
-      return;
-    } catch (e1) {
-      // Source 2: Coinbase (USD) + FX to PHP
-      try {
-        const [b, et, fx] = await Promise.all([
-          fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot", { cache: "no-store" }),
-          fetch("https://api.coinbase.com/v2/prices/ETH-USD/spot", { cache: "no-store" }),
-          fetch("https://api.coinbase.com/v2/exchange-rates?currency=USD", { cache: "no-store" })
-        ]);
-        if (!b.ok || !et.ok || !fx.ok) throw new Error("fallback HTTP");
-        const btcUsd = parseFloat((await b.json()).data.amount);
-        const ethUsd = parseFloat((await et.json()).data.amount);
-        const usdPhp = parseFloat((await fx.json()).data.rates.PHP);
-        market.btc = btcUsd * usdPhp;
-        market.eth = ethUsd * usdPhp;
-        applyMarket("Coinbase");
-        return;
-      } catch (e2) {
-        status.className = "err";
-        status.textContent = /429/.test(e1.message)
-          ? "Rate-limited. Will auto-retry shortly."
-          : "Could not load market prices. Will auto-retry shortly.";
-      }
+      state.coins.forEach(coinId => {
+        if (j[coinId]) market[coinId] = { price: j[coinId].php, change24h: j[coinId].php_24h_change };
+      });
+      applyPrices();
+    } catch (e) {
+      // best-effort; charts still try independently
     }
   }
 
-  function applyMarket(srcName) {
-    document.getElementById("mktBtc").textContent = fmtPeso(market.btc);
-    document.getElementById("mktEth").textContent = fmtPeso(market.eth);
-    document.getElementById("mktStatus").className = "";
-    document.getElementById("mktStatus").textContent = "Updated " + new Date().toLocaleTimeString() + " \u00b7 " + srcName;
-    render(); // recompute current values
+  function applyPrices() {
+    state.coins.forEach(coinId => {
+      const card = document.getElementById("chart_" + coinId);
+      if (!card) return;
+      const cardEl = card.closest(".coin-card");
+      const m = market[coinId];
+      const priceEl = cardEl.querySelector('[data-role="price"]');
+      const chgEl = cardEl.querySelector('[data-role="chg"]');
+      if (m) {
+        priceEl.textContent = fmtPeso(m.price);
+        if (m.change24h != null) {
+          const up = m.change24h >= 0;
+          chgEl.textContent = (up ? "\u25b2 +" : "\u25bc ") + m.change24h.toFixed(2) + "% (24h)";
+          chgEl.className = "chg " + (up ? "up" : "down");
+        }
+      }
+      // recompute rows
+      cardEl.querySelectorAll("tbody tr").forEach((tr, i) => updateRowComputed(coinId, i, tr));
+    });
+    updateTotals();
   }
 
+  // ---------- Charts (per coin) ----------
+  async function loadChart(coinId) {
+    const canvas = document.getElementById("chart_" + coinId);
+    if (!canvas) return;
+    const days = ranges[coinId] || 7;
+    const lib = libById(coinId) || { color: "#888" };
+    try {
+      const res = await fetch("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + days, { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const j = await res.json();
+      const raw = (j.prices || []);
+      if (!raw.length) throw new Error("no data");
+      const points = raw.map(p => ({ t: p[0], y: p[1] }));
+      drawChart(coinId, points, days, lib.color);
+    } catch (e) {
+      // leave canvas empty on failure; price still shows
+    }
+  }
+
+  function drawChart(coinId, points, days, color) {
+    const canvas = document.getElementById("chart_" + coinId);
+    if (!canvas || typeof Chart === "undefined") return;
+    const first = points[0].y, last = points[points.length - 1].y;
+    const up = last >= first;
+    const lineColor = up ? "#34d399" : "#ff6b6b";
+
+    // Build simple category labels (time-of-day for 24h, else date) so we
+    // don't depend on the time-scale date adapter being available.
+    const labels = points.map(p => {
+      const d = new Date(p.t);
+      return days <= 1
+        ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : d.toLocaleDateString([], { month: "short", day: "numeric" });
+    });
+    const values = points.map(p => p.y);
+    const stamps = points.map(p => p.t);
+
+    if (charts[coinId]) { charts[coinId].destroy(); }
+
+    const ctx = canvas.getContext("2d");
+    const grad = ctx.createLinearGradient(0, 0, 0, 150);
+    grad.addColorStop(0, (up ? "rgba(52,211,153,0.28)" : "rgba(255,107,107,0.28)"));
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+
+    charts[coinId] = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          data: values,
+          borderColor: lineColor,
+          backgroundColor: grad,
+          borderWidth: 2,
+          fill: true,
+          pointRadius: 0,
+          tension: 0.25
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => new Date(stamps[items[0].dataIndex]).toLocaleString(),
+              label: (item) => "\u20b1" + Number(item.parsed.y).toLocaleString("en-US", { maximumFractionDigits: 2 })
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            grid: { display: false },
+            ticks: { color: "#8e8e93", font: { size: 9 }, maxTicksLimit: 5, maxRotation: 0, autoSkip: true }
+          },
+          y: {
+            display: true,
+            position: "right",
+            grid: { color: "rgba(255,255,255,0.05)" },
+            ticks: {
+              color: "#8e8e93", font: { size: 10 }, maxTicksLimit: 4,
+              callback: (v) => "\u20b1" + Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 })
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // ---------- Add / remove coins ----------
+  function openAddCoin() { document.getElementById("addCoinModal").classList.add("show"); document.getElementById("coinSearch").value = ""; renderCoinOptions(); }
+  function closeAddCoin() { document.getElementById("addCoinModal").classList.remove("show"); }
+
+  function renderCoinOptions() {
+    const q = (document.getElementById("coinSearch").value || "").toLowerCase();
+    const box = document.getElementById("coinOptions");
+    box.innerHTML = "";
+    COIN_LIBRARY
+      .filter(c => c.name.toLowerCase().includes(q) || c.sym.toLowerCase().includes(q))
+      .forEach(c => {
+        const added = state.coins.includes(c.id);
+        const opt = document.createElement("div");
+        opt.className = "coin-option";
+        opt.innerHTML =
+          '<span class="dot" style="background:' + c.color + '"></span>' +
+          '<div><div class="co-name">' + c.name + '</div><div class="co-sym">' + c.sym + '</div></div>' +
+          (added ? '<span class="added">added \u2713</span>' : '');
+        if (!added) opt.onclick = () => addCoin(c.id);
+        box.appendChild(opt);
+      });
+    if (!box.children.length) box.innerHTML = '<div class="sub" style="text-align:center">No match.</div>';
+  }
+
+  function addCoin(coinId) {
+    if (state.coins.includes(coinId)) return;
+    state.coins.push(coinId);
+    if (!state.rows[coinId]) state.rows[coinId] = [];
+    ranges[coinId] = 7;
+    saveState();
+    closeAddCoin();
+    render();
+    loadPrices();
+  }
+
+  function removeCoin(coinId) {
+    const lib = libById(coinId) || { sym: coinId };
+    if (!confirm("Remove " + lib.sym + " and all its rows?")) return;
+    state.coins = state.coins.filter(c => c !== coinId);
+    delete state.rows[coinId];
+    if (charts[coinId]) { charts[coinId].destroy(); delete charts[coinId]; }
+    saveState();
+    render();
+  }
+
+  // ---------- Init ----------
   render();
-  loadMarket();
-  setInterval(loadMarket, 120000); // refresh every 2 min
+  loadPrices();
+  setInterval(loadPrices, 120000);              // prices every 2 min
+  setInterval(() => state.coins.forEach(loadChart), 300000); // charts every 5 min
 </script>
 </body>
 </html>
