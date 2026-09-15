@@ -1350,6 +1350,7 @@
   }
 
   // Inline plugin: draws a dashed horizontal "break-even" line at the average buy price.
+  // If the break-even is outside the visible chart range, show a small edge marker instead.
   const breakEvenPlugin = {
     id: "breakEven",
     afterDatasetsDraw(chart, args, opts) {
@@ -1357,21 +1358,30 @@
       if (!price || !isFinite(price)) return;
       const y = chart.scales.y;
       if (!y) return;
-      if (price < y.min || price > y.max) return; // off-chart, skip
-      const yPix = y.getPixelForValue(price);
-      const { left, right } = chart.chartArea;
+      const { left, right, top, bottom } = chart.chartArea;
       const c = chart.ctx;
-      c.save();
-      c.setLineDash([5, 4]);
-      c.lineWidth = 1.5;
-      c.strokeStyle = "#f5c542";
-      c.beginPath(); c.moveTo(left, yPix); c.lineTo(right, yPix); c.stroke();
-      c.setLineDash([]);
-      c.fillStyle = "#f5c542";
-      c.font = "10px -apple-system, sans-serif";
-      c.textAlign = "left";
-      c.fillText("break-even \u20b1" + Number(price).toLocaleString("en-US", { maximumFractionDigits: 0 }), left + 4, yPix - 4);
-      c.restore();
+      const label = "break-even \u20b1" + Number(price).toLocaleString("en-US", { maximumFractionDigits: 0 });
+
+      if (price >= y.min && price <= y.max) {
+        // in view: draw the full dashed line + label
+        const yPix = y.getPixelForValue(price);
+        c.save();
+        c.setLineDash([5, 4]); c.lineWidth = 1.5; c.strokeStyle = "#f5c542";
+        c.beginPath(); c.moveTo(left, yPix); c.lineTo(right, yPix); c.stroke();
+        c.setLineDash([]);
+        c.fillStyle = "#f5c542"; c.font = "10px -apple-system, sans-serif"; c.textAlign = "left";
+        c.fillText(label, left + 4, yPix - 4);
+        c.restore();
+      } else {
+        // off view: show a small marker at the top or bottom edge with an arrow
+        const above = price > y.max;           // break-even higher than everything shown
+        const yPix = above ? top + 10 : bottom - 6;
+        const arrow = above ? "\u2191" : "\u2193"; // up = price must rise to break even; down = you're in profit
+        c.save();
+        c.fillStyle = "#f5c542"; c.font = "10px -apple-system, sans-serif"; c.textAlign = "right";
+        c.fillText(arrow + " " + label, right - 6, yPix);
+        c.restore();
+      }
     }
   };
 
@@ -1633,7 +1643,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 19;
+  const APP_VERSION = 20;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
