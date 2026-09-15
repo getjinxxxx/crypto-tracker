@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#000000" />
 <title>Crypto Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   :root {
     --bg: #000000;
@@ -161,6 +163,30 @@
 
   .hint { color: var(--muted); font-size: 11.5px; text-align: center; margin-top: 14px; padding: 0 10px; line-height: 1.5; }
 
+  /* Lock screen */
+  #lock {
+    position: fixed; inset: 0; background: var(--bg); z-index: 500;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
+  }
+  #lock .lock-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 24px; width: 100%; max-width: 340px; text-align: center;
+  }
+  #lock .lk-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  #lock .lk-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  #lock input {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px;
+  }
+  #lock input:focus { outline: none; border-color: var(--gold); }
+  #lock button {
+    width: 100%; background: var(--gold); color: #000; border: none; border-radius: 12px;
+    padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px;
+  }
+  #lock .lk-err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 16px; }
+  body.locked { overflow: hidden; }
+  #app.hidden { display: none; }
+
   /* Modal */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none;
@@ -192,7 +218,20 @@
   }
 </style>
 </head>
-<body>
+<body class="locked">
+
+  <!-- LOCK SCREEN -->
+  <div id="lock">
+    <div class="lock-card">
+      <div class="lk-title">Crypto Tracker</div>
+      <div class="lk-sub">Enter passcode to view</div>
+      <input id="lockInput" type="password" inputmode="numeric" maxlength="12" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="off" />
+      <button id="lockBtn">Unlock</button>
+      <div class="lk-err" id="lockErr"></div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
   <div class="top-title">Crypto Tracker</div>
 
   <!-- SUMMARY -->
@@ -228,6 +267,10 @@
     <b>Deep dip target</b> (below anything seen in 30 days), <b>Ready to buy</b> (market already at/below your target).<br>
     <span style="opacity:.8">Note: these are simple guides from price data, not financial advice. The decision is yours.</span>
   </div>
+
+  <div class="sync-status" id="syncStatus" style="text-align:center;font-size:11px;color:var(--muted);margin-top:10px"></div>
+
+  </div><!-- /#app -->
 
   <!-- ADD COIN MODAL -->
   <div class="modal-overlay" id="addCoinModal">
@@ -307,6 +350,7 @@
   }
   function saveState() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    cloudSave(); // push to Firebase (debounced)
   }
 
   function num(v) { return parseFloat(v) || 0; }
@@ -913,12 +957,120 @@
     render();
   }
 
-  // ---------- Init ----------
-  render(); // render() triggers queueDataLoads()
-  // refresh prices every 2 min (queued so it won't collide with chart loads)
-  setInterval(() => { taskQueue.push(() => loadPrices()); runQueue(); }, 120000);
-  // refresh charts every 5 min
-  setInterval(() => { state.coins.forEach(coinId => taskQueue.push(() => loadChart(coinId))); runQueue(); }, 300000);
+  // ---------- Firebase cloud sync ----------
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyATaU8PnQwkMRvf6_j6Ccp1j0Qz8oeyELI",
+    authDomain: "crypto-tracker-bfefb.firebaseapp.com",
+    databaseURL: "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "crypto-tracker-bfefb",
+    storageBucket: "crypto-tracker-bfefb.firebasestorage.app",
+    messagingSenderId: "901782471631",
+    appId: "1:901782471631:web:5c7ec398e607b1777548ba"
+  };
+
+  let db = null;
+  let dbRef = null;
+  let applyingRemote = false;   // guard: don't echo remote updates back to cloud
+  let saveTimer = null;
+
+  function setSyncStatus(msg) {
+    const el = document.getElementById("syncStatus");
+    if (el) el.textContent = msg;
+  }
+
+  function cloudInit() {
+    try {
+      if (typeof firebase === "undefined") { setSyncStatus("Offline mode (no cloud). Data saved on this device."); return; }
+      firebase.initializeApp(FIREBASE_CONFIG);
+      db = firebase.database();
+      dbRef = db.ref("tracker/state");
+
+      // Realtime listener: whenever the cloud data changes (any device), apply it here.
+      dbRef.on("value", (snap) => {
+        const remote = snap.val();
+        if (remote && remote.state) {
+          applyingRemote = true;
+          state = remote.state;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+          render();
+          applyingRemote = false;
+          const when = remote.updatedAt ? new Date(remote.updatedAt).toLocaleTimeString() : "";
+          setSyncStatus("Synced " + when + " \u2601");
+        } else {
+          // No cloud data yet -> push our current (seeded/local) state up once.
+          cloudSave(true);
+        }
+      }, (err) => {
+        setSyncStatus("Cloud sync unavailable. Data saved on this device.");
+      });
+    } catch (e) {
+      setSyncStatus("Cloud sync error. Data saved on this device.");
+    }
+  }
+
+  function cloudSave(immediate) {
+    if (!dbRef || applyingRemote) return;
+    clearTimeout(saveTimer);
+    const doSave = () => {
+      dbRef.set({ state: state, updatedAt: Date.now() })
+        .then(() => setSyncStatus("Saved to cloud \u2601 " + new Date().toLocaleTimeString()))
+        .catch(() => setSyncStatus("Save failed (saved locally). Will retry on next change."));
+    };
+    if (immediate) doSave();
+    else saveTimer = setTimeout(doSave, 800); // debounce rapid edits
+  }
+
+  // ---------- Passcode lock ----------
+  // NOTE: This is casual privacy for a personal site, not strong security.
+  // The check is obfuscated (hashed) but a determined viewer of the page source
+  // could still bypass it. Do not treat this as real authentication.
+  const PASS_HASH = simpleHash("110299");
+  function simpleHash(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; }
+    return h;
+  }
+
+  function unlock() {
+    const input = document.getElementById("lockInput");
+    const err = document.getElementById("lockErr");
+    if (simpleHash(input.value) === PASS_HASH) {
+      sessionStorage.setItem("ctUnlocked", "1");
+      revealApp();
+    } else {
+      err.textContent = "Wrong passcode. Try again.";
+      input.value = "";
+      input.focus();
+    }
+  }
+
+  function revealApp() {
+    document.getElementById("lock").style.display = "none";
+    document.body.classList.remove("locked");
+    document.getElementById("app").classList.remove("hidden");
+    startApp();
+  }
+
+  let appStarted = false;
+  function startApp() {
+    if (appStarted) return;
+    appStarted = true;
+    render();                 // render() triggers queueDataLoads()
+    cloudInit();              // connect Firebase + realtime sync
+    setInterval(() => { taskQueue.push(() => loadPrices()); runQueue(); }, 120000);
+    setInterval(() => { state.coins.forEach(coinId => taskQueue.push(() => loadChart(coinId))); runQueue(); }, 300000);
+  }
+
+  // Wire up lock UI
+  document.getElementById("lockBtn").onclick = unlock;
+  document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+
+  // If already unlocked this session, skip the gate.
+  if (sessionStorage.getItem("ctUnlocked") === "1") {
+    revealApp();
+  } else {
+    document.getElementById("lockInput").focus();
+  }
 </script>
 </body>
 </html>
