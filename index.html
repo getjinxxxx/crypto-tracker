@@ -294,6 +294,24 @@
   .whatif .result.up { color: var(--green); } .whatif .result.down { color: var(--red); }
   .reminder { color: var(--muted); font-size: 11.5px; text-align: center; margin: 14px 0; line-height: 1.5; opacity: .85; }
 
+  /* Glossary / help (collapsible) */
+  .glossary { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; margin: 18px 0; overflow: hidden; }
+  .glossary > summary {
+    list-style: none; cursor: pointer; padding: 14px 16px; font-size: 15px; font-weight: 700;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .glossary > summary::-webkit-details-marker { display: none; }
+  .glossary > summary .chev { color: var(--muted); font-size: 13px; transition: transform .2s; }
+  .glossary[open] > summary .chev { transform: rotate(90deg); }
+  .glossary .g-body { padding: 0 16px 16px; }
+  .glossary h4 { font-size: 13px; color: var(--gold-bright); margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .4px; }
+  .glossary .g-item { padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.5; }
+  .glossary .g-item:first-of-type { border-top: none; }
+  .glossary .g-item b { color: var(--text); }
+  .glossary .g-item .ex { color: var(--muted); display: block; margin-top: 2px; }
+  .glossary .view-note { font-size: 13px; line-height: 1.6; color: var(--text); }
+  .glossary .view-note .pill { display: inline-block; background: var(--gold); color: #000; border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
+
   /* Modal */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none;
@@ -404,6 +422,57 @@
     <b>Deep dip target</b> (below anything seen in 30 days), <b>Ready to buy</b> (market already at/below your target).<br>
     <span style="opacity:.8">Note: these are simple guides from price data, not financial advice. The decision is yours.</span>
   </div>
+
+  <!-- GLOSSARY / HELP -->
+  <details class="glossary">
+    <summary>New to crypto? Tap to learn <span class="chev">&#10095;</span></summary>
+    <div class="g-body">
+
+      <h4>Simple vs Advanced view</h4>
+      <div class="view-note">
+        Use the <span class="pill">Simple</span> toggle at the top for everyday checking. It shows just the essentials:
+        how much you invested, what it&rsquo;s worth now, and your profit or loss.<br><br>
+        Switch to <span class="pill">Advanced</span> when you want the extra tools: charts you can change (line/candles),
+        a market snapshot (RSI, trend), a portfolio goal, history graph, what-if calculator, sorting, and more.<br><br>
+        <b>Example:</b> Every morning, open Simple view to see &ldquo;You are up &#8369;300 (+5%)&rdquo; at a glance.
+        When you&rsquo;re deciding whether to buy more, switch to Advanced to check the chart and market snapshot.
+      </div>
+
+      <h4>The basics</h4>
+      <div class="g-item"><b>Entry price</b> &mdash; the price of the coin when you bought it.
+        <span class="ex">Example: you bought BTC at &#8369;4,900,000 &mdash; that&rsquo;s your entry price.</span></div>
+      <div class="g-item"><b>Invested (&#8369;)</b> &mdash; the peso amount you put in. This is the only box you type in.
+        <span class="ex">Example: you put in &#8369;2,500 for that buy.</span></div>
+      <div class="g-item"><b>Amount</b> &mdash; how much of the coin you got (Invested &divide; Entry price).
+        <span class="ex">Example: &#8369;2,500 &divide; &#8369;4,900,000 = 0.00051 BTC.</span></div>
+      <div class="g-item"><b>Current (&#8369;)</b> &mdash; what your coins are worth right now at today&rsquo;s price.</div>
+      <div class="g-item"><b>P/L (profit / loss)</b> &mdash; Current minus Invested. Green = earning, red = losing (for now).
+        <span class="ex">Example: worth &#8369;2,700 now, you invested &#8369;2,500 &rarr; +&#8369;200 profit.</span></div>
+
+      <h4>Active vs Pending</h4>
+      <div class="g-item"><b>Active</b> &mdash; coins you already bought (your real holdings).</div>
+      <div class="g-item"><b>Pending</b> &mdash; a waiting order: you set a target price and it buys automatically if the price drops there.
+        <span class="ex">Example: BTC is &#8369;4.9M now; you set a pending buy at &#8369;4.5M and wait for a dip.</span></div>
+
+      <h4>Common terms</h4>
+      <div class="g-item"><b>Dip</b> &mdash; when the price drops. Many people like to buy on dips (cheaper).</div>
+      <div class="g-item"><b>DCA (peso-cost averaging)</b> &mdash; buying a little at a time instead of all at once, so your average price smooths out.</div>
+      <div class="g-item"><b>Average buy price</b> &mdash; your overall entry across all buys. If the market is above it, you&rsquo;re in profit.</div>
+      <div class="g-item"><b>Break-even</b> &mdash; the price where you&rsquo;re neither up nor down. Shown as a gold dashed line on the chart.</div>
+      <div class="g-item"><b>Take profit</b> &mdash; selling (some or all) while you&rsquo;re up, to lock in gains.</div>
+      <div class="g-item"><b>Volatile</b> &mdash; prices move up and down a lot. Crypto is very volatile.</div>
+
+      <h4>Advanced tools</h4>
+      <div class="g-item"><b>Line vs Candles chart</b> &mdash; Line shows the overall trend simply. Candles show each period&rsquo;s open/high/low/close (more detail). Green candle = went up, red = went down.</div>
+      <div class="g-item"><b>RSI</b> &mdash; a momentum meter (0&ndash;100). Below 30 = &ldquo;oversold&rdquo; (fell a lot), above 70 = &ldquo;overbought&rdquo; (rose a lot). Just a guide.</div>
+      <div class="g-item"><b>Market snapshot</b> &mdash; combines RSI + range position + trend into a simple read (Looks low / Neutral / Looks high). <b>Not advice</b> &mdash; just context.</div>
+      <div class="g-item"><b>What-if calculator</b> &mdash; type a future price to see how much profit you&rsquo;d have if it gets there.</div>
+
+      <div class="view-note" style="margin-top:14px;color:var(--muted);font-size:12px">
+        Reminder: everything here is a helper based on price data, <b>not financial advice</b>. Crypto is risky &mdash; only invest what you can afford to lose, and the decision is always yours.
+      </div>
+    </div>
+  </details>
 
   <div class="sync-status" id="syncStatus" style="text-align:center;font-size:11px;color:var(--muted);margin-top:10px"></div>
 
@@ -1781,7 +1850,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 23;
+  const APP_VERSION = 24;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
