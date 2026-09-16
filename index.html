@@ -573,7 +573,7 @@
   }
   function applyCachedStats(coinId) {
     const c = cacheGet("stats_" + coinId);
-    if (c && c.v) { stats[coinId] = c.v; showRange(coinId); show24(coinId); refreshRows(coinId); }
+    if (c && c.v) { stats[coinId] = c.v; showRange(coinId); show24(coinId); showMarketMood(coinId); refreshRows(coinId); }
   }
 
   function buildCoinCard(coinId) {
@@ -649,7 +649,9 @@
       '<span class="hl-line" data-role="hl24"></span>' +
       '<span class="avg-line" data-role="avg"></span>' +
       '<span class="coin-pl" data-role="coinpl"></span>' +
-      '<span data-role="range" style="display:block;margin-top:2px"></span>';
+      '<span data-role="range" style="display:block;margin-top:2px"></span>' +
+      '<span class="mood-line" data-role="mood" style="display:block;margin-top:8px"></span>' +
+      '<span class="market-help" data-help="mood" style="display:inline-block;margin-top:2px;color:var(--muted);font-size:10px;cursor:pointer;text-decoration:underline">what does this mean?</span>';
     card.appendChild(stat);
 
     // row controls: filter + sort + quick add
@@ -1039,7 +1041,8 @@
     pending: { t: "Pending money", b: "Money set aside for orders that are still waiting to buy at your target price. You haven\u2019t actually bought these yet." },
     balance: { t: "Total Balance", b: "Everything together: the current value of coins you already bought PLUS the money set aside in pending orders." },
     goal: { t: "Portfolio goal", b: "Set a peso target for your whole portfolio. The bar shows how close your Total Balance is to that goal." },
-    history: { t: "Portfolio history", b: "A line of your Total Balance over time. It records a point automatically as you use the app, so you can see your progress grow." }
+    history: { t: "Portfolio history", b: "A line of your Total Balance over time. It records a point automatically as you use the app, so you can see your progress grow." },
+    mood: { t: "Market snapshot", b: "A simple, data-based read of the market for this coin, combining three things:\n\n\u2022 RSI (momentum): below 30 can mean 'oversold' (fell a lot), above 70 can mean 'overbought' (rose a lot).\n\u2022 Position in the 30-day range: near the low vs near the high.\n\u2022 Trend: is the recent average above or below the 30-day average.\n\nLooks low / Leaning low = cheaper side of recent range. Looks high / Leaning high = pricier side. Neutral = mid-range.\n\nIMPORTANT: This is NOT financial advice or a prediction. No tool can truly know the best time to buy or sell. Crypto is very risky and can move against any signal. Always decide for yourself and only invest what you can afford to lose." }
   };
   function openHelp(key) {
     const h = HELP_TEXT[key];
@@ -1049,9 +1052,9 @@
     document.getElementById("helpModal").classList.add("show");
   }
   function closeHelp() { document.getElementById("helpModal").classList.remove("show"); }
-  // delegate clicks on any ? icon
+  // delegate clicks on any ? icon or element with data-help
   document.addEventListener("click", (e) => {
-    const el = e.target.closest(".help");
+    const el = e.target.closest("[data-help]");
     if (el) { e.preventDefault(); openHelp(el.getAttribute("data-help")); }
   });
 
@@ -1369,12 +1372,93 @@
       const last24 = prices.filter(p => p[0] >= cutoff).map(p => p[1]);
       const s = { low30: Math.min(...ys), high30: Math.max(...ys) };
       if (last24.length) { s.low24 = Math.min(...last24); s.high24 = Math.max(...last24); }
+
+      // ----- market snapshot signals -----
+      s.rsi = computeRSI(ys);              // 0-100 momentum
+      s.sma7 = sma(ys, 7);                 // recent average
+      s.sma30 = ys.reduce((a, b) => a + b, 0) / ys.length; // 30d average
+      s.lastPrice = ys[ys.length - 1];
+
       stats[coinId] = s;
       cacheSet("stats_" + coinId, stats[coinId]);
       showRange(coinId);
       show24(coinId);
+      showMarketMood(coinId);
       refreshRows(coinId);
     } catch (e) {}
+  }
+
+  // Simple moving average of the last n values
+  function sma(arr, n) {
+    if (arr.length < n) n = arr.length;
+    const slice = arr.slice(-n);
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
+  }
+
+  // RSI (Relative Strength Index) over the series. Standard 14-period, adapted.
+  function computeRSI(values) {
+    if (values.length < 15) return null;
+    // downsample to ~daily-ish steps so RSI reflects days, not minutes
+    const step = Math.max(1, Math.floor(values.length / 30));
+    const v = [];
+    for (let i = 0; i < values.length; i += step) v.push(values[i]);
+    if (v.length < 15) return null;
+    let gains = 0, losses = 0;
+    const period = 14;
+    for (let i = v.length - period; i < v.length; i++) {
+      const diff = v[i] - v[i - 1];
+      if (diff >= 0) gains += diff; else losses -= diff;
+    }
+    if (gains + losses === 0) return 50;
+    const avgGain = gains / period, avgLoss = losses / period;
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  }
+
+  // Combined data-based "market mood" for a coin (NOT financial advice).
+  function marketMood(coinId) {
+    const s = stats[coinId];
+    if (!s || s.rsi == null || s.high30 == null) return null;
+    const price = (market[coinId] && market[coinId].price) || s.lastPrice;
+    if (price == null) return null;
+
+    // 1) position in 30-day range (0 = at low, 1 = at high)
+    const range = s.high30 - s.low30;
+    const posn = range > 0 ? (price - s.low30) / range : 0.5;
+    // 2) trend: is the recent average above or below the 30-day average?
+    const trendUp = s.sma7 != null && s.sma30 != null ? s.sma7 >= s.sma30 : null;
+
+    // score: negative = leans "cheap / dip", positive = leans "expensive / high"
+    let score = 0;
+    if (s.rsi <= 30) score -= 2; else if (s.rsi >= 70) score += 2;
+    else if (s.rsi < 45) score -= 1; else if (s.rsi > 55) score += 1;
+    if (posn <= 0.25) score -= 2; else if (posn >= 0.75) score += 2;
+    else if (posn < 0.45) score -= 1; else if (posn > 0.55) score += 1;
+
+    let mood, cls, note;
+    if (score <= -3) { mood = "Looks low"; cls = "b-take"; note = "Price is near recent lows with weak momentum \u2014 some buyers see dips as opportunities."; }
+    else if (score <= -1) { mood = "Leaning low"; cls = "b-near"; note = "Price is on the lower side of its recent range."; }
+    else if (score >= 3) { mood = "Looks high"; cls = "b-loss"; note = "Price is near recent highs with strong momentum \u2014 some take profit here."; }
+    else if (score >= 1) { mood = "Leaning high"; cls = "b-near"; note = "Price is on the higher side of its recent range."; }
+    else { mood = "Neutral"; cls = "b-hold"; note = "Price is mid-range \u2014 no strong signal either way."; }
+
+    return { mood, cls, note, rsi: s.rsi, posn, trendUp };
+  }
+
+  function showMarketMood(coinId) {
+    const card = document.getElementById("chart_" + coinId);
+    if (!card) return;
+    const el = card.closest(".coin-card").querySelector('[data-role="mood"]');
+    if (!el) return;
+    const m = marketMood(coinId);
+    if (!m) { el.innerHTML = ""; return; }
+    const rsiTxt = m.rsi != null ? "RSI " + Math.round(m.rsi) : "";
+    const trendTxt = m.trendUp == null ? "" : (m.trendUp ? " \u00b7 trend \u25b2" : " \u00b7 trend \u25bc");
+    el.innerHTML =
+      '<span class="badge ' + m.cls + '">' + m.mood + '</span> ' +
+      '<span style="color:var(--muted);font-size:11px">' + rsiTxt + trendTxt + '</span>' +
+      '<div style="color:var(--muted);font-size:11px;margin-top:3px">' + m.note + '</div>';
   }
 
   function show24(coinId) {
@@ -1678,7 +1762,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 21;
+  const APP_VERSION = 22;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
