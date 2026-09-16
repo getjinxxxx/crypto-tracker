@@ -199,6 +199,17 @@
   body.locked { overflow: hidden; }
   #app.hidden { display: none; }
 
+  /* Simple / Advanced view toggle */
+  .view-toggle { display: flex; justify-content: center; gap: 0; margin: 0 auto 16px; max-width: 240px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .view-toggle button {
+    flex: 1; background: none; border: none; color: var(--muted); font-size: 13px; font-weight: 600;
+    padding: 7px 10px; border-radius: 999px; cursor: pointer;
+  }
+  .view-toggle button.active { background: var(--gold); color: #000; }
+  /* In Simple view, hide advanced-only details */
+  body.simple .adv-only { display: none !important; }
+
   /* Plain-language summary */
   .plain {
     background: linear-gradient(135deg, #1a2436, #141b28);
@@ -330,11 +341,17 @@
   <div id="app" class="hidden">
   <div class="top-title">Crypto Tracker</div>
 
+  <!-- VIEW TOGGLE -->
+  <div class="view-toggle">
+    <button id="viewSimple">Simple</button>
+    <button id="viewAdvanced">Advanced</button>
+  </div>
+
   <!-- PLAIN-LANGUAGE SUMMARY -->
   <div class="plain" id="plainSummary"></div>
 
   <!-- GOAL PROGRESS -->
-  <div class="goal-card">
+  <div class="goal-card adv-only">
     <div class="goal-head">
       <span class="lbl">Portfolio goal <span class="help" data-help="goal">?</span></span>
       <input id="goalInput" type="text" inputmode="decimal" placeholder="e.g. 50000" />
@@ -344,7 +361,7 @@
   </div>
 
   <!-- PORTFOLIO HISTORY -->
-  <div class="coin-card" id="historyCard" style="display:none">
+  <div class="coin-card adv-only" id="historyCard" style="display:none">
     <div class="coin-head"><span class="name">Portfolio value over time</span>
       <span class="help" data-help="history" style="margin-left:6px">?</span></div>
     <div class="chart-box" style="height:130px"><canvas id="historyChart"></canvas></div>
@@ -372,7 +389,7 @@
 
   <div class="reminder" id="reminder"></div>
 
-  <div class="legend">
+  <div class="legend adv-only">
     <span class="item"><span class="sw take"></span> Take profit / Ready to buy</span>
     <span class="item"><span class="sw near"></span> Getting close / Good dip entry</span>
     <span class="item"><span class="sw hold"></span> Hold / Fair entry</span>
@@ -613,9 +630,9 @@
       tabs.appendChild(b);
     });
 
-    // chart-type toggle (Line / Candles)
+    // chart-type toggle (Line / Candles) — advanced only
     const typeTabs = document.createElement("div");
-    typeTabs.className = "range-tabs";
+    typeTabs.className = "range-tabs adv-only";
     [["line","Line"],["candle","Candles"]].forEach(([type, label]) => {
       const b = document.createElement("button");
       b.textContent = label;
@@ -646,17 +663,17 @@
     const stat = document.createElement("div");
     stat.className = "coin-stat";
     stat.innerHTML = 'Active: <b data-role="active">0</b> &middot; Pending: <b data-role="pending">0</b>' +
-      '<span class="hl-line" data-role="hl24"></span>' +
+      '<span class="hl-line adv-only" data-role="hl24"></span>' +
       '<span class="avg-line" data-role="avg"></span>' +
       '<span class="coin-pl" data-role="coinpl"></span>' +
-      '<span data-role="range" style="display:block;margin-top:2px"></span>' +
-      '<span class="mood-line" data-role="mood" style="display:block;margin-top:8px"></span>' +
-      '<span class="market-help" data-help="mood" style="display:inline-block;margin-top:2px;color:var(--muted);font-size:10px;cursor:pointer;text-decoration:underline">what does this mean?</span>';
+      '<span class="adv-only" data-role="range" style="display:block;margin-top:2px"></span>' +
+      '<span class="mood-line adv-only" data-role="mood" style="display:block;margin-top:8px"></span>' +
+      '<span class="market-help adv-only" data-help="mood" style="display:inline-block;margin-top:2px;color:var(--muted);font-size:10px;cursor:pointer;text-decoration:underline">what does this mean?</span>';
     card.appendChild(stat);
 
-    // row controls: filter + sort + quick add
+    // row controls: filter + sort — advanced only
     const controls = document.createElement("div");
-    controls.className = "row-controls";
+    controls.className = "row-controls adv-only";
     const curFilter = filterMode[coinId] || "all";
     const curSort = sortMode[coinId] || "default";
     [["all","All"],["active","Active"],["pending","Pending"]].forEach(([f, label]) => {
@@ -718,7 +735,7 @@
     addBtn.onclick = () => addRow(coinId);
     addWrap.appendChild(addBtn);
     const quickBtn = document.createElement("button");
-    quickBtn.className = "add-row";
+    quickBtn.className = "add-row adv-only";
     quickBtn.innerHTML = '<span class="plus">\u26a1</span> Quick add at market';
     quickBtn.title = "Add a bought row pre-filled with the current market price";
     quickBtn.onclick = () => quickAdd(coinId);
@@ -1097,8 +1114,10 @@
             if (s.hasMarket) {
               const mkt = market[coinId].price;
               const gap = ((mkt - s.avgPrice) / s.avgPrice) * 100;
-              if (mkt < s.avgPrice) dca += " \u2014 market is " + Math.abs(gap).toFixed(1) + "% below your average (buying now lowers it)";
-              else dca += " \u2014 market is " + gap.toFixed(1) + "% above your average";
+              const detail = (mkt < s.avgPrice)
+                ? " \u2014 market is " + Math.abs(gap).toFixed(1) + "% below your average (buying now lowers it)"
+                : " \u2014 market is " + gap.toFixed(1) + "% above your average";
+              dca += '<span class="adv-only">' + detail + '</span>';
             }
             avgEl.innerHTML = dca;
           } else avgEl.innerHTML = "";
@@ -1142,7 +1161,7 @@
     let box = cardEl.querySelector('[data-role="whatif"]');
     if (!box) {
       box = document.createElement("div");
-      box.className = "whatif";
+      box.className = "whatif adv-only";
       box.setAttribute("data-role", "whatif");
       // insert right after the stat block
       const stat = cardEl.querySelector(".coin-stat");
@@ -1762,7 +1781,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 22;
+  const APP_VERSION = 23;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1794,6 +1813,26 @@
         updateTotals();
       });
     }
+  })();
+
+  // ---------- Simple / Advanced view (per-device preference) ----------
+  function applyView(mode) {
+    const simple = mode !== "advanced";
+    document.body.classList.toggle("simple", simple);
+    const bS = document.getElementById("viewSimple");
+    const bA = document.getElementById("viewAdvanced");
+    if (bS) bS.classList.toggle("active", simple);
+    if (bA) bA.classList.toggle("active", !simple);
+    try { localStorage.setItem("ctView", simple ? "simple" : "advanced"); } catch (e) {}
+  }
+  (function () {
+    const bS = document.getElementById("viewSimple");
+    const bA = document.getElementById("viewAdvanced");
+    if (bS) bS.onclick = () => applyView("simple");
+    if (bA) bA.onclick = () => applyView("advanced");
+    let saved = "simple";
+    try { saved = localStorage.getItem("ctView") || "simple"; } catch (e) {}
+    applyView(saved); // default = Simple
   })();
 
   // If already unlocked this session, skip the gate.
