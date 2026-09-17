@@ -673,8 +673,23 @@
   function applyCachedChart(coinId) {
     const days = ranges[coinId] || 7;
     const type = chartTypes[coinId] || "line";
+    const color = (libById(coinId) || {}).color;
+    if (days < 1) {
+      // short window: slice from cached 1-day data if available
+      const cached = cacheGet("chart_" + coinId + "_1_line");
+      if (cached && cached.v && cached.v.length) {
+        const cutoff = Date.now() - days * 24 * 3600 * 1000;
+        let points = cached.v.filter(p => p.t >= cutoff);
+        if (points.length < 2) points = cached.v.slice(-Math.max(2, Math.ceil(cached.v.length * days)));
+        drawChart(coinId, points, days, color, "line");
+        showInsight(coinId, points, days);
+      } else {
+        setChartStatus(coinId, "Loading chart\u2026");
+      }
+      return;
+    }
     const c = cacheGet("chart_" + coinId + "_" + days + "_" + type);
-    if (c && c.v && c.v.length) { drawChart(coinId, c.v, days, (libById(coinId) || {}).color, type); showInsight(coinId, c.v, days); }
+    if (c && c.v && c.v.length) { drawChart(coinId, c.v, days, color, type); showInsight(coinId, c.v, days); }
     else setChartStatus(coinId, "Loading chart\u2026");
   }
   function applyCachedStats(coinId) {
@@ -1440,37 +1455,52 @@
     const days = ranges[coinId] || 7;
     const type = chartTypes[coinId] || "line";
     const lib = libById(coinId) || { color: "#888" };
-    const cacheKey = "chart_" + coinId + "_" + days + "_" + type;
-    // Short intraday windows (< 1 day) fetch 1 day of data, then slice to the window.
     const isShort = days < 1;
-    const fetchDays = isShort ? 1 : days;
+
+    // Short intraday windows reuse the 1-day line data (no extra API call, no rate-limit).
+    if (isShort) {
+      const oneDayKey = "chart_" + coinId + "_1_line";
+      let base = null;
+      const cached = cacheGet(oneDayKey);
+      if (cached && cached.v && cached.v.length) base = cached.v;
+      try {
+        if (!base) {
+          const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=1");
+          const raw = (j.prices || []);
+          if (raw.length) { base = raw.map(p => ({ t: p[0], y: p[1] })); cacheSet(oneDayKey, base); }
+        }
+      } catch (e) { /* use cache if we have it */ }
+      if (!base || !base.length) { setChartStatus(coinId, "Chart unavailable right now (rate-limited). Will retry.", true); return; }
+      const cutoff = Date.now() - days * 24 * 3600 * 1000;
+      let points = base.filter(p => p.t >= cutoff);
+      if (points.length < 2) points = base.slice(-Math.max(2, Math.ceil(base.length * days)));
+      clearChartStatus(coinId);
+      drawChart(coinId, points, days, lib.color, "line");
+      showInsight(coinId, points, days);
+      return;
+    }
+
+    const cacheKey = "chart_" + coinId + "_" + days + "_" + type;
     try {
       let points;
-      if (type === "candle" && !isShort) {
+      if (type === "candle") {
         // OHLC: [ time, open, high, low, close ]
-        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/ohlc?vs_currency=php&days=" + fetchDays);
+        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/ohlc?vs_currency=php&days=" + days);
         if (!Array.isArray(j) || !j.length) throw new Error("no data");
         points = j.map(p => ({ t: p[0], o: p[1], h: p[2], l: p[3], c: p[4] }));
       } else {
-        // line data (also used for short windows, since OHLC has no intraday granularity)
-        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + fetchDays);
+        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + days);
         const raw = (j.prices || []);
         if (!raw.length) throw new Error("no data");
         points = raw.map(p => ({ t: p[0], y: p[1] }));
       }
-      if (isShort) {
-        const cutoff = Date.now() - days * 24 * 3600 * 1000;
-        const sliced = points.filter(p => p.t >= cutoff);
-        if (sliced.length >= 2) points = sliced;
-        else points = points.slice(-Math.max(2, Math.ceil(points.length * days))); // fallback if too few
-      }
       cacheSet(cacheKey, points);
       clearChartStatus(coinId);
-      drawChart(coinId, points, days, lib.color, isShort ? "line" : type);
+      drawChart(coinId, points, days, lib.color, type);
       showInsight(coinId, points, days);
     } catch (e) {
       const c = cacheGet(cacheKey);
-      if (c && c.v && c.v.length) { clearChartStatus(coinId); drawChart(coinId, c.v, days, lib.color, isShort ? "line" : type); showInsight(coinId, c.v, days); }
+      if (c && c.v && c.v.length) { clearChartStatus(coinId); drawChart(coinId, c.v, days, lib.color, type); showInsight(coinId, c.v, days); }
       else setChartStatus(coinId, "Chart unavailable right now (rate-limited). Will retry.", true);
     }
   }
@@ -1940,7 +1970,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 25;
+  const APP_VERSION = 26;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
