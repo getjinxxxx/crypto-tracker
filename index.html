@@ -95,6 +95,12 @@
   .coin-stat { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
   .coin-stat b { color: var(--gold-bright); }
 
+  /* Insight box ("what happened") */
+  .insight { background: var(--panel-2); border-radius: 12px; padding: 10px 12px; margin: 4px 0 12px; }
+  .insight:empty { display: none; }
+  .insight .ins-head { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+  .insight .ins-body { font-size: 13px; line-height: 1.5; color: var(--text); }
+
   /* Table */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; }
   table { width: 100%; border-collapse: collapse; min-width: 620px; }
@@ -650,11 +656,25 @@
   function cacheSet(key, val) { try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v: val })); } catch (e) {} }
   function cacheGet(key) { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
 
+  // Select a chart time range for a coin, update tab highlight across both groups.
+  function selectRange(coinId, days, btn) {
+    ranges[coinId] = days;
+    const card = document.getElementById("chart_" + coinId);
+    if (card) {
+      const cardEl = card.closest(".coin-card");
+      cardEl.querySelectorAll(".range-tabs button").forEach(bb => bb.classList.remove("active"));
+    }
+    if (btn) btn.classList.add("active");
+    applyCachedChart(coinId);
+    taskQueue.push(() => loadChart(coinId));
+    runQueue();
+  }
+
   function applyCachedChart(coinId) {
     const days = ranges[coinId] || 7;
     const type = chartTypes[coinId] || "line";
     const c = cacheGet("chart_" + coinId + "_" + days + "_" + type);
-    if (c && c.v && c.v.length) drawChart(coinId, c.v, days, (libById(coinId) || {}).color, type);
+    if (c && c.v && c.v.length) { drawChart(coinId, c.v, days, (libById(coinId) || {}).color, type); showInsight(coinId, c.v, days); }
     else setChartStatus(coinId, "Loading chart\u2026");
   }
   function applyCachedStats(coinId) {
@@ -680,22 +700,25 @@
     card.appendChild(head);
 
     // range tabs
+    // Short intraday windows (advanced) + standard ranges.
+    // Value = fraction of a day. e.g. 5min = 5/1440. We fetch days=1 data and slice.
+    const shortTabs = document.createElement("div");
+    shortTabs.className = "range-tabs adv-only";
+    [[5/1440,"5m"],[15/1440,"15m"],[30/1440,"30m"],[1/24,"1H"],[4/24,"4H"],[12/24,"12H"]].forEach(([days, label]) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      if ((ranges[coinId] || 7) === days) b.classList.add("active");
+      b.onclick = () => selectRange(coinId, days, b);
+      shortTabs.appendChild(b);
+    });
+
     const tabs = document.createElement("div");
     tabs.className = "range-tabs";
     [[1,"24h"],[7,"7d"],[30,"30d"]].forEach(([days, label]) => {
       const b = document.createElement("button");
       b.textContent = label;
       if ((ranges[coinId] || 7) === days) b.classList.add("active");
-      b.onclick = () => {
-        ranges[coinId] = days;
-        // update tab styles without full re-render
-        tabs.querySelectorAll("button").forEach(bb => bb.classList.remove("active"));
-        b.classList.add("active");
-        // show cached chart for this range instantly, then queue a refresh
-        applyCachedChart(coinId);
-        taskQueue.push(() => loadChart(coinId));
-        runQueue();
-      };
+      b.onclick = () => selectRange(coinId, days, b);
       tabs.appendChild(b);
     });
 
@@ -726,7 +749,14 @@
 
     card.appendChild(chartBox);
     card.appendChild(tabs);
+    card.appendChild(shortTabs);
     card.appendChild(typeTabs);
+
+    // insight text ("what happened in this window")
+    const insight = document.createElement("div");
+    insight.className = "insight";
+    insight.setAttribute("data-role", "insight");
+    card.appendChild(insight);
 
     // per-coin stat line
     const stat = document.createElement("div");
@@ -1411,27 +1441,87 @@
     const type = chartTypes[coinId] || "line";
     const lib = libById(coinId) || { color: "#888" };
     const cacheKey = "chart_" + coinId + "_" + days + "_" + type;
+    // Short intraday windows (< 1 day) fetch 1 day of data, then slice to the window.
+    const isShort = days < 1;
+    const fetchDays = isShort ? 1 : days;
     try {
       let points;
-      if (type === "candle") {
+      if (type === "candle" && !isShort) {
         // OHLC: [ time, open, high, low, close ]
-        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/ohlc?vs_currency=php&days=" + days);
+        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/ohlc?vs_currency=php&days=" + fetchDays);
         if (!Array.isArray(j) || !j.length) throw new Error("no data");
         points = j.map(p => ({ t: p[0], o: p[1], h: p[2], l: p[3], c: p[4] }));
       } else {
-        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + days);
+        // line data (also used for short windows, since OHLC has no intraday granularity)
+        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=" + fetchDays);
         const raw = (j.prices || []);
         if (!raw.length) throw new Error("no data");
         points = raw.map(p => ({ t: p[0], y: p[1] }));
       }
+      if (isShort) {
+        const cutoff = Date.now() - days * 24 * 3600 * 1000;
+        const sliced = points.filter(p => p.t >= cutoff);
+        if (sliced.length >= 2) points = sliced;
+        else points = points.slice(-Math.max(2, Math.ceil(points.length * days))); // fallback if too few
+      }
       cacheSet(cacheKey, points);
       clearChartStatus(coinId);
-      drawChart(coinId, points, days, lib.color, type);
+      drawChart(coinId, points, days, lib.color, isShort ? "line" : type);
+      showInsight(coinId, points, days);
     } catch (e) {
       const c = cacheGet(cacheKey);
-      if (c && c.v && c.v.length) { clearChartStatus(coinId); drawChart(coinId, c.v, days, lib.color, type); }
+      if (c && c.v && c.v.length) { clearChartStatus(coinId); drawChart(coinId, c.v, days, lib.color, isShort ? "line" : type); showInsight(coinId, c.v, days); }
       else setChartStatus(coinId, "Chart unavailable right now (rate-limited). Will retry.", true);
     }
+  }
+
+  // Human-readable label for a range value (fraction of a day).
+  function rangeLabel(days) {
+    if (days >= 1) return days === 1 ? "24 hours" : days + " days";
+    const mins = Math.round(days * 1440);
+    if (mins < 60) return mins + " minutes";
+    const hrs = Math.round(days * 24);
+    return hrs + (hrs === 1 ? " hour" : " hours");
+  }
+
+  // Build an "insight" of what happened over the window from the price points.
+  function showInsight(coinId, points, days) {
+    const card = document.getElementById("chart_" + coinId);
+    if (!card) return;
+    const el = card.closest(".coin-card").querySelector('[data-role="insight"]');
+    if (!el) return;
+    if (!points || points.length < 2) { el.innerHTML = ""; return; }
+
+    const vals = points.map(p => (p.y != null ? p.y : p.c)).filter(v => isFinite(v));
+    if (vals.length < 2) { el.innerHTML = ""; return; }
+    const first = vals[0], last = vals[vals.length - 1];
+    const hi = Math.max(...vals), lo = Math.min(...vals);
+    const diff = last - first;
+    const pct = first > 0 ? (diff / first) * 100 : 0;
+    const up = diff >= 0;
+
+    // simple wording based on size of the move
+    const absPct = Math.abs(pct);
+    let word;
+    if (absPct < 0.1) word = "was basically flat";
+    else if (absPct < 0.5) word = up ? "ticked up slightly" : "ticked down slightly";
+    else if (absPct < 2) word = up ? "rose" : "fell";
+    else word = up ? "jumped" : "dropped";
+
+    // volatility note: how wide the swing was vs the move
+    const swing = hi - lo;
+    const swingPct = first > 0 ? (swing / first) * 100 : 0;
+    let volNote = "";
+    if (swingPct > absPct * 3 && swingPct > 0.5) volNote = " It swung around a lot within the window.";
+
+    const arrow = up ? "\u25b2" : "\u25bc";
+    const color = up ? "var(--green)" : "var(--red)";
+    el.innerHTML =
+      '<div class="ins-head">In the last ' + rangeLabel(days) + ':</div>' +
+      '<div class="ins-body">' + libById(coinId).sym + ' ' + word +
+      ' <span style="color:' + color + '">' + arrow + ' ' + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(2) + '%</span> ' +
+      '(' + fmtPeso(first) + ' \u2192 ' + fmtPeso(last) + ').<br>' +
+      'High ' + fmtPeso(hi) + ' \u00b7 Low ' + fmtPeso(lo) + '.' + volNote + '</div>';
   }
 
   function showRange(coinId) {
@@ -1850,7 +1940,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 24;
+  const APP_VERSION = 25;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
