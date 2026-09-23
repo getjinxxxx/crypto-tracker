@@ -605,11 +605,18 @@
 
   // ---------- Rendering ----------
   function render() {
+    // Preserve scroll position so a background sync/refresh doesn't yank the page back to the top.
+    const prevScroll = window.pageYOffset || document.documentElement.scrollTop || 0;
     const container = document.getElementById("coinCards");
     container.innerHTML = "";
     state.coins.forEach(coinId => container.appendChild(buildCoinCard(coinId)));
     renderSummary();
     updateTotals();
+    // Restore scroll after the DOM has been rebuilt.
+    if (prevScroll > 0) {
+      window.scrollTo(0, prevScroll);
+      requestAnimationFrame(() => window.scrollTo(0, prevScroll));
+    }
     // Show any cached chart/stats immediately, then refresh from network (queued).
     state.coins.forEach(coinId => {
       if (!ranges[coinId]) ranges[coinId] = 7;
@@ -938,7 +945,7 @@
     const td = document.createElement("td");
     td.colSpan = 8;
     td.innerHTML =
-      '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0 6px 8px">' +
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:12px;line-height:1.5;padding:2px 8px 6px 8px">' +
         '<span style="color:var(--gold-bright)">\u{1F4B0} Took profit</span>' +
         '<span style="color:var(--muted)">' + fmtAmount(amt) + ' ' + lib.sym + ' \u2192 ' + fmtPeso(php) + (when ? " (" + when + ")" : "") + '</span>' +
         '<span style="color:' + pcolor + '">' + psign + '\u20b1' + Math.abs(profit).toLocaleString("en-US", { maximumFractionDigits: 2 }) +
@@ -1650,6 +1657,7 @@
       });
     });
     updateTotals();
+    checkAlerts();            // notify on Take-profit / Ready-to-buy signals
   }
 
   // ---------- Charts (per coin) ----------
@@ -2218,6 +2226,118 @@
     }
   }
 
+  // ---------- Buy/Sell alerts ----------
+  // Fires a browser notification when a bought coin hits "Take profit" (>= +30%)
+  // or a pending order becomes "Ready to buy" (market at/below your target).
+  const ALERTS_KEY = "cryptoAlertsOn";
+  let alertsOn = false;
+  // Remember what we already alerted so we don't notify the same thing repeatedly.
+  const alertedKeys = {};
+
+  function initAlerts() {
+    const btn = document.getElementById("alertBtn");
+    const status = document.getElementById("alertStatus");
+    if (!btn) return;
+    const supported = ("Notification" in window);
+    alertsOn = supported && localStorage.getItem(ALERTS_KEY) === "1" && Notification.permission === "granted";
+    updateAlertUI();
+
+    btn.onclick = async () => {
+      if (!supported) {
+        status.textContent = "This device/browser doesn't support notifications. On iPhone, add the app to your Home Screen first, then try again.";
+        return;
+      }
+      if (alertsOn) {
+        // toggle OFF
+        alertsOn = false;
+        localStorage.setItem(ALERTS_KEY, "0");
+        updateAlertUI();
+        return;
+      }
+      // turn ON: ask permission
+      try {
+        let perm = Notification.permission;
+        if (perm !== "granted") perm = await Notification.requestPermission();
+        if (perm === "granted") {
+          alertsOn = true;
+          localStorage.setItem(ALERTS_KEY, "1");
+          updateAlertUI();
+          try { new Notification("Crypto Tracker", { body: "Alerts are on. I'll notify you on Take-profit and Ready-to-buy signals." }); } catch (e) {}
+          checkAlerts(); // check right away against current prices
+        } else {
+          status.textContent = perm === "denied"
+            ? "Notifications are blocked. Enable them for this site in your browser/phone settings, then try again."
+            : "Permission not granted.";
+        }
+      } catch (e) {
+        status.textContent = "Couldn't enable notifications on this device.";
+      }
+    };
+
+    function updateAlertUI() {
+      if (!supported) {
+        btn.textContent = "\uD83D\uDD14 Alerts not supported here";
+        status.textContent = "Tip: on iPhone, open this from the Home Screen app to allow notifications.";
+        return;
+      }
+      btn.textContent = alertsOn ? "\uD83D\uDD14 Alerts ON (tap to turn off)" : "\uD83D\uDD14 Enable buy/sell alerts";
+      btn.style.color = alertsOn ? "var(--green)" : "var(--gold-bright)";
+      status.textContent = alertsOn
+        ? "You'll get a notification on Take-profit or Ready-to-buy signals."
+        : (Notification.permission === "denied"
+            ? "Notifications are blocked in settings. Allow them for this site, then tap again."
+            : "Off. Tap to get notified when a coin is ready to buy or take profit.");
+    }
+    // expose so checkAlerts can refresh the label if permission changes
+    initAlerts._updateUI = updateAlertUI;
+  }
+
+  function fireAlert(key, title, body) {
+    if (alertedKeys[key]) return;          // already notified for this exact condition
+    alertedKeys[key] = Date.now();
+    try { new Notification(title, { body }); } catch (e) {}
+  }
+
+  // Scan all coins/rows for actionable signals. Called after each price refresh.
+  function checkAlerts() {
+    if (!alertsOn) return;
+    const seen = {};
+    state.coins.forEach(coinId => {
+      const mkt = market[coinId] ? market[coinId].price : null;
+      if (mkt == null) return;
+      const lib = libById(coinId) || { sym: coinId };
+      (state.rows[coinId] || []).forEach((row, i) => {
+        const entry = num(row.price);
+        if (row.pending) {
+          // Ready to buy: market reached/deeper than your target
+          if (entry > 0 && mkt <= entry) {
+            const key = coinId + ":buy:" + i + ":" + entry;
+            seen[key] = true;
+            fireAlert(key, "\uD83D\uDFE2 Ready to buy " + lib.sym,
+              lib.sym + " is at " + fmtPeso(mkt) + " \u2014 at/below your target " + fmtPeso(entry) + ".");
+          }
+        } else {
+          // Take profit: remaining holding up >= +30%
+          const sold = soldTotals(row);
+          const fullAmount = entry > 0 ? num(row.peso) / entry : 0;
+          const amount = Math.max(0, fullAmount - sold.amt);
+          const remainingInvested = fullAmount > 0 ? num(row.peso) * (amount / fullAmount) : 0;
+          if (amount > 0 && remainingInvested > 0) {
+            const pct = ((amount * mkt) - remainingInvested) / remainingInvested * 100;
+            if (pct >= TP_TAKE) {
+              const key = coinId + ":tp:" + i + ":" + entry;
+              seen[key] = true;
+              fireAlert(key, "\uD83D\uDFE2 Take profit? " + lib.sym,
+                lib.sym + " entry " + fmtPeso(entry) + " is up +" + pct.toFixed(1) + "% (now " + fmtPeso(mkt) + ").");
+            }
+          }
+        }
+      });
+    });
+    // Reset any condition that is no longer true, so it can alert again next time it triggers.
+    Object.keys(alertedKeys).forEach(k => { if (!seen[k]) delete alertedKeys[k]; });
+  }
+
   function revealApp() {
     document.getElementById("lock").style.display = "none";
     document.body.classList.remove("locked");
@@ -2230,6 +2350,7 @@
     if (appStarted) return;
     appStarted = true;
     render();                 // render() triggers queueDataLoads()
+    initAlerts();             // wire up the buy/sell alert button
     cloudInit();              // connect Firebase + realtime sync
     setInterval(() => { taskQueue.push(() => loadPrices()); runQueue(); }, 120000);
     setInterval(() => { state.coins.forEach(coinId => taskQueue.push(() => loadChart(coinId))); runQueue(); }, 300000);
@@ -2239,7 +2360,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 31;
+  const APP_VERSION = 32;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
