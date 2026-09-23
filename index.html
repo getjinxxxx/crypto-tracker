@@ -844,6 +844,8 @@
       tbody.appendChild(buildRow(coinId, e.row, e.idx));
       // take-profit sub-rows (one per recorded sell)
       (e.row.sells || []).forEach((s, si) => tbody.appendChild(buildSellRow(coinId, e.idx, si)));
+      // inline take-profit form (when opened)
+      if (e.row._showTP) tbody.appendChild(buildTPForm(coinId, e.idx));
       if (e.row.note || e.row._showNote) tbody.appendChild(buildNoteRow(coinId, e.idx));
     });
     wrap.appendChild(table);
@@ -999,7 +1001,7 @@
       tpBtn.textContent = "\u{1F4B0}"; // money bag = record a take-profit sell
       tpBtn.title = "Record a take-profit (sell part or all)";
       tpBtn.style.fontSize = "13px";
-      tpBtn.onclick = () => openTakeProfit(coinId, i);
+      tpBtn.onclick = () => { state.rows[coinId][i]._showTP = !state.rows[coinId][i]._showTP; render(); };
       tdAct.appendChild(tpBtn);
     }
     const noteBtn = document.createElement("button");
@@ -1157,37 +1159,80 @@
     return { amt, php, costBasis };
   }
 
-  // ----- Take-profit dialog -----
-  function openTakeProfit(coinId, i) {
+  // ----- Inline take-profit form (matches Coins.ph: Amount, Rate, Received) -----
+  function buildTPForm(coinId, i) {
     const row = state.rows[coinId][i];
-    if (!row) return;
     const lib = libById(coinId) || { sym: coinId };
     const entry = num(row.price);
     const fullAmount = entry > 0 ? num(row.peso) / entry : 0;
     const sold = soldTotals(row);
     const remaining = Math.max(0, fullAmount - sold.amt);
 
-    const amtStr = prompt(
-      "Take profit on " + lib.sym + " (entry " + fmtPlain(entry) + ").\n" +
-      "You still hold about " + fmtAmount(remaining) + " " + lib.sym + ".\n\n" +
-      "How much " + lib.sym + " did you SELL? (crypto amount)",
-      fmtAmount(remaining)
-    );
-    if (amtStr === null) return;
-    const amt = num(amtStr);
-    if (amt <= 0) { alert("Enter a valid amount."); return; }
-    if (amt > remaining + 1e-9) {
-      if (!confirm("That's more than your remaining " + fmtAmount(remaining) + ". Record it anyway?")) return;
-    }
-    const phpStr = prompt("How much PHP did you RECEIVE for selling " + fmtAmount(amt) + " " + lib.sym + "?", "");
-    if (phpStr === null) return;
-    const php = num(phpStr);
-    if (php <= 0) { alert("Enter a valid peso amount."); return; }
+    const tr = document.createElement("tr");
+    tr.className = "note-row";
+    const td = document.createElement("td");
+    td.colSpan = 8;
 
-    if (!row.sells) row.sells = [];
-    row.sells.push({ amt: amt, php: php, at: Date.now() });
-    saveState();
-    render();
+    const inStyle = "background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px;width:120px";
+    td.innerHTML =
+      '<div style="padding:6px 8px 10px 8px;background:var(--panel-2);border-radius:10px;margin:2px 0 8px">' +
+        '<div style="font-size:12px;color:var(--gold-bright);margin-bottom:8px">\u{1F4B0} Record take-profit on ' + lib.sym +
+          ' <span style="color:var(--muted)">(you still hold ' + fmtAmount(remaining) + ' ' + lib.sym + ')</span></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">' +
+          '<label style="font-size:11px;color:var(--muted)">Amount sold (' + lib.sym + ')<br><input data-f="amt" inputmode="decimal" placeholder="0.002559" style="' + inStyle + '"></label>' +
+          '<label style="font-size:11px;color:var(--muted)">Rate (1 ' + lib.sym + ' = \u20b1)<br><input data-f="rate" inputmode="decimal" placeholder="171160.6" style="' + inStyle + '"></label>' +
+          '<label style="font-size:11px;color:var(--muted)">Received (\u20b1)<br><input data-f="php" inputmode="decimal" placeholder="438" style="' + inStyle + '"></label>' +
+          '<button data-f="save" style="background:var(--gold);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Save</button>' +
+          '<button data-f="cancel" style="background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer">Cancel</button>' +
+        '</div>' +
+        '<div data-f="preview" style="font-size:12px;color:var(--muted);margin-top:8px"></div>' +
+      '</div>';
+
+    const amtI = td.querySelector('[data-f="amt"]');
+    const rateI = td.querySelector('[data-f="rate"]');
+    const phpI = td.querySelector('[data-f="php"]');
+    const prev = td.querySelector('[data-f="preview"]');
+
+    // Prefill rate with current market price as a convenience
+    const mkt = market[coinId] ? market[coinId].price : null;
+    if (mkt != null) rateI.value = Math.round(mkt * 100) / 100;
+
+    function recompute(source) {
+      const a = num(amtI.value), r = num(rateI.value), p = num(phpI.value);
+      // auto-fill the third field from the other two
+      if (source !== "php" && a > 0 && r > 0) phpI.value = Math.round(a * r * 100) / 100;
+      else if (source === "php" && a > 0 && p > 0) rateI.value = Math.round((p / a) * 100) / 100;
+      // preview profit
+      const amt = num(amtI.value), php = num(phpI.value);
+      if (amt > 0 && php > 0 && entry > 0) {
+        const cost = amt * entry;
+        const profit = php - cost;
+        const pct = cost > 0 ? (profit / cost) * 100 : 0;
+        const up = profit >= 0;
+        prev.innerHTML = "Cost to buy this " + fmtAmount(amt) + " " + lib.sym + " was " + fmtPeso(cost) +
+          '. Profit: <span style="color:' + (up ? "var(--green)" : "var(--red)") + '">' +
+          (up ? "+" : "\u2212") + fmtPeso(Math.abs(profit)).slice(0) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)</span>";
+      } else { prev.textContent = ""; }
+    }
+    amtI.oninput = () => recompute("amt");
+    rateI.oninput = () => recompute("rate");
+    phpI.oninput = () => recompute("php");
+
+    td.querySelector('[data-f="save"]').onclick = () => {
+      const amt = num(amtI.value), php = num(phpI.value);
+      if (amt <= 0) { alert("Enter the amount sold."); amtI.focus(); return; }
+      if (php <= 0) { alert("Enter the pesos received (or a rate)."); phpI.focus(); return; }
+      if (amt > remaining + 1e-9 && !confirm("That's more than your remaining " + fmtAmount(remaining) + ". Record anyway?")) return;
+      if (!row.sells) row.sells = [];
+      row.sells.push({ amt: amt, php: php, rate: num(rateI.value) || null, at: Date.now() });
+      delete row._showTP;
+      saveState();
+      render();
+    };
+    td.querySelector('[data-f="cancel"]').onclick = () => { delete row._showTP; render(); };
+
+    tr.appendChild(td);
+    return tr;
   }
 
   // Delete one take-profit record
@@ -2165,7 +2210,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 27;
+  const APP_VERSION = 28;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
