@@ -922,6 +922,17 @@
     const psign = profit >= 0 ? "+" : "\u2212";
     const when = s.at ? new Date(s.at).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
 
+    // How much of this entry is still held after all sells (helps explain why P/L isn't 0).
+    const fullAmount = entry > 0 ? num(row.peso) / entry : 0;
+    const soldAll = soldTotals(row);
+    const stillHeld = Math.max(0, fullAmount - soldAll.amt);
+    let remainNote = "";
+    if (stillHeld > 0.0000001 && fullAmount > 0) {
+      const heldPct = (stillHeld / fullAmount) * 100;
+      remainNote = ' \u00b7 <span style="color:var(--muted)">You still hold ' + fmtAmount(stillHeld) + ' ' + lib.sym +
+        ' (' + heldPct.toFixed(0) + '% of this buy) \u2014 that part still has its own P/L</span>';
+    }
+
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
@@ -932,7 +943,7 @@
         '<span style="color:var(--muted)">' + fmtAmount(amt) + ' ' + lib.sym + ' \u2192 ' + fmtPeso(php) + (when ? " (" + when + ")" : "") + '</span>' +
         '<span style="color:' + pcolor + '">' + psign + '\u20b1' + Math.abs(profit).toLocaleString("en-US", { maximumFractionDigits: 2 }) +
           ' (' + psign + Math.abs(startPct).toFixed(1) + '% profit)</span>' +
-        '<span style="color:var(--muted)">' + vsNow + '</span>' +
+        '<span style="color:var(--muted)">' + vsNow + remainNote + '</span>' +
         '<button class="del" title="Remove this record" style="margin-left:auto;font-size:14px">\u00d7</button>' +
       '</div>';
     td.querySelector("button").onclick = () => removeSell(coinId, i, si);
@@ -1435,7 +1446,8 @@
             avgEl.innerHTML = dca;
           } else avgEl.innerHTML = "";
         }
-        // per-coin overall P/L (active only)
+        // per-coin overall P/L (active only = coins you STILL hold)
+        const hasRealized = s.realized && Math.abs(s.realized) > 0.005;
         const plEl = cardEl.querySelector('[data-role="coinpl"]');
         if (plEl) {
           if (s.hasMarket && s.active > 0) {
@@ -1444,18 +1456,20 @@
             const up = diff >= 0;
             plEl.style.display = "block";
             plEl.className = "coin-pl " + (up ? "up" : "down");
-            plEl.textContent = (up ? "Up " : "Down ") + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%) overall";
+            // If you've cashed out some already, label this clearly as the value of what you STILL hold.
+            const tail = hasRealized ? " on coins you still hold (paper)" : " overall";
+            plEl.textContent = (up ? "Up " : "Down ") + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)" + tail;
           } else { plEl.textContent = ""; }
         }
 
-        // realized profit (locked in from take-profit sells)
+        // realized profit (locked in from take-profit sells = cash that will not change)
         const realEl = cardEl.querySelector('[data-role="realized"]');
         if (realEl) {
-          if (s.realized && Math.abs(s.realized) > 0.005) {
+          if (hasRealized) {
             const up = s.realized >= 0;
             realEl.style.display = "block";
             realEl.className = "coin-pl " + (up ? "up" : "down");
-            realEl.textContent = "\u{1F4B0} Realized (cashed out): " + (up ? "+" : "\u2212") + "\u20b1" + Math.abs(s.realized).toLocaleString("en-US", { maximumFractionDigits: 2 });
+            realEl.textContent = "\u{1F4B0} Realized (cash, locked in): " + (up ? "+" : "\u2212") + "\u20b1" + Math.abs(s.realized).toLocaleString("en-US", { maximumFractionDigits: 2 });
           } else { realEl.textContent = ""; }
         }
 
@@ -2225,7 +2239,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 30;
+  const APP_VERSION = 31;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
