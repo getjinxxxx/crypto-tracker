@@ -371,6 +371,12 @@
     <button id="viewAdvanced">Advanced</button>
   </div>
 
+  <!-- ALERTS -->
+  <div style="text-align:center;margin-bottom:16px">
+    <button id="alertBtn" style="background:var(--panel-2);color:var(--gold-bright);border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:13px;cursor:pointer">&#128276; Enable buy/sell alerts</button>
+    <div id="alertStatus" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
+  </div>
+
   <!-- PLAIN-LANGUAGE SUMMARY -->
   <div class="plain" id="plainSummary"></div>
 
@@ -780,6 +786,7 @@
       '<span class="hl-line adv-only" data-role="hl24"></span>' +
       '<span class="avg-line" data-role="avg"></span>' +
       '<span class="coin-pl" data-role="coinpl"></span>' +
+      '<span class="coin-pl" data-role="realized"></span>' +
       '<span class="adv-only" data-role="range" style="display:block;margin-top:2px"></span>' +
       '<span class="mood-line adv-only" data-role="mood" style="display:block;margin-top:8px"></span>' +
       '<span class="market-help adv-only" data-help="mood" style="display:inline-block;margin-top:2px;color:var(--muted);font-size:10px;cursor:pointer;text-decoration:underline">what does this mean?</span>';
@@ -835,6 +842,8 @@
     }
     entries.forEach(e => {
       tbody.appendChild(buildRow(coinId, e.row, e.idx));
+      // take-profit sub-rows (one per recorded sell)
+      (e.row.sells || []).forEach((s, si) => tbody.appendChild(buildSellRow(coinId, e.idx, si)));
       if (e.row.note || e.row._showNote) tbody.appendChild(buildNoteRow(coinId, e.idx));
     });
     wrap.appendChild(table);
@@ -882,6 +891,49 @@
     inp.value = (state.rows[coinId][i] && state.rows[coinId][i].note) || "";
     inp.oninput = () => { state.rows[coinId][i].note = inp.value; saveState(); };
     td.appendChild(inp);
+    tr.appendChild(td);
+    return tr;
+  }
+
+  // Sub-row showing one take-profit sell: amount sold, PHP received, profit % (start & current-rate).
+  function buildSellRow(coinId, i, si) {
+    const row = state.rows[coinId][i];
+    const s = row.sells[si];
+    const lib = libById(coinId) || { sym: coinId };
+    const entry = num(row.price);
+    const amt = num(s.amt), php = num(s.php);
+    // cost basis of the sold chunk (what it cost you to buy that amount)
+    const cost = entry > 0 ? amt * entry : 0;
+    const profit = php - cost;
+    const startPct = cost > 0 ? (profit / cost) * 100 : 0;   // profit % vs your buy cost
+    // "current" rate: what that same amount would be worth now
+    const mkt = market[coinId] ? market[coinId].price : null;
+    const nowVal = mkt != null ? amt * mkt : null;
+    let vsNow = "";
+    if (nowVal != null && php > 0) {
+      const d = ((php - nowVal) / nowVal) * 100; // + means you sold higher than current price
+      vsNow = d >= 0
+        ? ' \u00b7 <span style="color:var(--green)">sold ' + Math.abs(d).toFixed(1) + "% above current</span>"
+        : ' \u00b7 <span style="color:var(--red)">' + Math.abs(d).toFixed(1) + "% below current now</span>";
+    }
+    const pcolor = profit >= 0 ? "var(--green)" : "var(--red)";
+    const psign = profit >= 0 ? "+" : "\u2212";
+    const when = s.at ? new Date(s.at).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+
+    const tr = document.createElement("tr");
+    tr.className = "note-row";
+    const td = document.createElement("td");
+    td.colSpan = 8;
+    td.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0 6px 8px">' +
+        '<span style="color:var(--gold-bright)">\u{1F4B0} Took profit</span>' +
+        '<span style="color:var(--muted)">' + fmtAmount(amt) + ' ' + lib.sym + ' \u2192 ' + fmtPeso(php) + (when ? " (" + when + ")" : "") + '</span>' +
+        '<span style="color:' + pcolor + '">' + psign + '\u20b1' + Math.abs(profit).toLocaleString("en-US", { maximumFractionDigits: 2 }) +
+          ' (' + psign + Math.abs(startPct).toFixed(1) + '% profit)</span>' +
+        '<span style="color:var(--muted)">' + vsNow + '</span>' +
+        '<button class="del" title="Remove this record" style="margin-left:auto;font-size:14px">\u00d7</button>' +
+      '</div>';
+    td.querySelector("button").onclick = () => removeSell(coinId, i, si);
     tr.appendChild(td);
     return tr;
   }
@@ -938,9 +990,18 @@
     sigSpan.className = "badge"; sigSpan.setAttribute("data-role", "signal");
     tdSig.appendChild(sigSpan);
 
-    // actions: note toggle + delete
+    // actions: take-profit (active only) + note toggle + delete
     const tdAct = document.createElement("td");
     tdAct.className = "act";
+    if (!row.pending) {
+      const tpBtn = document.createElement("button");
+      tpBtn.className = "del";
+      tpBtn.textContent = "\u{1F4B0}"; // money bag = record a take-profit sell
+      tpBtn.title = "Record a take-profit (sell part or all)";
+      tpBtn.style.fontSize = "13px";
+      tpBtn.onclick = () => openTakeProfit(coinId, i);
+      tdAct.appendChild(tpBtn);
+    }
     const noteBtn = document.createElement("button");
     noteBtn.className = "del";
     noteBtn.textContent = row.note ? "\u{1F4DD}" : "\u270E"; // memo if has note, pencil otherwise
@@ -982,21 +1043,29 @@
     // If no entry price was typed, use the live market price as the entry.
     const typedEntry = num(row.price);
     const entry = typedEntry > 0 ? typedEntry : (mkt != null ? mkt : 0);
-    const amount = entry > 0 ? peso / entry : 0;
+    const fullAmount = entry > 0 ? peso / entry : 0;           // amount originally bought
+    // Sold so far via take-profit records
+    const sold = soldTotals(row);
+    const amount = Math.max(0, fullAmount - sold.amt);          // remaining crypto units
+    // Remaining invested = proportional to remaining amount
+    const remainingInvested = fullAmount > 0 ? peso * (amount / fullAmount) : 0;
     const amountEl = tr.querySelector('[data-role="amount"]');
     const curEl = tr.querySelector('[data-role="current"]');
     const plEl = tr.querySelector('[data-role="pl"]');
     const sigEl = tr.querySelector('[data-role="signal"]');
-    const canCompute = mkt != null && entry > 0 && peso > 0;
+    const canCompute = mkt != null && entry > 0 && remainingInvested > 0;
 
     if (amountEl) amountEl.textContent = entry > 0 ? fmtAmount(amount) : "\u2014";
 
     if (curEl) {
-      if (canCompute) {
+      if (mkt != null && entry > 0 && amount > 0) {
         const cur = amount * mkt;
         curEl.textContent = fmtPeso(cur);
         curEl.classList.remove("up", "down");
-        curEl.classList.add(cur >= peso ? "up" : "down");
+        curEl.classList.add(cur >= remainingInvested ? "up" : "down");
+      } else if (amount <= 0 && sold.amt > 0) {
+        curEl.textContent = "sold out";
+        curEl.classList.remove("up", "down");
       } else { curEl.textContent = "\u2014"; curEl.classList.remove("up", "down"); }
     }
 
@@ -1055,8 +1124,17 @@
         return;
       }
 
+      // Fully sold out via take-profit
+      if (amount <= 0 && sold.amt > 0) {
+        const realizedPct = sold.costBasis > 0 ? ((sold.php - sold.costBasis) / sold.costBasis) * 100 : 0;
+        const rSign = sold.php >= sold.costBasis ? "+" : "\u2212";
+        plEl.textContent = "realized " + rSign + "\u20b1" + Math.abs(sold.php - sold.costBasis).toLocaleString("en-US", { maximumFractionDigits: 2 });
+        plEl.classList.add(sold.php >= sold.costBasis ? "up" : "down");
+        sigEl.textContent = "Sold"; sigEl.classList.add("b-take");
+        return;
+      }
       if (!canCompute) { plEl.textContent = "\u2014"; sigEl.textContent = "\u2014"; return; }
-      const cur = amount * mkt, diff = cur - peso, pct = (diff / peso) * 100;
+      const cur = amount * mkt, diff = cur - remainingInvested, pct = (diff / remainingInvested) * 100;
       const sign = diff >= 0 ? "+" : "\u2212";
       plEl.textContent = sign + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
       plEl.classList.add(diff >= 0 ? "up" : "down");
@@ -1065,6 +1143,62 @@
       else if (pct >= 0) { sigEl.textContent = "Hold"; sigEl.classList.add("b-hold"); }
       else { sigEl.textContent = "At a loss"; sigEl.classList.add("b-loss"); }
     }
+  }
+
+  // Totals sold for a row via take-profit records.
+  // Returns { amt (crypto sold), php (pesos received), costBasis (invested portion sold) }
+  function soldTotals(row) {
+    let amt = 0, php = 0;
+    (row.sells || []).forEach(s => { amt += num(s.amt); php += num(s.php); });
+    const entry = num(row.price);
+    const fullAmount = entry > 0 ? num(row.peso) / entry : 0;
+    // cost basis of the sold portion = invested * (amount sold / amount bought)
+    const costBasis = fullAmount > 0 ? num(row.peso) * (Math.min(amt, fullAmount) / fullAmount) : 0;
+    return { amt, php, costBasis };
+  }
+
+  // ----- Take-profit dialog -----
+  function openTakeProfit(coinId, i) {
+    const row = state.rows[coinId][i];
+    if (!row) return;
+    const lib = libById(coinId) || { sym: coinId };
+    const entry = num(row.price);
+    const fullAmount = entry > 0 ? num(row.peso) / entry : 0;
+    const sold = soldTotals(row);
+    const remaining = Math.max(0, fullAmount - sold.amt);
+
+    const amtStr = prompt(
+      "Take profit on " + lib.sym + " (entry " + fmtPlain(entry) + ").\n" +
+      "You still hold about " + fmtAmount(remaining) + " " + lib.sym + ".\n\n" +
+      "How much " + lib.sym + " did you SELL? (crypto amount)",
+      fmtAmount(remaining)
+    );
+    if (amtStr === null) return;
+    const amt = num(amtStr);
+    if (amt <= 0) { alert("Enter a valid amount."); return; }
+    if (amt > remaining + 1e-9) {
+      if (!confirm("That's more than your remaining " + fmtAmount(remaining) + ". Record it anyway?")) return;
+    }
+    const phpStr = prompt("How much PHP did you RECEIVE for selling " + fmtAmount(amt) + " " + lib.sym + "?", "");
+    if (phpStr === null) return;
+    const php = num(phpStr);
+    if (php <= 0) { alert("Enter a valid peso amount."); return; }
+
+    if (!row.sells) row.sells = [];
+    row.sells.push({ amt: amt, php: php, at: Date.now() });
+    saveState();
+    render();
+  }
+
+  // Delete one take-profit record
+  function removeSell(coinId, i, sellIdx) {
+    const row = state.rows[coinId][i];
+    if (!row || !row.sells) return;
+    if (!confirm("Remove this take-profit record?")) return;
+    row.sells.splice(sellIdx, 1);
+    if (!row.sells.length) delete row.sells;
+    saveState();
+    render();
   }
 
   function addRow(coinId) {
@@ -1085,21 +1219,26 @@
   function sums(coinId) {
     let active = 0, pending = 0, activeCurrent = 0, activeAmount = 0;
     const mkt = market[coinId] ? market[coinId].price : null;
+    let realized = 0;
     (state.rows[coinId] || []).forEach(r => {
       const peso = num(r.peso);
       const typedEntry = num(r.price);
       // active rows with no typed entry price use the live market price
       const entry = typedEntry > 0 ? typedEntry : (mkt != null ? mkt : 0);
-      if (r.pending) pending += peso;
-      else {
-        active += peso;
-        if (entry > 0) activeAmount += peso / entry;             // total crypto units bought
-        if (mkt != null && entry > 0) activeCurrent += (peso / entry) * mkt;
-      }
+      if (r.pending) { pending += peso; return; }
+      // Account for take-profit sells: reduce to remaining holdings.
+      const fullAmt = entry > 0 ? peso / entry : 0;
+      const sold = soldTotals(r);
+      realized += (sold.php - sold.costBasis);                  // locked-in profit
+      const remAmt = Math.max(0, fullAmt - sold.amt);
+      const remInvested = fullAmt > 0 ? peso * (remAmt / fullAmt) : 0;
+      active += remInvested;
+      if (entry > 0) activeAmount += remAmt;
+      if (mkt != null && entry > 0) activeCurrent += remAmt * mkt;
     });
-    // average buy price = total pesos invested / total units bought
+    // average buy price = remaining invested / remaining units
     const avgPrice = activeAmount > 0 ? active / activeAmount : null;
-    return { active, pending, activeCurrent, activeAmount, avgPrice, hasMarket: mkt != null };
+    return { active, pending, activeCurrent, activeAmount, avgPrice, realized, hasMarket: mkt != null };
   }
 
   // Plain-language "you invested X, now worth Y, up/down Z" summary
@@ -1247,6 +1386,17 @@
             plEl.className = "coin-pl " + (up ? "up" : "down");
             plEl.textContent = (up ? "Up " : "Down ") + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%) overall";
           } else { plEl.textContent = ""; }
+        }
+
+        // realized profit (locked in from take-profit sells)
+        const realEl = cardEl.querySelector('[data-role="realized"]');
+        if (realEl) {
+          if (s.realized && Math.abs(s.realized) > 0.005) {
+            const up = s.realized >= 0;
+            realEl.style.display = "block";
+            realEl.className = "coin-pl " + (up ? "up" : "down");
+            realEl.textContent = "\u{1F4B0} Realized (cashed out): " + (up ? "+" : "\u2212") + "\u20b1" + Math.abs(s.realized).toLocaleString("en-US", { maximumFractionDigits: 2 });
+          } else { realEl.textContent = ""; }
         }
 
         // what-if calculator (per coin)
@@ -1586,6 +1736,7 @@
       s.sma7 = sma(ys, 7);                 // recent average
       s.sma30 = ys.reduce((a, b) => a + b, 0) / ys.length; // 30d average
       s.lastPrice = ys[ys.length - 1];
+      s.structure = marketStructure(ys);   // higher-highs/lower-lows trend read
 
       stats[coinId] = s;
       cacheSet("stats_" + coinId, stats[coinId]);
@@ -1622,6 +1773,42 @@
     if (avgLoss === 0) return 100;
     const rs = avgGain / avgLoss;
     return 100 - (100 / (1 + rs));
+  }
+
+  // Market structure: compares the two most recent swing highs and swing lows.
+  // Higher highs + higher lows = uptrend; lower highs + lower lows = downtrend.
+  function marketStructure(values) {
+    if (values.length < 10) return null;
+    // downsample to ~30 points so swings reflect days, not noise
+    const step = Math.max(1, Math.floor(values.length / 30));
+    const v = [];
+    for (let i = 0; i < values.length; i += step) v.push(values[i]);
+    if (v.length < 6) return null;
+
+    // find local swing highs/lows (a point higher/lower than its immediate neighbors)
+    const highs = [], lows = [];
+    for (let i = 1; i < v.length - 1; i++) {
+      if (v[i] > v[i - 1] && v[i] >= v[i + 1]) highs.push(v[i]);
+      if (v[i] < v[i - 1] && v[i] <= v[i + 1]) lows.push(v[i]);
+    }
+    // need at least 2 of each to compare
+    if (highs.length < 2 || lows.length < 2) {
+      // fallback: compare first vs second half extremes
+      const mid = Math.floor(v.length / 2);
+      const h1 = Math.max(...v.slice(0, mid)), h2 = Math.max(...v.slice(mid));
+      const l1 = Math.min(...v.slice(0, mid)), l2 = Math.min(...v.slice(mid));
+      return classifyStructure(h2 > h1, l2 > l1);
+    }
+    const hhUp = highs[highs.length - 1] > highs[highs.length - 2];
+    const llUp = lows[lows.length - 1] > lows[lows.length - 2];
+    return classifyStructure(hhUp, llUp);
+  }
+
+  function classifyStructure(higherHigh, higherLow) {
+    if (higherHigh && higherLow) return { label: "Higher highs & higher lows", trend: "Uptrend", cls: "b-take" };
+    if (!higherHigh && !higherLow) return { label: "Lower highs & lower lows", trend: "Downtrend", cls: "b-loss" };
+    if (higherHigh && !higherLow) return { label: "Higher high, lower low", trend: "Widening / choppy", cls: "b-hold" };
+    return { label: "Lower high, higher low", trend: "Narrowing / consolidating", cls: "b-hold" };
   }
 
   // Combined data-based "market mood" for a coin (NOT financial advice).
@@ -1663,10 +1850,18 @@
     if (!m) { el.innerHTML = ""; return; }
     const rsiTxt = m.rsi != null ? "RSI " + Math.round(m.rsi) : "";
     const trendTxt = m.trendUp == null ? "" : (m.trendUp ? " \u00b7 trend \u25b2" : " \u00b7 trend \u25bc");
+    // market structure line (higher highs / lower lows)
+    const st = stats[coinId] && stats[coinId].structure;
+    let structHtml = "";
+    if (st) {
+      structHtml = '<div style="margin-top:5px"><span class="badge ' + st.cls + '">' + st.trend + '</span> ' +
+        '<span style="color:var(--muted);font-size:11px">' + st.label + '</span></div>';
+    }
     el.innerHTML =
       '<span class="badge ' + m.cls + '">' + m.mood + '</span> ' +
       '<span style="color:var(--muted);font-size:11px">' + rsiTxt + trendTxt + '</span>' +
-      '<div style="color:var(--muted);font-size:11px;margin-top:3px">' + m.note + '</div>';
+      '<div style="color:var(--muted);font-size:11px;margin-top:3px">' + m.note + '</div>' +
+      structHtml;
   }
 
   function show24(coinId) {
@@ -1970,7 +2165,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 26;
+  const APP_VERSION = 27;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
