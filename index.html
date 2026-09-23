@@ -1138,8 +1138,22 @@
       if (!canCompute) { plEl.textContent = "\u2014"; sigEl.textContent = "\u2014"; return; }
       const cur = amount * mkt, diff = cur - remainingInvested, pct = (diff / remainingInvested) * 100;
       const sign = diff >= 0 ? "+" : "\u2212";
-      plEl.textContent = sign + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
-      plEl.classList.add(diff >= 0 ? "up" : "down");
+      const partlySold = sold.amt > 0.0000001; // some of this entry has already been cashed out
+      const plMain = sign + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
+      if (partlySold) {
+        // Make it obvious this P/L is only for the un-sold remainder, and show the locked-in cash separately.
+        const realizedDiff = sold.php - sold.costBasis;
+        const rUp = realizedDiff >= 0;
+        const rSign = rUp ? "+" : "\u2212";
+        const realizedTxt = "\uD83D\uDCB0 Realized (cash): " + rSign + "\u20b1" + Math.abs(realizedDiff).toLocaleString("en-US", { maximumFractionDigits: 2 });
+        plEl.innerHTML =
+          '<span class="pl-tag" style="display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;line-height:1.2">Remaining (unsold)</span>' +
+          '<span class="' + (diff >= 0 ? "up" : "down") + '">' + plMain + '</span>' +
+          '<span class="' + (rUp ? "up" : "down") + '" style="display:block;font-size:10px;margin-top:2px">' + realizedTxt + '</span>';
+      } else {
+        plEl.textContent = plMain;
+        plEl.classList.add(diff >= 0 ? "up" : "down");
+      }
       if (pct >= TP_TAKE) { sigEl.textContent = "Take profit"; sigEl.classList.add("b-take"); }
       else if (pct >= TP_NEAR) { sigEl.textContent = "Getting close"; sigEl.classList.add("b-near"); }
       else if (pct >= 0) { sigEl.textContent = "Hold"; sigEl.classList.add("b-hold"); }
@@ -1352,7 +1366,7 @@
     invested: { t: "Invested (\u20b1)", b: "The peso amount you put into this row. This is the only field you edit \u2014 the rest are calculated for you." },
     amount: { t: "Amount", b: "How much of the coin you got, in coin units. It\u2019s your Invested peso divided by the Entry Price." },
     current: { t: "Current (\u20b1)", b: "What your coins in this row are worth right now, using the live market price. Green means it went up, red means down." },
-    pl: { t: "P/L (Profit / Loss)", b: "Current value minus what you invested. Green = you\u2019re earning, red = you\u2019re losing (for now). For pending orders, it shows how far the price must drop to reach your target." },
+    pl: { t: "P/L (Profit / Loss)", b: "Current value minus what you invested. Green = you\u2019re earning, red = you\u2019re losing (for now).\n\nIf you sold part of an entry, the P/L number is only for the coins you STILL hold (Remaining / unsold \u2014 paper profit, can still change). Below it, \uD83D\uDCB0 Realized (cash) is the profit you already locked in from the part you sold \u2014 that money is yours and won\u2019t change.\n\nFor pending orders, it shows how far the price must drop to reach your target." },
     signal: { t: "Signal", b: "A simple guide.\n\nFor coins you bought: Take profit (\u2265+30%), Getting close (+15\u201330%), Hold (0\u201315%), At a loss (below 0%).\n\nFor pending orders: Ready to buy, Good dip entry (near recent low), Fair entry (mid), High entry (near recent high), Deep dip target (below the last 30 days).\n\nNot financial advice \u2014 just a guide." },
     pending: { t: "Pending money", b: "Money set aside for orders that are still waiting to buy at your target price. You haven\u2019t actually bought these yet." },
     balance: { t: "Total Balance", b: "Everything together: the current value of coins you already bought PLUS the money set aside in pending orders." },
@@ -2211,7 +2225,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 29;
+  const APP_VERSION = 30;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
