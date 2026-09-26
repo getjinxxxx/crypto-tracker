@@ -573,7 +573,14 @@
     { id: "avalanche-2",  sym: "AVAX", name: "Avalanche",   color: "#e84142" },
     { id: "chainlink",    sym: "LINK", name: "Chainlink",   color: "#2a5ada" },
     { id: "matic-network",sym: "MATIC",name: "Polygon",     color: "#8247e5" },
-    { id: "litecoin",     sym: "LTC",  name: "Litecoin",    color: "#a6a9aa" }
+    { id: "litecoin",     sym: "LTC",  name: "Litecoin",    color: "#a6a9aa" },
+    { id: "tron",         sym: "TRX",  name: "TRON",        color: "#eb0029" },
+    { id: "the-open-network", sym: "TON", name: "Toncoin",  color: "#0098ea" },
+    { id: "shiba-inu",    sym: "SHIB", name: "Shiba Inu",   color: "#ffa409" },
+    { id: "bitcoin-cash", sym: "BCH",  name: "Bitcoin Cash",color: "#8dc351" },
+    { id: "pepe",         sym: "PEPE", name: "Pepe",        color: "#4caf50" },
+    { id: "tether",       sym: "USDT", name: "Tether (USDT)", color: "#26a17b" },
+    { id: "usd-coin",     sym: "USDC", name: "USD Coin",    color: "#2775ca" }
   ];
   function libById(id) { return COIN_LIBRARY.find(c => c.id === id); }
 
@@ -2607,7 +2614,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 42;
+  const APP_VERSION = 43;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
