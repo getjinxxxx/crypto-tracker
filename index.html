@@ -103,7 +103,7 @@
 
   /* Table */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; }
-  table { width: 100%; border-collapse: collapse; min-width: 620px; }
+  table { width: 100%; border-collapse: collapse; min-width: 680px; }
   thead th {
     text-align: right; color: var(--muted); font-weight: 600; font-size: 11px;
     padding: 4px 10px 10px; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
@@ -415,6 +415,7 @@
     <div class="row"><span class="lbl">Total Pending Money (all coins) <span class="help" data-help="pending">?</span></span><span class="val" id="grandPending">0</span></div>
     <div class="row"><span class="lbl">Current Value of Active (all) <span class="help" data-help="current">?</span></span><span class="val" id="grandCurrent">&mdash;</span></div>
     <div class="row big"><span class="lbl">Total Balance (active + pending) <span class="help" data-help="balance">?</span></span><span class="val" id="grandBalance">&mdash;</span></div>
+    <div class="row" id="grandUsdRow" style="display:none"><span class="lbl">USDT/USDC holdings (kept separate)</span><span class="val" id="grandUsd">&mdash;</span></div>
   </div>
 
   <div class="reminder" id="reminder"></div>
@@ -602,6 +603,27 @@
   function fmtPeso(n) { if (n == null || isNaN(n)) return "\u2014"; return "\u20b1" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }); }
   function fmtPlain(n) { return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 }); }
   function fmtAmount(n) { if (!isFinite(n)) return "\u2014"; return Number(n).toLocaleString("en-US", { maximumFractionDigits: 8 }); }
+
+  // ---------- Multi-currency (per-row base currency) ----------
+  // A row can be bought in PHP, USDT, or USDC. USDT/USDC are ~$1 stablecoins,
+  // so both use the coin's USD market price. Missing currency = PHP (keeps old rows working).
+  const CURRENCIES = ["PHP", "USDT", "USDC"];
+  function rowCcy(row) { const c = row && row.currency; return CURRENCIES.indexOf(c) >= 0 ? c : "PHP"; }
+  function ccySymbol(ccy) { return ccy === "PHP" ? "\u20b1" : "$"; }
+  // Money formatter that respects a currency. PHP -> "\u20b1", USDT/USDC -> "$".
+  function fmtMoney(n, ccy) {
+    if (n == null || isNaN(n)) return "\u2014";
+    const dp = ccy === "PHP" ? 2 : 4; // stablecoin amounts often need more precision
+    return ccySymbol(ccy) + Number(n).toLocaleString("en-US", { maximumFractionDigits: dp });
+  }
+  // Which market price applies to a row's currency: PHP uses the peso price,
+  // USDT/USDC use the USD price. Returns null if not loaded yet.
+  function mktPrice(coinId, ccy) {
+    const m = market[coinId];
+    if (!m) return null;
+    if (ccy === "PHP") return (m.price != null ? m.price : null);
+    return (m.usd != null ? m.usd : null); // USDT/USDC
+  }
 
   // ---------- Rendering ----------
   function render() {
@@ -828,10 +850,11 @@
     table.innerHTML =
       '<thead><tr>' +
       '<th class="c"></th>' +
+      '<th class="l">Cur. <span class="help" data-help="currency">?</span></th>' +
       '<th class="l">Entry Price <span class="help" data-help="entry">?</span></th>' +
-      '<th>Invested (\u20b1) <span class="help" data-help="invested">?</span></th>' +
+      '<th>Invested <span class="help" data-help="invested">?</span></th>' +
       '<th>Amount <span class="help" data-help="amount">?</span></th>' +
-      '<th>Current (\u20b1) <span class="help" data-help="current">?</span></th>' +
+      '<th>Current <span class="help" data-help="current">?</span></th>' +
       '<th>P/L <span class="help" data-help="pl">?</span></th>' +
       '<th class="l">Signal <span class="help" data-help="signal">?</span></th>' +
       '<th class="act"></th>' +
@@ -843,7 +866,7 @@
     else if (curFilter === "pending") entries = entries.filter(e => e.row.pending);
     const mkt = market[coinId] ? market[coinId].price : null;
     if (curSort === "profit") {
-      entries.sort((a, b) => rowPL(coinId, b.row, mkt) - rowPL(coinId, a.row, mkt));
+      entries.sort((a, b) => rowPL(coinId, b.row) - rowPL(coinId, a.row));
     } else if (curSort === "price") {
       entries.sort((a, b) => num(b.row.price) - num(a.row.price));
     }
@@ -877,9 +900,11 @@
     return card;
   }
 
-  // profit (peso) for a single active row given a market price (used for sorting)
-  function rowPL(coinId, row, mkt) {
-    if (row.pending || mkt == null) return -Infinity;
+  // profit for a single active row (used for sorting). Uses the row's own currency price.
+  function rowPL(coinId, row) {
+    if (row.pending) return -Infinity;
+    const mkt = mktPrice(coinId, rowCcy(row));
+    if (mkt == null) return -Infinity;
     const peso = num(row.peso);
     const typedEntry = num(row.price);
     const entry = typedEntry > 0 ? typedEntry : mkt;
@@ -892,7 +917,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 8;
+    td.colSpan = 9;
     const inp = document.createElement("input");
     inp.className = "note-input";
     inp.type = "text";
@@ -909,6 +934,8 @@
     const row = state.rows[coinId][i];
     const s = row.sells[si];
     const lib = libById(coinId) || { sym: coinId };
+    const ccy = rowCcy(row);
+    const mSym = ccySymbol(ccy);
     const entry = num(row.price);
     const amt = num(s.amt), php = num(s.php);
     // cost basis of the sold chunk (what it cost you to buy that amount)
@@ -943,12 +970,12 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 8;
+    td.colSpan = 9;
     td.innerHTML =
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:12px;line-height:1.5;padding:2px 8px 6px 8px">' +
         '<span style="color:var(--gold-bright)">\u{1F4B0} Took profit</span>' +
-        '<span style="color:var(--muted)">' + fmtAmount(amt) + ' ' + lib.sym + ' \u2192 ' + fmtPeso(php) + (when ? " (" + when + ")" : "") + '</span>' +
-        '<span style="color:' + pcolor + '">' + psign + '\u20b1' + Math.abs(profit).toLocaleString("en-US", { maximumFractionDigits: 2 }) +
+        '<span style="color:var(--muted)">' + fmtAmount(amt) + ' ' + lib.sym + ' \u2192 ' + fmtMoney(php, ccy) + (when ? " (" + when + ")" : "") + '</span>' +
+        '<span style="color:' + pcolor + '">' + psign + mSym + Math.abs(profit).toLocaleString("en-US", { maximumFractionDigits: ccy === "PHP" ? 2 : 4 }) +
           ' (' + psign + Math.abs(startPct).toFixed(1) + '% profit)</span>' +
         '<span style="color:var(--muted)">' + vsNow + remainNote + '</span>' +
         '<button class="del" title="Remove this record" style="margin-left:auto;font-size:14px">\u00d7</button>' +
@@ -972,6 +999,27 @@
     circle.title = row.pending ? "Pending order" : "Active (bought)";
     circle.onclick = () => { state.rows[coinId][i].pending = !state.rows[coinId][i].pending; saveState(); render(); };
     tdChk.appendChild(circle);
+
+    // currency selector (PHP / USDT / USDC). Changing it re-labels this row's money.
+    const tdCcy = document.createElement("td");
+    tdCcy.style.textAlign = "left";
+    const ccySel = document.createElement("select");
+    ccySel.className = "cell-input";
+    ccySel.style.padding = "4px 2px";
+    ccySel.style.textAlign = "left";
+    const curCcy = rowCcy(row);
+    CURRENCIES.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      if (c === curCcy) opt.selected = true;
+      ccySel.appendChild(opt);
+    });
+    ccySel.onchange = () => {
+      state.rows[coinId][i].currency = ccySel.value;
+      saveState();
+      render(); // re-render so headers/labels/symbols update for this row
+    };
+    tdCcy.appendChild(ccySel);
 
     // entry price (editable). If left blank, the current market price is used.
     const tdPrice = document.createElement("td");
@@ -1040,7 +1088,7 @@
     tdAct.appendChild(noteBtn);
     tdAct.appendChild(del);
 
-    tr.append(tdChk, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdSig, tdAct);
+    tr.append(tdChk, tdCcy, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdSig, tdAct);
     setTimeout(() => updateRowComputed(coinId, i, tr), 0);
     return tr;
   }
@@ -1058,8 +1106,9 @@
   function updateRowComputed(coinId, i, tr) {
     const row = state.rows[coinId][i];
     if (!row) return;
-    const peso = num(row.peso);
-    const mkt = market[coinId] ? market[coinId].price : null;
+    const ccy = rowCcy(row);
+    const peso = num(row.peso); // "peso" here = invested amount in this row's currency
+    const mkt = mktPrice(coinId, ccy);
     // If no entry price was typed, use the live market price as the entry.
     const typedEntry = num(row.price);
     const entry = typedEntry > 0 ? typedEntry : (mkt != null ? mkt : 0);
@@ -1080,7 +1129,7 @@
     if (curEl) {
       if (mkt != null && entry > 0 && amount > 0) {
         const cur = amount * mkt;
-        curEl.textContent = fmtPeso(cur);
+        curEl.textContent = fmtMoney(cur, ccy);
         curEl.classList.remove("up", "down");
         curEl.classList.add(cur >= remainingInvested ? "up" : "down");
       } else if (amount <= 0 && sold.amt > 0) {
@@ -1146,9 +1195,8 @@
 
       // Fully sold out via take-profit
       if (amount <= 0 && sold.amt > 0) {
-        const realizedPct = sold.costBasis > 0 ? ((sold.php - sold.costBasis) / sold.costBasis) * 100 : 0;
         const rSign = sold.php >= sold.costBasis ? "+" : "\u2212";
-        plEl.textContent = "realized " + rSign + "\u20b1" + Math.abs(sold.php - sold.costBasis).toLocaleString("en-US", { maximumFractionDigits: 2 });
+        plEl.textContent = "realized " + rSign + fmtMoney(Math.abs(sold.php - sold.costBasis), ccy);
         plEl.classList.add(sold.php >= sold.costBasis ? "up" : "down");
         sigEl.textContent = "Sold"; sigEl.classList.add("b-take");
         return;
@@ -1157,13 +1205,13 @@
       const cur = amount * mkt, diff = cur - remainingInvested, pct = (diff / remainingInvested) * 100;
       const sign = diff >= 0 ? "+" : "\u2212";
       const partlySold = sold.amt > 0.0000001; // some of this entry has already been cashed out
-      const plMain = sign + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
+      const plMain = sign + fmtMoney(Math.abs(diff), ccy) + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
       if (partlySold) {
         // Make it obvious this P/L is only for the un-sold remainder, and show the locked-in cash separately.
         const realizedDiff = sold.php - sold.costBasis;
         const rUp = realizedDiff >= 0;
         const rSign = rUp ? "+" : "\u2212";
-        const realizedTxt = "\uD83D\uDCB0 Realized (cash): " + rSign + "\u20b1" + Math.abs(realizedDiff).toLocaleString("en-US", { maximumFractionDigits: 2 });
+        const realizedTxt = "\uD83D\uDCB0 Realized (cash): " + rSign + fmtMoney(Math.abs(realizedDiff), ccy);
         plEl.innerHTML =
           '<span class="pl-tag" style="display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;line-height:1.2">Remaining (unsold)</span>' +
           '<span class="' + (diff >= 0 ? "up" : "down") + '">' + plMain + '</span>' +
@@ -1195,6 +1243,8 @@
   function buildTPForm(coinId, i) {
     const row = state.rows[coinId][i];
     const lib = libById(coinId) || { sym: coinId };
+    const ccy = rowCcy(row);
+    const sym = ccySymbol(ccy);
     const entry = num(row.price);
     const fullAmount = entry > 0 ? num(row.peso) / entry : 0;
     const sold = soldTotals(row);
@@ -1203,7 +1253,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 8;
+    td.colSpan = 9;
 
     const inStyle = "background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px;width:120px";
     const roStyle = inStyle + ";opacity:.75";
@@ -1211,10 +1261,10 @@
     td.innerHTML =
       '<div style="padding:6px 8px 10px 8px;background:var(--panel-2);border-radius:10px;margin:2px 0 8px">' +
         '<div style="font-size:12px;color:var(--gold-bright);margin-bottom:8px">\u{1F4B0} Record take-profit on ' + lib.sym +
-          ' <span style="color:var(--muted)">(you still hold ' + fmtAmount(remaining) + ' ' + lib.sym + ')</span></div>' +
+          ' <span style="color:var(--muted)">(you still hold ' + fmtAmount(remaining) + ' ' + lib.sym + ', paid in ' + ccy + ')</span></div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">' +
-          '<label style="font-size:11px;color:var(--muted)">Received (\u20b1)<br><input data-f="php" inputmode="decimal" placeholder="438" style="' + inStyle + '"></label>' +
-          '<label style="font-size:11px;color:var(--muted)">Rate (1 ' + lib.sym + ' = \u20b1)<br><input data-f="rate" inputmode="decimal" placeholder="171160.6" style="' + inStyle + '"></label>' +
+          '<label style="font-size:11px;color:var(--muted)">Received (' + sym + ')<br><input data-f="php" inputmode="decimal" style="' + inStyle + '"></label>' +
+          '<label style="font-size:11px;color:var(--muted)">Rate (1 ' + lib.sym + ' = ' + sym + ')<br><input data-f="rate" inputmode="decimal" style="' + inStyle + '"></label>' +
           '<label style="font-size:11px;color:var(--muted)">Amount sold (' + lib.sym + ') \u2014 auto<br><input data-f="amt" readonly style="' + roStyle + '"></label>' +
           '<button data-f="save" style="background:var(--gold);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Save</button>' +
           '<button data-f="cancel" style="background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer">Cancel</button>' +
@@ -1241,9 +1291,9 @@
         const profit = php - cost;
         const pct = cost > 0 ? (profit / cost) * 100 : 0;
         const up = profit >= 0;
-        prev.innerHTML = "You sold " + fmtAmount(amt) + " " + lib.sym + " (cost to buy it was " + fmtPeso(cost) + ")." +
+        prev.innerHTML = "You sold " + fmtAmount(amt) + " " + lib.sym + " (cost to buy it was " + fmtMoney(cost, ccy) + ")." +
           ' Profit: <span style="color:' + (up ? "var(--green)" : "var(--red)") + '">' +
-          (up ? "+" : "\u2212") + fmtPeso(Math.abs(profit)) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)</span>";
+          (up ? "+" : "\u2212") + fmtMoney(Math.abs(profit), ccy) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)</span>";
       } else { prev.textContent = ""; }
     }
     rateI.oninput = recompute;
@@ -1281,7 +1331,7 @@
 
   function addRow(coinId) {
     if (!state.rows[coinId]) state.rows[coinId] = [];
-    state.rows[coinId].push({ price: "", peso: 0, pending: false });
+    state.rows[coinId].push({ price: "", peso: 0, pending: false, currency: "PHP" });
     saveState(); render();
   }
 
@@ -1290,33 +1340,56 @@
     const mkt = market[coinId] ? market[coinId].price : null;
     if (mkt == null) { alert("Live price not loaded yet. Try again in a moment."); return; }
     if (!state.rows[coinId]) state.rows[coinId] = [];
-    state.rows[coinId].push({ price: String(Math.round(mkt * 100) / 100), peso: 0, pending: false });
+    state.rows[coinId].push({ price: String(Math.round(mkt * 100) / 100), peso: 0, pending: false, currency: "PHP" });
     saveState(); render();
   }
 
+  // Aggregate a coin's rows. Because a coin can hold rows in different currencies,
+  // we keep a per-currency breakdown in `byCcy`. The top-level fields (active, pending,
+  // activeCurrent, ...) reflect the coin's DOMINANT currency (the one with the most
+  // invested), so the existing single-currency UI keeps working for pure-PHP coins.
   function sums(coinId) {
-    let active = 0, pending = 0, activeCurrent = 0, activeAmount = 0;
-    const mkt = market[coinId] ? market[coinId].price : null;
-    let realized = 0;
-    (state.rows[coinId] || []).forEach(r => {
+    const rows = state.rows[coinId] || [];
+    const byCcy = {}; // ccy -> { active, pending, activeCurrent, activeAmount, realized, hasMarket }
+    function bucket(ccy) {
+      if (!byCcy[ccy]) byCcy[ccy] = { ccy, active: 0, pending: 0, activeCurrent: 0, activeAmount: 0, realized: 0, hasMarket: mktPrice(coinId, ccy) != null };
+      return byCcy[ccy];
+    }
+    rows.forEach(r => {
+      const ccy = rowCcy(r);
+      const b = bucket(ccy);
+      const mkt = mktPrice(coinId, ccy);
       const peso = num(r.peso);
       const typedEntry = num(r.price);
-      // active rows with no typed entry price use the live market price
       const entry = typedEntry > 0 ? typedEntry : (mkt != null ? mkt : 0);
-      if (r.pending) { pending += peso; return; }
-      // Account for take-profit sells: reduce to remaining holdings.
+      if (r.pending) { b.pending += peso; return; }
       const fullAmt = entry > 0 ? peso / entry : 0;
       const sold = soldTotals(r);
-      realized += (sold.php - sold.costBasis);                  // locked-in profit
+      b.realized += (sold.php - sold.costBasis);
       const remAmt = Math.max(0, fullAmt - sold.amt);
       const remInvested = fullAmt > 0 ? peso * (remAmt / fullAmt) : 0;
-      active += remInvested;
-      if (entry > 0) activeAmount += remAmt;
-      if (mkt != null && entry > 0) activeCurrent += remAmt * mkt;
+      b.active += remInvested;
+      if (entry > 0) b.activeAmount += remAmt;
+      if (mkt != null && entry > 0) b.activeCurrent += remAmt * mkt;
     });
-    // average buy price = remaining invested / remaining units
-    const avgPrice = activeAmount > 0 ? active / activeAmount : null;
-    return { active, pending, activeCurrent, activeAmount, avgPrice, realized, hasMarket: mkt != null };
+    // pick the dominant currency for the flat/legacy fields
+    const ccyList = Object.keys(byCcy);
+    let domCcy = "PHP";
+    let domScore = -1;
+    ccyList.forEach(c => {
+      const b = byCcy[c];
+      const score = b.active + b.pending;
+      if (score > domScore) { domScore = score; domCcy = c; }
+    });
+    const dom = byCcy[domCcy] || { ccy: "PHP", active: 0, pending: 0, activeCurrent: 0, activeAmount: 0, realized: 0, hasMarket: mktPrice(coinId, "PHP") != null };
+    const avgPrice = dom.activeAmount > 0 ? dom.active / dom.activeAmount : null;
+    return {
+      active: dom.active, pending: dom.pending, activeCurrent: dom.activeCurrent,
+      activeAmount: dom.activeAmount, avgPrice, realized: dom.realized,
+      hasMarket: dom.hasMarket, ccy: domCcy, byCcy,
+      // convenience: true if this coin mixes more than one currency
+      mixed: ccyList.length > 1
+    };
   }
 
   // Plain-language "you invested X, now worth Y, up/down Z" summary
@@ -1380,10 +1453,11 @@
 
   // ---------- Help / glossary ----------
   const HELP_TEXT = {
-    entry: { t: "Entry Price", b: "The price of the coin when you bought (or plan to buy) it. In peso per 1 whole coin." },
-    invested: { t: "Invested (\u20b1)", b: "The peso amount you put into this row. This is the only field you edit \u2014 the rest are calculated for you." },
-    amount: { t: "Amount", b: "How much of the coin you got, in coin units. It\u2019s your Invested peso divided by the Entry Price." },
-    current: { t: "Current (\u20b1)", b: "What your coins in this row are worth right now, using the live market price. Green means it went up, red means down." },
+    currency: { t: "Currency", b: "The money you used to buy this row. PHP (\u20b1) uses peso prices. USDT or USDC (both \u2248 $1) use the coin\u2019s US-dollar price.\n\nEach row is tracked in its own currency, so a coin you bought with USDT shows its entry price, value, and P/L in dollars. USDT/USDC holdings are kept separate from your peso Total Balance." },
+    entry: { t: "Entry Price", b: "The price of the coin when you bought (or plan to buy) it, per 1 whole coin. It\u2019s in the row\u2019s currency: \u20b1 for PHP rows, $ for USDT/USDC rows." },
+    invested: { t: "Invested", b: "The amount you put into this row, in the row\u2019s currency (\u20b1 for PHP, $ for USDT/USDC). This is the only field you edit \u2014 the rest are calculated for you." },
+    amount: { t: "Amount", b: "How much of the coin you got, in coin units. It\u2019s your Invested amount divided by the Entry Price." },
+    current: { t: "Current", b: "What your coins in this row are worth right now, using the live market price in the row\u2019s currency. Green means it went up, red means down." },
     pl: { t: "P/L (Profit / Loss)", b: "Current value minus what you invested. Green = you\u2019re earning, red = you\u2019re losing (for now).\n\nIf you sold part of an entry, the P/L number is only for the coins you STILL hold (Remaining / unsold \u2014 paper profit, can still change). Below it, \uD83D\uDCB0 Realized (cash) is the profit you already locked in from the part you sold \u2014 that money is yours and won\u2019t change.\n\nFor pending orders, it shows how far the price must drop to reach your target." },
     signal: { t: "Signal", b: "A simple guide.\n\nFor coins you bought: Take profit (\u2265+30%), Getting close (+15\u201330%), Hold (0\u201315%), At a loss (below 0%).\n\nFor pending orders: Ready to buy, Good dip entry (near recent low), Fair entry (mid), High entry (near recent high), Deep dip target (below the last 30 days).\n\nNot financial advice \u2014 just a guide." },
     pending: { t: "Pending money", b: "Money set aside for orders that are still waiting to buy at your target price. You haven\u2019t actually bought these yet." },
@@ -1421,13 +1495,30 @@
   }
 
   function updateTotals() {
+    // PHP grand totals (unchanged behaviour). USD (USDT/USDC) is kept SEPARATE.
     let totalPending = 0, totalCurrent = 0, totalActiveInvested = 0, anyMarket = false;
+    let usdPending = 0, usdCurrent = 0, usdActive = 0, anyUsd = false, anyUsdMarket = false;
     state.coins.forEach(coinId => {
       const s = sums(coinId);
-      totalPending += s.pending;
-      totalActiveInvested += s.active;
-      if (s.hasMarket) { anyMarket = true; totalCurrent += s.activeCurrent; }
-      // per-card stat
+      // Accumulate PHP bucket into the peso grand totals.
+      const php = s.byCcy["PHP"];
+      if (php) {
+        totalPending += php.pending;
+        totalActiveInvested += php.active;
+        if (php.hasMarket) { anyMarket = true; totalCurrent += php.activeCurrent; }
+      }
+      // Accumulate USDT + USDC (both USD-priced) into the separate USD subtotal.
+      ["USDT", "USDC"].forEach(c => {
+        const b = s.byCcy[c];
+        if (!b) return;
+        anyUsd = true;
+        usdPending += b.pending;
+        usdActive += b.active;
+        if (b.hasMarket) { anyUsdMarket = true; usdCurrent += b.activeCurrent; }
+      });
+
+      // per-card stat (uses the coin's dominant currency)
+      const cardCcy = s.ccy || "PHP";
       const card = document.getElementById("chart_" + coinId);
       if (card) {
         const cardEl = card.closest(".coin-card");
@@ -1441,15 +1532,16 @@
         if (avgEl) {
           avgEl.style.display = "block";
           if (s.avgPrice != null) {
-            let dca = "Avg buy price: <b>" + fmtPeso(s.avgPrice) + "</b>";
+            let dca = "Avg buy price: <b>" + fmtMoney(s.avgPrice, cardCcy) + "</b>";
             if (s.hasMarket) {
-              const mkt = market[coinId].price;
+              const mkt = mktPrice(coinId, cardCcy);
               const gap = ((mkt - s.avgPrice) / s.avgPrice) * 100;
               const detail = (mkt < s.avgPrice)
                 ? " \u2014 market is " + Math.abs(gap).toFixed(1) + "% below your average (buying now lowers it)"
                 : " \u2014 market is " + gap.toFixed(1) + "% above your average";
               dca += '<span class="adv-only">' + detail + '</span>';
             }
+            if (s.mixed) dca += '<span class="adv-only" style="color:var(--muted)"> \u2014 note: this coin has rows in more than one currency; card shows ' + cardCcy + ' rows</span>';
             avgEl.innerHTML = dca;
           } else avgEl.innerHTML = "";
         }
@@ -1463,9 +1555,8 @@
             const up = diff >= 0;
             plEl.style.display = "block";
             plEl.className = "coin-pl " + (up ? "up" : "down");
-            // If you've cashed out some already, label this clearly as the value of what you STILL hold.
             const tail = hasRealized ? " on coins you still hold (paper)" : " overall";
-            plEl.textContent = (up ? "Up " : "Down ") + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)" + tail;
+            plEl.textContent = (up ? "Up " : "Down ") + fmtMoney(Math.abs(diff), cardCcy) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)" + tail;
           } else { plEl.textContent = ""; }
         }
 
@@ -1476,7 +1567,7 @@
             const up = s.realized >= 0;
             realEl.style.display = "block";
             realEl.className = "coin-pl " + (up ? "up" : "down");
-            realEl.textContent = "\u{1F4B0} Realized (cash, locked in): " + (up ? "+" : "\u2212") + "\u20b1" + Math.abs(s.realized).toLocaleString("en-US", { maximumFractionDigits: 2 });
+            realEl.textContent = "\u{1F4B0} Realized (cash, locked in): " + (up ? "+" : "\u2212") + fmtMoney(Math.abs(s.realized), cardCcy);
           } else { realEl.textContent = ""; }
         }
 
@@ -1487,9 +1578,22 @@
     document.getElementById("grandPending").textContent = fmtPlain(totalPending);
     document.getElementById("grandCurrent").textContent = anyMarket ? fmtPeso(totalCurrent) : "\u2014";
 
-    // Plain-language summary
+    // Separate USD subtotal row (only shown when you have USDT/USDC holdings).
+    const usdRow = document.getElementById("grandUsdRow");
+    const usdEl = document.getElementById("grandUsd");
+    if (usdRow && usdEl) {
+      if (anyUsd) {
+        usdRow.style.display = "";
+        const usdBalance = anyUsdMarket ? (usdCurrent + usdPending) : usdPending;
+        usdEl.textContent = fmtMoney(usdBalance, "USDT");
+      } else {
+        usdRow.style.display = "none";
+      }
+    }
+
+    // Plain-language summary (PHP holdings only)
     renderPlain(totalActiveInvested, totalCurrent, totalPending, anyMarket);
-    // Total Balance = current value of active holdings + pending money set aside
+    // Total Balance = current value of active PHP holdings + PHP pending money set aside
     const totalBalance = anyMarket ? (totalCurrent + totalPending) : totalPending;
     const balEl = document.getElementById("grandBalance");
     if (balEl) balEl.textContent = fmtPeso(totalBalance);
@@ -1514,7 +1618,8 @@
       else cardEl.appendChild(box);
     }
     if (!s.hasMarket || s.activeAmount <= 0) { box.innerHTML = ""; return; }
-    const mkt = market[coinId].price;
+    const ccy = s.ccy || "PHP";
+    const mkt = mktPrice(coinId, ccy);
     const target = whatIf[coinId] != null ? whatIf[coinId] : Math.round(mkt * 1.2); // default +20%
     const projValue = s.activeAmount * target;
     const diff = projValue - s.active;
@@ -1523,8 +1628,8 @@
     box.innerHTML =
       '<div>What if the price reaches:</div>' +
       '<div class="row2"><input type="text" inputmode="decimal" value="' + target + '" data-role="wi-input" /> ' +
-      '<span class="result ' + (up ? "up" : "down") + '">\u2192 ' + fmtPeso(projValue) +
-      ' (' + (up ? "+" : "\u2212") + "\u20b1" + Math.abs(diff).toLocaleString("en-US", { maximumFractionDigits: 2 }) +
+      '<span class="result ' + (up ? "up" : "down") + '">\u2192 ' + fmtMoney(projValue, ccy) +
+      ' (' + (up ? "+" : "\u2212") + fmtMoney(Math.abs(diff), ccy) +
       ', ' + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + '%)</span></div>';
     const inp = box.querySelector('[data-role="wi-input"]');
     inp.oninput = () => {
@@ -1534,7 +1639,7 @@
       const res = box.querySelector(".result");
       if (res) {
         res.className = "result " + (u ? "up" : "down");
-        res.textContent = "\u2192 " + fmtPeso(pv) + " (" + (u ? "+" : "\u2212") + "\u20b1" + Math.abs(d).toLocaleString("en-US", { maximumFractionDigits: 2 }) + ", " + (u ? "+" : "\u2212") + Math.abs(pc).toFixed(1) + "%)";
+        res.textContent = "\u2192 " + fmtMoney(pv, ccy) + " (" + (u ? "+" : "\u2212") + fmtMoney(Math.abs(d), ccy) + ", " + (u ? "+" : "\u2212") + Math.abs(pc).toFixed(1) + "%)";
       }
     };
   }
@@ -1622,9 +1727,9 @@
     if (!state.coins.length) return;
     const ids = state.coins.join(",");
     try {
-      const j = await fetchJson("https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=php&include_24hr_change=true");
+      const j = await fetchJson("https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=php,usd&include_24hr_change=true");
       state.coins.forEach(coinId => {
-        if (j[coinId]) market[coinId] = { price: j[coinId].php, change24h: j[coinId].php_24h_change };
+        if (j[coinId]) market[coinId] = { price: j[coinId].php, usd: j[coinId].usd, change24h: j[coinId].php_24h_change };
       });
       cacheSet("prices", market);
       applyPrices();
@@ -1644,7 +1749,10 @@
       const priceEl = cardEl.querySelector('[data-role="price"]');
       const chgEl = cardEl.querySelector('[data-role="chg"]');
       if (m) {
-        priceEl.textContent = fmtPeso(m.price);
+        // Show the header price in this coin's dominant row currency.
+        const cardCcy = sums(coinId).ccy || "PHP";
+        const p = mktPrice(coinId, cardCcy);
+        priceEl.textContent = p != null ? fmtMoney(p, cardCcy) : "\u2014";
         if (m.change24h != null) {
           const up = m.change24h >= 0;
           chgEl.textContent = (up ? "\u25b2 +" : "\u25bc ") + m.change24h.toFixed(2) + "% (24h)";
@@ -2303,10 +2411,11 @@
     if (!alertsOn) return;
     const seen = {};
     state.coins.forEach(coinId => {
-      const mkt = market[coinId] ? market[coinId].price : null;
-      if (mkt == null) return;
       const lib = libById(coinId) || { sym: coinId };
       (state.rows[coinId] || []).forEach((row, i) => {
+        const ccy = rowCcy(row);
+        const mkt = mktPrice(coinId, ccy);
+        if (mkt == null) return;
         const entry = num(row.price);
         if (row.pending) {
           // Ready to buy: market reached/deeper than your target
@@ -2314,7 +2423,7 @@
             const key = coinId + ":buy:" + i + ":" + entry;
             seen[key] = true;
             fireAlert(key, "\uD83D\uDFE2 Ready to buy " + lib.sym,
-              lib.sym + " is at " + fmtPeso(mkt) + " \u2014 at/below your target " + fmtPeso(entry) + ".");
+              lib.sym + " is at " + fmtMoney(mkt, ccy) + " \u2014 at/below your target " + fmtMoney(entry, ccy) + ".");
           }
         } else {
           // Take profit: remaining holding up >= +30%
@@ -2328,7 +2437,7 @@
               const key = coinId + ":tp:" + i + ":" + entry;
               seen[key] = true;
               fireAlert(key, "\uD83D\uDFE2 Take profit? " + lib.sym,
-                lib.sym + " entry " + fmtPeso(entry) + " is up +" + pct.toFixed(1) + "% (now " + fmtPeso(mkt) + ").");
+                lib.sym + " entry " + fmtMoney(entry, ccy) + " is up +" + pct.toFixed(1) + "% (now " + fmtMoney(mkt, ccy) + ").");
             }
           }
         }
@@ -2360,7 +2469,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 32;
+  const APP_VERSION = 33;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
