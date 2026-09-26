@@ -127,6 +127,8 @@
   tbody td { padding: 11px 10px; border-top: 1px solid var(--line); vertical-align: middle; text-align: right; white-space: nowrap; }
   tbody tr:first-child td { border-top: none; }
   tbody tr:hover td { background: rgba(212,160,23,0.04); }
+  /* Vertical separators between columns (skip the first checkbox and last action cells) */
+  thead th + th:not(.act), tbody td + td:not(.act) { border-left: 1px solid rgba(212,160,23,0.12); }
   td.chk { width: 32px; text-align: center; padding-left: 0; padding-right: 4px; }
   td.act { width: 30px; text-align: center; padding-right: 0; }
   th.act { padding-right: 0; }
@@ -1194,9 +1196,11 @@
     }
 
     // "In PHP" column = the amount you INVESTED, converted to pesos.
-    // (PHP rows show the same peso value; USDT/USDC use the live USD->PHP rate.)
+    // For PHP rows this is redundant (same as Invested), so we leave it blank.
     if (phpEl) {
-      if (peso > 0) {
+      if (ccy === "PHP") {
+        phpEl.textContent = "";
+      } else if (peso > 0) {
         const php = toPhp(coinId, peso, ccy);
         phpEl.textContent = php != null ? fmtMoney(php, "PHP") : "\u2014";
       } else {
@@ -1205,9 +1209,12 @@
     }
 
     // "Amount In PHP" = the peso value of the coins you hold (amount * live PHP price).
+    // For PHP rows this equals Current, so we leave it blank to avoid clutter.
     if (amtPhpEl) {
       const phpMkt = mktPrice(coinId, "PHP");
-      if (amount > 0 && entry > 0 && phpMkt != null) {
+      if (ccy === "PHP") {
+        amtPhpEl.textContent = "";
+      } else if (amount > 0 && entry > 0 && phpMkt != null) {
         amtPhpEl.textContent = fmtMoney(amount * phpMkt, "PHP");
       } else {
         amtPhpEl.textContent = "\u2014";
@@ -2556,7 +2563,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 37;
+  const APP_VERSION = 38;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
