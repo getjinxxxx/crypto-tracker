@@ -624,6 +624,19 @@
     if (ccy === "PHP") return (m.price != null ? m.price : null);
     return (m.usd != null ? m.usd : null); // USDT/USDC
   }
+  // Live USD->PHP rate implied by this coin's own PHP and USD prices (phpPrice / usdPrice).
+  // Used to show a "\u2248 \u20b1..." conversion next to USDT/USDC amounts. Returns null if unknown.
+  function usdToPhp(coinId) {
+    const m = market[coinId];
+    if (!m || m.usd == null || m.price == null || m.usd === 0) return null;
+    return m.price / m.usd;
+  }
+  // Convert an amount in a row's currency to PHP. PHP stays as-is; USDT/USDC use usdToPhp().
+  function toPhp(coinId, amountInCcy, ccy) {
+    if (ccy === "PHP") return amountInCcy;
+    const fx = usdToPhp(coinId);
+    return fx != null ? amountInCcy * fx : null;
+  }
 
   // ---------- Rendering ----------
   function render() {
@@ -1129,9 +1142,18 @@
     if (curEl) {
       if (mkt != null && entry > 0 && amount > 0) {
         const cur = amount * mkt;
-        curEl.textContent = fmtMoney(cur, ccy);
         curEl.classList.remove("up", "down");
         curEl.classList.add(cur >= remainingInvested ? "up" : "down");
+        if (ccy === "PHP") {
+          curEl.textContent = fmtMoney(cur, ccy);
+        } else {
+          // Show the native ($) value plus a converted-to-PHP line underneath.
+          const php = toPhp(coinId, cur, ccy);
+          const phpLine = php != null
+            ? '<span style="display:block;font-size:10px;color:var(--muted);font-weight:400">\u2248 ' + fmtMoney(php, "PHP") + '</span>'
+            : "";
+          curEl.innerHTML = fmtMoney(cur, ccy) + phpLine;
+        }
       } else if (amount <= 0 && sold.amt > 0) {
         curEl.textContent = "sold out";
         curEl.classList.remove("up", "down");
@@ -1498,6 +1520,7 @@
     // PHP grand totals (unchanged behaviour). USD (USDT/USDC) is kept SEPARATE.
     let totalPending = 0, totalCurrent = 0, totalActiveInvested = 0, anyMarket = false;
     let usdPending = 0, usdCurrent = 0, usdActive = 0, anyUsd = false, anyUsdMarket = false;
+    let usdPhpPending = 0, usdPhpCurrent = 0; // PHP-equivalent of the USD holdings
     state.coins.forEach(coinId => {
       const s = sums(coinId);
       // Accumulate PHP bucket into the peso grand totals.
@@ -1508,6 +1531,7 @@
         if (php.hasMarket) { anyMarket = true; totalCurrent += php.activeCurrent; }
       }
       // Accumulate USDT + USDC (both USD-priced) into the separate USD subtotal.
+      // Also track a PHP-equivalent using this coin's live USD->PHP rate.
       ["USDT", "USDC"].forEach(c => {
         const b = s.byCcy[c];
         if (!b) return;
@@ -1515,6 +1539,11 @@
         usdPending += b.pending;
         usdActive += b.active;
         if (b.hasMarket) { anyUsdMarket = true; usdCurrent += b.activeCurrent; }
+        const fx = usdToPhp(coinId);
+        if (fx != null) {
+          usdPhpPending += b.pending * fx;
+          if (b.hasMarket) usdPhpCurrent += b.activeCurrent * fx;
+        }
       });
 
       // per-card stat (uses the coin's dominant currency)
@@ -1585,7 +1614,9 @@
       if (anyUsd) {
         usdRow.style.display = "";
         const usdBalance = anyUsdMarket ? (usdCurrent + usdPending) : usdPending;
-        usdEl.textContent = fmtMoney(usdBalance, "USDT");
+        const phpEquiv = anyUsdMarket ? (usdPhpCurrent + usdPhpPending) : usdPhpPending;
+        usdEl.innerHTML = fmtMoney(usdBalance, "USDT") +
+          (phpEquiv > 0 ? '<span style="font-size:11px;color:var(--muted);font-weight:400"> \u2248 ' + fmtMoney(phpEquiv, "PHP") + '</span>' : "");
       } else {
         usdRow.style.display = "none";
       }
@@ -2469,7 +2500,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 33;
+  const APP_VERSION = 34;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
