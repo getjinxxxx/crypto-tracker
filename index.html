@@ -288,7 +288,29 @@
     border-radius: 999px; font-size: 11px; padding: 4px 10px; cursor: pointer;
   }
   .row-controls .mini.active { background: var(--gold); color: #000; border-color: var(--gold); font-weight: 700; }
+  .row-controls .mini { transition: background .15s ease, color .15s ease, border-color .15s ease; }
+  .row-controls .mini:hover:not(.active) { border-color: var(--gold); color: var(--text); }
   .row-controls .spacer { flex: 1; }
+
+  /* ---- Native UI polish (matches the dark + gold motif, no external deps) ---- */
+  .badge { box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform .12s ease; }
+  tr:hover .badge { transform: translateY(-1px); }
+  .del { border-radius: 8px; transition: background .15s ease, color .15s ease, transform .1s ease; }
+  .del:hover { background: rgba(212,160,23,0.12); color: var(--gold-bright); }
+  .del:active { transform: scale(0.9); }
+  .add-row { border-radius: 10px; transition: background .15s ease, color .15s ease; }
+  .add-row:hover { background: rgba(212,160,23,0.08); }
+  .add-coin-btn { transition: border-color .15s ease, background .15s ease, color .15s ease; }
+  .add-coin-btn:hover { border-color: var(--accent); background: rgba(79,140,255,0.08); }
+  .range-tabs button { transition: background .15s ease, color .15s ease, border-color .15s ease; }
+  .range-tabs button:hover:not(.active) { border-color: var(--gold); color: var(--text); }
+  .cell-input { transition: background .15s ease, border-color .15s ease; }
+  /* Gentle fade/slide-in for freshly rendered rows */
+  @keyframes rowIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+  tbody tr[data-idx] { animation: rowIn .22s ease both; }
+  @media (prefers-reduced-motion: reduce) {
+    .circle, .del, .badge, tbody tr[data-idx] { transition: none !important; animation: none !important; }
+  }
 
   /* note input */
   .note-input {
@@ -1046,9 +1068,10 @@
     const tdChk = document.createElement("td");
     tdChk.className = "chk";
     const circle = document.createElement("button");
-    circle.className = "circle" + (row.pending ? " checked" : "");
+    // Tick = Active (bought); no tick = Pending (waiting). The stored `pending` flag is unchanged.
+    circle.className = "circle" + (row.pending ? "" : " checked");
     circle.innerHTML = '<span class="tick">\u2713</span>';
-    circle.title = row.pending ? "Pending order" : "Active (bought)";
+    circle.title = row.pending ? "Pending order (tap to mark bought)" : "Active / bought (tap to mark pending)";
     circle.onclick = () => { state.rows[coinId][i].pending = !state.rows[coinId][i].pending; saveState(); render(); };
     tdChk.appendChild(circle);
 
@@ -2584,7 +2607,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 41;
+  const APP_VERSION = 42;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
