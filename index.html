@@ -137,7 +137,10 @@
     width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--gold);
     background: transparent; display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer; padding: 0; flex: none;
+    transition: background .15s ease, border-color .15s ease, transform .12s ease;
   }
+  .circle:hover { transform: scale(1.12); }
+  .circle:active { transform: scale(0.94); }
   .circle.checked { background: var(--gold); border-color: var(--gold); }
   .circle .tick { display: none; color: #000; font-size: 13px; font-weight: 900; }
   .circle.checked .tick { display: block; }
@@ -902,10 +905,22 @@
     if (curFilter === "active") entries = entries.filter(e => !e.row.pending);
     else if (curFilter === "pending") entries = entries.filter(e => e.row.pending);
     const mkt = market[coinId] ? market[coinId].price : null;
+    // Optional secondary sort within groups
     if (curSort === "profit") {
       entries.sort((a, b) => rowPL(coinId, b.row) - rowPL(coinId, a.row));
     } else if (curSort === "price") {
       entries.sort((a, b) => num(b.row.price) - num(a.row.price));
+    }
+    // Primary grouping: Active (bought / unticked) rows float to the top,
+    // Pending (ticked) rows sink to the bottom. Stable so it keeps the order above within each group.
+    if (curFilter === "all") {
+      entries = entries
+        .map((e, i) => ({ e, i }))
+        .sort((x, y) => {
+          const px = x.e.row.pending ? 1 : 0, py = y.e.row.pending ? 1 : 0;
+          return px !== py ? px - py : x.i - y.i; // keep stable order within the same group
+        })
+        .map(o => o.e);
     }
     entries.forEach(e => {
       tbody.appendChild(buildRow(coinId, e.row, e.idx));
@@ -2569,7 +2584,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 40;
+  const APP_VERSION = 41;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
