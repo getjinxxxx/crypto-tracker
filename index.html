@@ -103,7 +103,7 @@
 
   /* Table */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; }
-  table { width: 100%; border-collapse: collapse; min-width: 760px; }
+  table { width: 100%; border-collapse: collapse; min-width: 840px; }
   thead th {
     text-align: right; color: var(--muted); font-weight: 600; font-size: 11px;
     padding: 4px 10px 10px; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
@@ -871,10 +871,11 @@
       '<th class="l">Cur. <span class="help" data-help="currency">?</span></th>' +
       '<th class="l">Entry Price <span class="help" data-help="entry">?</span></th>' +
       '<th>Invested <span class="help" data-help="invested">?</span></th>' +
-      '<th>Amount <span class="help" data-help="amount">?</span></th>' +
       '<th>Current <span class="help" data-help="current">?</span></th>' +
-      '<th>P/L <span class="help" data-help="pl">?</span></th>' +
       '<th>In PHP <span class="help" data-help="inphp">?</span></th>' +
+      '<th>Amount <span class="help" data-help="amount">?</span></th>' +
+      '<th>Amount In PHP <span class="help" data-help="amtphp">?</span></th>' +
+      '<th>P/L <span class="help" data-help="pl">?</span></th>' +
       '<th class="l">Signal <span class="help" data-help="signal">?</span></th>' +
       '<th class="act"></th>' +
       '</tr></thead><tbody></tbody>';
@@ -936,7 +937,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 10;
+    td.colSpan = 11;
     const inp = document.createElement("input");
     inp.className = "note-input";
     inp.type = "text";
@@ -989,7 +990,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 10;
+    td.colSpan = 11;
     td.innerHTML =
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:12px;line-height:1.5;padding:2px 8px 6px 8px">' +
         '<span style="color:var(--gold-bright)">\u{1F4B0} Took profit</span>' +
@@ -1081,11 +1082,12 @@
     pesoWrap.appendChild(pesoInput);
     tdPeso.appendChild(pesoWrap);
 
-    // amount / current / pl / signal / in-php
-    const tdAmount = td('ro small muted', 'amount');
-    const tdCur    = td('ro small cur', 'current');
-    const tdPl     = td('ro small', 'pl');
-    const tdPhp    = td('ro small muted', 'inphp'); // converted-to-PHP column
+    // current / in-php / amount / amount-in-php / pl / signal
+    const tdCur     = td('ro small cur', 'current');
+    const tdPhp     = td('ro small muted', 'inphp');    // Current value converted to PHP
+    const tdAmount  = td('ro small muted', 'amount');
+    const tdAmtPhp  = td('ro small muted', 'amtphp');   // Amount value converted to PHP
+    const tdPl      = td('ro small', 'pl');
     const tdSig = document.createElement("td");
     tdSig.style.textAlign = "left";
     const sigSpan = document.createElement("span");
@@ -1122,7 +1124,7 @@
     tdAct.appendChild(noteBtn);
     tdAct.appendChild(del);
 
-    tr.append(tdChk, tdCcy, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdPhp, tdSig, tdAct);
+    tr.append(tdChk, tdCcy, tdPrice, tdPeso, tdCur, tdPhp, tdAmount, tdAmtPhp, tdPl, tdSig, tdAct);
     setTimeout(() => updateRowComputed(coinId, i, tr), 0);
     return tr;
   }
@@ -1153,6 +1155,7 @@
     // Remaining invested = proportional to remaining amount
     const remainingInvested = fullAmount > 0 ? peso * (amount / fullAmount) : 0;
     const amountEl = tr.querySelector('[data-role="amount"]');
+    const amtPhpEl = tr.querySelector('[data-role="amtphp"]');
     const curEl = tr.querySelector('[data-role="current"]');
     const plEl = tr.querySelector('[data-role="pl"]');
     const phpEl = tr.querySelector('[data-role="inphp"]');
@@ -1182,6 +1185,16 @@
         phpEl.textContent = php != null ? fmtMoney(php, "PHP") : "\u2014";
       } else {
         phpEl.textContent = "\u2014";
+      }
+    }
+
+    // "Amount In PHP" = the peso value of the coins you hold (amount * live PHP price).
+    if (amtPhpEl) {
+      const phpMkt = mktPrice(coinId, "PHP");
+      if (amount > 0 && entry > 0 && phpMkt != null) {
+        amtPhpEl.textContent = fmtMoney(amount * phpMkt, "PHP");
+      } else {
+        amtPhpEl.textContent = "\u2014";
       }
     }
 
@@ -1300,7 +1313,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 10;
+    td.colSpan = 11;
 
     const inStyle = "background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px;width:120px";
     const roStyle = inStyle + ";opacity:.75";
@@ -1506,6 +1519,7 @@
     amount: { t: "Amount", b: "How much of the coin you got, in coin units. It\u2019s your Invested amount divided by the Entry Price." },
     current: { t: "Current", b: "What your coins in this row are worth right now, using the live market price in the row\u2019s currency. Green means it went up, red means down." },
     inphp: { t: "In PHP", b: "The Current value converted to Philippine pesos. For USDT/USDC rows it uses the live US-dollar-to-peso rate. For PHP rows it\u2019s the same peso value." },
+    amtphp: { t: "Amount In PHP", b: "The peso value of the coins you\u2019re holding in this row \u2014 your Amount multiplied by the coin\u2019s live peso price. Handy for seeing every row in one currency (\u20b1)." },
     pl: { t: "P/L (Profit / Loss)", b: "Current value minus what you invested. Green = you\u2019re earning, red = you\u2019re losing (for now).\n\nIf you sold part of an entry, the P/L number is only for the coins you STILL hold (Remaining / unsold \u2014 paper profit, can still change). Below it, \uD83D\uDCB0 Realized (cash) is the profit you already locked in from the part you sold \u2014 that money is yours and won\u2019t change.\n\nFor pending orders, it shows how far the price must drop to reach your target." },
     signal: { t: "Signal", b: "A simple guide.\n\nFor coins you bought: Take profit (\u2265+30%), Getting close (+15\u201330%), Hold (0\u201315%), At a loss (below 0%).\n\nFor pending orders: Ready to buy, Good dip entry (near recent low), Fair entry (mid), High entry (near recent high), Deep dip target (below the last 30 days).\n\nNot financial advice \u2014 just a guide." },
     pending: { t: "Pending money", b: "Money set aside for orders that are still waiting to buy at your target price. You haven\u2019t actually bought these yet." },
@@ -2526,7 +2540,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 35;
+  const APP_VERSION = 36;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
