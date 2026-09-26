@@ -1288,7 +1288,13 @@
       const cur = amount * mkt, diff = cur - remainingInvested, pct = (diff / remainingInvested) * 100;
       const sign = diff >= 0 ? "+" : "\u2212";
       const partlySold = sold.amt > 0.0000001; // some of this entry has already been cashed out
-      const plMain = sign + fmtMoney(Math.abs(diff), ccy) + " (" + sign + Math.abs(pct).toFixed(1) + "%)";
+      // For non-PHP rows, append the peso equivalent on the same line: "... (%) / \u20b1X"
+      let plPhpSuffix = "";
+      if (ccy !== "PHP") {
+        const diffPhp = toPhp(coinId, diff, ccy);
+        if (diffPhp != null) plPhpSuffix = " / " + sign + fmtMoney(Math.abs(diffPhp), "PHP");
+      }
+      const plMain = sign + fmtMoney(Math.abs(diff), ccy) + " (" + sign + Math.abs(pct).toFixed(1) + "%)" + plPhpSuffix;
       if (partlySold) {
         // Make it obvious this P/L is only for the un-sold remainder, and show the locked-in cash separately.
         const realizedDiff = sold.php - sold.costBasis;
@@ -2563,7 +2569,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 39;
+  const APP_VERSION = 40;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
