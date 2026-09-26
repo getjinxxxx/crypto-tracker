@@ -888,8 +888,8 @@
       '<th class="l">Cur. <span class="help" data-help="currency">?</span></th>' +
       '<th class="l">Entry Price <span class="help" data-help="entry">?</span></th>' +
       '<th>Invested <span class="help" data-help="invested">?</span></th>' +
-      '<th>Current <span class="help" data-help="current">?</span></th>' +
       '<th>In PHP <span class="help" data-help="inphp">?</span></th>' +
+      '<th>Current <span class="help" data-help="current">?</span></th>' +
       '<th>Amount <span class="help" data-help="amount">?</span></th>' +
       '<th>Amount In PHP <span class="help" data-help="amtphp">?</span></th>' +
       '<th>P/L <span class="help" data-help="pl">?</span></th>' +
@@ -1141,7 +1141,7 @@
     tdAct.appendChild(noteBtn);
     tdAct.appendChild(del);
 
-    tr.append(tdChk, tdCcy, tdPrice, tdPeso, tdCur, tdPhp, tdAmount, tdAmtPhp, tdPl, tdSig, tdAct);
+    tr.append(tdChk, tdCcy, tdPrice, tdPeso, tdPhp, tdCur, tdAmount, tdAmtPhp, tdPl, tdSig, tdAct);
     setTimeout(() => updateRowComputed(coinId, i, tr), 0);
     return tr;
   }
@@ -2563,7 +2563,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 38;
+  const APP_VERSION = 39;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
