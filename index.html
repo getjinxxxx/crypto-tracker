@@ -103,7 +103,7 @@
 
   /* Table */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; }
-  table { width: 100%; border-collapse: collapse; min-width: 680px; }
+  table { width: 100%; border-collapse: collapse; min-width: 760px; }
   thead th {
     text-align: right; color: var(--muted); font-weight: 600; font-size: 11px;
     padding: 4px 10px 10px; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap;
@@ -131,6 +131,11 @@
   }
   .cell-input::placeholder { color: var(--muted); }
   .cell-input:focus { outline: none; background: var(--panel-2); border-color: var(--gold); }
+
+  /* Money input with a leading currency symbol */
+  .money-cell { display: inline-flex; align-items: center; gap: 2px; }
+  .money-sym { color: var(--muted); font-size: 14px; }
+  .money-cell .cell-input { width: 84px; padding-left: 2px; }
 
   .ro { font-size: 15px; color: var(--text); }
   .ro.small { font-size: 13px; }
@@ -869,6 +874,7 @@
       '<th>Amount <span class="help" data-help="amount">?</span></th>' +
       '<th>Current <span class="help" data-help="current">?</span></th>' +
       '<th>P/L <span class="help" data-help="pl">?</span></th>' +
+      '<th>In PHP <span class="help" data-help="inphp">?</span></th>' +
       '<th class="l">Signal <span class="help" data-help="signal">?</span></th>' +
       '<th class="act"></th>' +
       '</tr></thead><tbody></tbody>';
@@ -930,7 +936,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 9;
+    td.colSpan = 10;
     const inp = document.createElement("input");
     inp.className = "note-input";
     inp.type = "text";
@@ -983,7 +989,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 9;
+    td.colSpan = 10;
     td.innerHTML =
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:12px;line-height:1.5;padding:2px 8px 6px 8px">' +
         '<span style="color:var(--gold-bright)">\u{1F4B0} Took profit</span>' +
@@ -1034,9 +1040,15 @@
     };
     tdCcy.appendChild(ccySel);
 
+    const rowSym = ccySymbol(curCcy); // \u20b1 for PHP, $ for USDT/USDC
+
     // entry price (editable). If left blank, the current market price is used.
     const tdPrice = document.createElement("td");
     tdPrice.style.textAlign = "left";
+    const priceWrap = document.createElement("span");
+    priceWrap.className = "money-cell";
+    const priceSym = document.createElement("span");
+    priceSym.className = "money-sym"; priceSym.textContent = rowSym;
     const priceInput = document.createElement("input");
     priceInput.className = "cell-input";
     priceInput.style.textAlign = "left";
@@ -1047,10 +1059,16 @@
       state.rows[coinId][i].price = priceInput.value;
       saveState(); updateRowComputed(coinId, i, tr); updateTotals();
     };
-    tdPrice.appendChild(priceInput);
+    priceWrap.appendChild(priceSym);
+    priceWrap.appendChild(priceInput);
+    tdPrice.appendChild(priceWrap);
 
     // invested (editable)
     const tdPeso = document.createElement("td");
+    const pesoWrap = document.createElement("span");
+    pesoWrap.className = "money-cell";
+    const pesoSym = document.createElement("span");
+    pesoSym.className = "money-sym"; pesoSym.textContent = rowSym;
     const pesoInput = document.createElement("input");
     pesoInput.className = "cell-input";
     pesoInput.type = "text"; pesoInput.inputMode = "decimal";
@@ -1059,12 +1077,15 @@
       state.rows[coinId][i].peso = num(pesoInput.value);
       saveState(); updateRowComputed(coinId, i, tr); updateTotals();
     };
-    tdPeso.appendChild(pesoInput);
+    pesoWrap.appendChild(pesoSym);
+    pesoWrap.appendChild(pesoInput);
+    tdPeso.appendChild(pesoWrap);
 
-    // amount / current / pl / signal
+    // amount / current / pl / signal / in-php
     const tdAmount = td('ro small muted', 'amount');
     const tdCur    = td('ro small cur', 'current');
     const tdPl     = td('ro small', 'pl');
+    const tdPhp    = td('ro small muted', 'inphp'); // converted-to-PHP column
     const tdSig = document.createElement("td");
     tdSig.style.textAlign = "left";
     const sigSpan = document.createElement("span");
@@ -1101,7 +1122,7 @@
     tdAct.appendChild(noteBtn);
     tdAct.appendChild(del);
 
-    tr.append(tdChk, tdCcy, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdSig, tdAct);
+    tr.append(tdChk, tdCcy, tdPrice, tdPeso, tdAmount, tdCur, tdPl, tdPhp, tdSig, tdAct);
     setTimeout(() => updateRowComputed(coinId, i, tr), 0);
     return tr;
   }
@@ -1134,30 +1155,34 @@
     const amountEl = tr.querySelector('[data-role="amount"]');
     const curEl = tr.querySelector('[data-role="current"]');
     const plEl = tr.querySelector('[data-role="pl"]');
+    const phpEl = tr.querySelector('[data-role="inphp"]');
     const sigEl = tr.querySelector('[data-role="signal"]');
     const canCompute = mkt != null && entry > 0 && remainingInvested > 0;
 
     if (amountEl) amountEl.textContent = entry > 0 ? fmtAmount(amount) : "\u2014";
 
+    // Current value (in the row's own currency)
+    let curValue = null;
     if (curEl) {
       if (mkt != null && entry > 0 && amount > 0) {
-        const cur = amount * mkt;
+        curValue = amount * mkt;
+        curEl.textContent = fmtMoney(curValue, ccy);
         curEl.classList.remove("up", "down");
-        curEl.classList.add(cur >= remainingInvested ? "up" : "down");
-        if (ccy === "PHP") {
-          curEl.textContent = fmtMoney(cur, ccy);
-        } else {
-          // Show the native ($) value plus a converted-to-PHP line underneath.
-          const php = toPhp(coinId, cur, ccy);
-          const phpLine = php != null
-            ? '<span style="display:block;font-size:10px;color:var(--muted);font-weight:400">\u2248 ' + fmtMoney(php, "PHP") + '</span>'
-            : "";
-          curEl.innerHTML = fmtMoney(cur, ccy) + phpLine;
-        }
+        curEl.classList.add(curValue >= remainingInvested ? "up" : "down");
       } else if (amount <= 0 && sold.amt > 0) {
         curEl.textContent = "sold out";
         curEl.classList.remove("up", "down");
       } else { curEl.textContent = "\u2014"; curEl.classList.remove("up", "down"); }
+    }
+
+    // "In PHP" column = current value converted to pesos (PHP rows just show the same peso value).
+    if (phpEl) {
+      if (curValue != null) {
+        const php = toPhp(coinId, curValue, ccy);
+        phpEl.textContent = php != null ? fmtMoney(php, "PHP") : "\u2014";
+      } else {
+        phpEl.textContent = "\u2014";
+      }
     }
 
     if (plEl && sigEl) {
@@ -1275,7 +1300,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 9;
+    td.colSpan = 10;
 
     const inStyle = "background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px;width:120px";
     const roStyle = inStyle + ";opacity:.75";
@@ -1480,6 +1505,7 @@
     invested: { t: "Invested", b: "The amount you put into this row, in the row\u2019s currency (\u20b1 for PHP, $ for USDT/USDC). This is the only field you edit \u2014 the rest are calculated for you." },
     amount: { t: "Amount", b: "How much of the coin you got, in coin units. It\u2019s your Invested amount divided by the Entry Price." },
     current: { t: "Current", b: "What your coins in this row are worth right now, using the live market price in the row\u2019s currency. Green means it went up, red means down." },
+    inphp: { t: "In PHP", b: "The Current value converted to Philippine pesos. For USDT/USDC rows it uses the live US-dollar-to-peso rate. For PHP rows it\u2019s the same peso value." },
     pl: { t: "P/L (Profit / Loss)", b: "Current value minus what you invested. Green = you\u2019re earning, red = you\u2019re losing (for now).\n\nIf you sold part of an entry, the P/L number is only for the coins you STILL hold (Remaining / unsold \u2014 paper profit, can still change). Below it, \uD83D\uDCB0 Realized (cash) is the profit you already locked in from the part you sold \u2014 that money is yours and won\u2019t change.\n\nFor pending orders, it shows how far the price must drop to reach your target." },
     signal: { t: "Signal", b: "A simple guide.\n\nFor coins you bought: Take profit (\u2265+30%), Getting close (+15\u201330%), Hold (0\u201315%), At a loss (below 0%).\n\nFor pending orders: Ready to buy, Good dip entry (near recent low), Fair entry (mid), High entry (near recent high), Deep dip target (below the last 30 days).\n\nNot financial advice \u2014 just a guide." },
     pending: { t: "Pending money", b: "Money set aside for orders that are still waiting to buy at your target price. You haven\u2019t actually bought these yet." },
@@ -2500,7 +2526,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 34;
+  const APP_VERSION = 35;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
