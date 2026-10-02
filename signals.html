@@ -95,7 +95,10 @@
 <body>
   <div class="topbar">
     <h1>Market Signals<span class="sub">Data-based buy / sell / hold read</span></h1>
-    <a class="back-link" href="index.html">&larr; Back to tracker</a>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="refreshBtn" class="back-link" style="color:var(--green)">&#128260; Refresh</button>
+      <a class="back-link" href="index.html">&larr; Back</a>
+    </div>
   </div>
 
   <div class="disclaimer">
@@ -342,18 +345,12 @@
              ccy: ccy || "PHP", phpRate: phpRate || null, entries: entries || [] };
   }
 
-  function renderCard(sig) {
+  // Builds the inner HTML of a card (separated so we can update in place w/o a full rebuild).
+  function cardHtml(sig) {
     const lib = libById(sig.coinId) || { sym: sig.coinId, name: sig.coinId, color: "#888" };
-    const card = document.createElement("div");
-    card.className = "sig-card";
-
-    const chgTxt = ""; // 24h change not needed for the read
-
     const buyWord = sig.cls === "buy" ? "Buy around here" : "Buy if it dips to";
     const sellWord = sig.cls === "sell" ? "Sell around here" : "Sell / take profit near";
-
     const isUsd = sig.ccy === "USD";
-    // Price in the coin's display currency, with a tiny peso line underneath for USD rows.
     const money = (n) => {
       const main = isUsd ? fmtUsd(n) : fmtPeso(n);
       if (isUsd && sig.phpRate) {
@@ -361,8 +358,7 @@
       }
       return main;
     };
-
-    card.innerHTML =
+    return (
       '<div class="sig-head">' +
         '<span class="sig-dot" style="background:' + lib.color + '"></span>' +
         '<div><div class="sig-name">' + lib.name + '</div><div class="sig-sym">' + lib.sym + (isUsd ? ' \u00b7 USD' : '') + '</div></div>' +
@@ -380,7 +376,14 @@
         '<span class="metric">30d low ' + (isUsd ? fmtUsd(sig.low30) : fmtPeso(sig.low30)) + '</span>' +
         '<span class="metric">30d high ' + (isUsd ? fmtUsd(sig.high30) : fmtPeso(sig.high30)) + '</span>' +
         '<span class="metric">now ' + (sig.posn * 100).toFixed(0) + '% of range</span>' +
-      '</div>';
+      '</div>'
+    );
+  }
+  function renderCard(sig) {
+    const card = document.createElement("div");
+    card.className = "sig-card";
+    card.id = "sig_" + sig.coinId;
+    card.innerHTML = cardHtml(sig);
     return card;
   }
   function verdictIcon(cls) {
@@ -410,18 +413,47 @@
            '</div>';
   }
 
-  // Draw whatever signals we have (merged live + cached), sorted buy-first.
+  // Draw signals IN PLACE: update existing cards, add new ones, remove stale ones,
+  // and reorder without wiping the whole list. No flash, scroll position preserved.
   function draw(map) {
     const cardsEl = document.getElementById("cards");
     const arr = Object.keys(map).map(k => map[k]).filter(Boolean);
     arr.sort((a, b) => b.score - a.score);
-    cardsEl.innerHTML = "";
-    arr.forEach(sig => cardsEl.appendChild(renderCard(sig)));
+
+    // If the list was showing the "empty"/placeholder message, clear it first.
+    if (cardsEl.querySelector(".empty")) cardsEl.innerHTML = "";
+
+    const wanted = {};
+    arr.forEach(sig => {
+      wanted[sig.coinId] = true;
+      const id = "sig_" + sig.coinId;
+      let card = document.getElementById(id);
+      if (card) {
+        // update contents only (no remove/re-add => no flash)
+        const html = cardHtml(sig);
+        if (card.innerHTML !== html) card.innerHTML = html;
+        card.style.animation = "none"; // don't re-animate on refresh
+      } else {
+        card = renderCard(sig);
+        cardsEl.appendChild(card);
+      }
+    });
+
+    // remove cards for coins no longer present
+    Array.prototype.slice.call(cardsEl.children).forEach(ch => {
+      if (ch.id && ch.id.indexOf("sig_") === 0 && !wanted[ch.id.slice(4)]) ch.remove();
+    });
+
+    // reorder DOM to match sorted order (cheap: appendChild moves existing nodes)
+    arr.forEach(sig => {
+      const card = document.getElementById("sig_" + sig.coinId);
+      if (card) cardsEl.appendChild(card);
+    });
+
     return arr.length;
   }
 
   let running = false;
-  const REFRESH_MS = 180000; // auto-refresh every 3 minutes
 
   // ---------- Main ----------
   async function run() {
@@ -494,13 +526,27 @@
   // device), then analyze.
   async function syncAndRun() {
     await syncFromCloud();
-    run();
+    await run();
   }
 
-  // Initial run + automatic refresh. Also refresh when the tab is reopened.
+  // Manual refresh only (no auto-refresh, no refresh-on-tab-return) so the page
+  // stays calm. Tap the Refresh button to update.
+  const refreshBtn = document.getElementById("refreshBtn");
+  if (refreshBtn) {
+    refreshBtn.onclick = async () => {
+      if (running) return;
+      const orig = refreshBtn.innerHTML;
+      refreshBtn.innerHTML = "\u231b Refreshing\u2026";
+      refreshBtn.disabled = true;
+      try { await syncAndRun(); } finally {
+        refreshBtn.innerHTML = orig;
+        refreshBtn.disabled = false;
+      }
+    };
+  }
+
+  // Load once on open.
   syncAndRun();
-  setInterval(syncAndRun, REFRESH_MS);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) syncAndRun(); });
 </script>
 </body>
 </html>
