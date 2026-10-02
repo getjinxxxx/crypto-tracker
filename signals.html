@@ -136,18 +136,42 @@
     const dp = Math.abs(n) >= 100 ? 2 : (Math.abs(n) >= 1 ? 3 : 6);
     return "\u20b1" + Number(n).toLocaleString("en-US", { maximumFractionDigits: dp });
   }
+  function fmtUsd(n) {
+    if (n == null || isNaN(n)) return "\u2014";
+    const dp = Math.abs(n) >= 100 ? 2 : (Math.abs(n) >= 1 ? 4 : 6);
+    return "$" + Number(n).toLocaleString("en-US", { maximumFractionDigits: dp });
+  }
+  // Format money in the coin's display currency; USD rows also get a tiny peso line.
+  function fmtMoney(n, ccy, phpRate) {
+    if (ccy === "USD") return fmtUsd(n);
+    return fmtPeso(n);
+  }
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // Which coins to analyze = the ones you added in the main tracker.
-  function getUserCoins() {
+  // Read the full saved state once (coins + rows) from the tracker.
+  function getState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const st = JSON.parse(raw);
-        if (st && Array.isArray(st.coins) && st.coins.length) return st.coins;
-      }
+      if (raw) { const st = JSON.parse(raw); if (st && Array.isArray(st.coins)) return st; }
     } catch (e) {}
     return null;
+  }
+  // Which coins to analyze = the ones you added in the main tracker.
+  function getUserCoins() {
+    const st = getState();
+    return (st && st.coins && st.coins.length) ? st.coins : null;
+  }
+  // Decide the display currency for a coin from its rows.
+  // If any row was bought with USDT/USDC, show that coin's signal in USD; else PHP.
+  function coinCurrency(coinId) {
+    const st = getState();
+    if (!st || !st.rows || !st.rows[coinId]) return "PHP";
+    const rows = st.rows[coinId];
+    const usd = rows.some(r => r && (r.currency === "USDT" || r.currency === "USDC"));
+    const php = rows.some(r => !r || !r.currency || r.currency === "PHP");
+    // Prefer USD only if there are USD rows and no PHP rows (mixed -> keep PHP base).
+    if (usd && !php) return "USD";
+    return "PHP";
   }
 
   // ---------- Indicators (same formulas as the tracker) ----------
@@ -175,16 +199,41 @@
     return 100 - (100 / (1 + rs));
   }
 
-  async function fetchJson(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
+  // Fetch with retry + backoff. CoinGecko's free tier rate-limits (HTTP 429),
+  // so we wait longer and try again instead of silently skipping the coin.
+  async function fetchJson(url, tries) {
+    tries = tries || 3;
+    let lastErr;
+    for (let attempt = 0; attempt < tries; attempt++) {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (res.status === 429) { // rate limited -> wait and retry
+          await sleep(3000 + attempt * 2500);
+          continue;
+        }
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      } catch (e) {
+        lastErr = e;
+        await sleep(1500 + attempt * 1500);
+      }
+    }
+    throw lastErr || new Error("fetch failed");
+  }
+
+  // ---------- Lightweight cache so coins show instantly on refresh ----------
+  const CACHE_KEY = "cryptoSignalsCache";
+  function cacheGet() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch (e) { return {}; }
+  }
+  function cacheSet(obj) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(obj)); } catch (e) {}
   }
 
   // ---------- Signal engine ----------
   // Combines RSI, trend (7d vs 30d avg), and position in the 30-day range into
   // a score. Positive score leans BUY, negative leans SELL.
-  function buildSignal(coinId, prices) {
+  function buildSignal(coinId, prices, ccy, phpRate) {
     const ys = prices.map(p => p[1]).filter(isFinite);
     if (ys.length < 15) return null;
     const last = ys[ys.length - 1];
@@ -224,7 +273,8 @@
     const buyHere = low30 + range * 0.25;
     const sellHere = high30 - range * 0.25;
 
-    return { coinId, last, low30, high30, rsi, posn, sma7, sma30, score, reasons, verdict, cls, buyHere, sellHere };
+    return { coinId, last, low30, high30, rsi, posn, sma7, sma30, score, reasons, verdict, cls, buyHere, sellHere,
+             ccy: ccy || "PHP", phpRate: phpRate || null };
   }
 
   function renderCard(sig) {
@@ -237,22 +287,32 @@
     const buyWord = sig.cls === "buy" ? "Buy around here" : "Buy if it dips to";
     const sellWord = sig.cls === "sell" ? "Sell around here" : "Sell / take profit near";
 
+    const isUsd = sig.ccy === "USD";
+    // Price in the coin's display currency, with a tiny peso line underneath for USD rows.
+    const money = (n) => {
+      const main = isUsd ? fmtUsd(n) : fmtPeso(n);
+      if (isUsd && sig.phpRate) {
+        return main + '<span style="display:block;font-size:9px;color:var(--muted);font-weight:400;line-height:1.2">\u2248 ' + fmtPeso(n * sig.phpRate) + '</span>';
+      }
+      return main;
+    };
+
     card.innerHTML =
       '<div class="sig-head">' +
         '<span class="sig-dot" style="background:' + lib.color + '"></span>' +
-        '<div><div class="sig-name">' + lib.name + '</div><div class="sig-sym">' + lib.sym + '</div></div>' +
-        '<div class="sig-price"><div class="p">' + fmtPeso(sig.last) + '</div></div>' +
+        '<div><div class="sig-name">' + lib.name + '</div><div class="sig-sym">' + lib.sym + (isUsd ? ' \u00b7 USD' : '') + '</div></div>' +
+        '<div class="sig-price"><div class="p">' + money(sig.last) + '</div></div>' +
       '</div>' +
       '<div class="verdict ' + sig.cls + '">' + verdictIcon(sig.cls) + ' ' + sig.verdict + '</div>' +
       '<div class="levels">' +
-        '<div class="level buy"><div class="lbl">' + buyWord + '</div><div class="v">' + fmtPeso(sig.buyHere) + '</div></div>' +
-        '<div class="level sell"><div class="lbl">' + sellWord + '</div><div class="v">' + fmtPeso(sig.sellHere) + '</div></div>' +
+        '<div class="level buy"><div class="lbl">' + buyWord + '</div><div class="v">' + money(sig.buyHere) + '</div></div>' +
+        '<div class="level sell"><div class="lbl">' + sellWord + '</div><div class="v">' + money(sig.sellHere) + '</div></div>' +
       '</div>' +
       '<div class="why"><b>Why:</b> ' + sig.reasons.join(" \u00b7 ") + '.</div>' +
       '<div class="metrics">' +
         '<span class="metric">RSI ' + (sig.rsi != null ? sig.rsi.toFixed(0) : "\u2014") + '</span>' +
-        '<span class="metric">30d low ' + fmtPeso(sig.low30) + '</span>' +
-        '<span class="metric">30d high ' + fmtPeso(sig.high30) + '</span>' +
+        '<span class="metric">30d low ' + (isUsd ? fmtUsd(sig.low30) : fmtPeso(sig.low30)) + '</span>' +
+        '<span class="metric">30d high ' + (isUsd ? fmtUsd(sig.high30) : fmtPeso(sig.high30)) + '</span>' +
         '<span class="metric">now ' + (sig.posn * 100).toFixed(0) + '% of range</span>' +
       '</div>';
     return card;
@@ -263,8 +323,23 @@
     return "\u26AA";
   }
 
+  // Draw whatever signals we have (merged live + cached), sorted buy-first.
+  function draw(map) {
+    const cardsEl = document.getElementById("cards");
+    const arr = Object.keys(map).map(k => map[k]).filter(Boolean);
+    arr.sort((a, b) => b.score - a.score);
+    cardsEl.innerHTML = "";
+    arr.forEach(sig => cardsEl.appendChild(renderCard(sig)));
+    return arr.length;
+  }
+
+  let running = false;
+  const REFRESH_MS = 180000; // auto-refresh every 3 minutes
+
   // ---------- Main ----------
   async function run() {
+    if (running) return;          // avoid overlapping runs
+    running = true;
     const coins = getUserCoins();
     const statusEl = document.getElementById("status");
     const cardsEl = document.getElementById("cards");
@@ -272,37 +347,65 @@
     if (!coins) {
       statusEl.textContent = "";
       cardsEl.innerHTML = '<div class="empty">No coins found yet. Open the tracker, add some coins, then come back here.</div>';
+      running = false;
       return;
     }
 
-    const results = [];
+    // Show cached signals immediately so you see all your coins right away.
+    const cache = cacheGet();
+    const merged = {};
+    coins.forEach(id => { if (cache[id]) merged[id] = cache[id]; });
+    if (draw(merged) > 0) statusEl.textContent = "Showing saved signals \u2014 refreshing\u2026";
+    else statusEl.textContent = "Loading your " + coins.length + " coin(s)\u2026";
+
+    let got = 0, failed = 0;
     for (let i = 0; i < coins.length; i++) {
       const coinId = coins[i];
       const lib = libById(coinId) || { sym: coinId };
       statusEl.textContent = "Analyzing " + lib.sym + " (" + (i + 1) + "/" + coins.length + ")\u2026";
       try {
-        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=30");
+        const ccy = coinCurrency(coinId); // "PHP" or "USD" based on your rows
+        const vs = ccy === "USD" ? "usd" : "php";
+        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=" + vs + "&days=30");
         const prices = (j.prices || []).filter(p => isFinite(p[1]));
-        const sig = buildSignal(coinId, prices);
-        if (sig) results.push(sig);
-      } catch (e) { /* skip on rate-limit / error */ }
-      await sleep(1100); // stay under the free CoinGecko rate limit
+        // For USD coins, also grab the live USD->PHP rate so we can show "\u2248 \u20b1" underneath.
+        let phpRate = null;
+        if (ccy === "USD") {
+          try {
+            const fx = await fetchJson("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=php");
+            if (fx && fx.tether && fx.tether.php) phpRate = fx.tether.php;
+          } catch (e) {}
+        }
+        const sig = buildSignal(coinId, prices, ccy, phpRate);
+        if (sig) {
+          merged[coinId] = sig;
+          cache[coinId] = sig;      // keep a fresh copy
+          cacheSet(cache);
+          got++;
+          draw(merged);             // update the list as each coin loads
+        } else { failed++; }
+      } catch (e) {
+        failed++;                   // keep any cached card for this coin on screen
+      }
+      await sleep(1600);            // gentle gap to avoid the free-tier rate limit
     }
 
-    // Sort: strongest BUY first, strongest SELL last
-    results.sort((a, b) => b.score - a.score);
-
-    cardsEl.innerHTML = "";
-    if (!results.length) {
+    const shown = draw(merged);
+    if (!shown) {
+      cardsEl.innerHTML = '<div class="empty">Couldn\u2019t load prices right now (rate-limited). It will retry automatically in a moment.</div>';
       statusEl.textContent = "";
-      cardsEl.innerHTML = '<div class="empty">Couldn\u2019t load prices right now (rate-limited). Pull to refresh in a minute.</div>';
-      return;
+    } else {
+      statusEl.textContent = "Updated " + new Date().toLocaleTimeString() +
+        " \u00b7 " + shown + "/" + coins.length + " coin(s)" +
+        (failed ? " \u00b7 " + failed + " still loading, will retry" : "");
     }
-    statusEl.textContent = "Updated " + new Date().toLocaleTimeString() + " \u00b7 " + results.length + " coin(s)";
-    results.forEach(sig => cardsEl.appendChild(renderCard(sig)));
+    running = false;
   }
 
+  // Initial run + automatic refresh. Also refresh when the tab is reopened.
   run();
+  setInterval(run, REFRESH_MS);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) run(); });
 </script>
 </body>
 </html>
