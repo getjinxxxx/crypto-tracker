@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#000000" />
 <title>Market Signals</title>
 <link rel="manifest" href="manifest.json" />
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   :root {
     --bg: #000000; --panel: #16161a; --panel-2: #232329; --line: #2a2a30;
@@ -114,6 +116,40 @@
 <script>
   // ---------- Config shared with the main tracker ----------
   const STORAGE_KEY = "cryptoTrackerState";
+  // Same Firebase project as the tracker, so the signals page sees the exact same
+  // coins/rows you added on any device (not just this browser's localStorage).
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyATaU8PnQwkMRvf6_j6Ccp1j0Qz8oeyELI",
+    authDomain: "crypto-tracker-bfefb.firebaseapp.com",
+    databaseURL: "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "crypto-tracker-bfefb",
+    storageBucket: "crypto-tracker-bfefb.firebasestorage.app",
+    messagingSenderId: "901782471631",
+    appId: "1:901782471631:web:5c7ec398e607b1777548ba"
+  };
+  // Pull the latest state from the cloud and mirror it into localStorage, so
+  // getState()/getUserCoins() below read the newest coins/rows. Resolves even if
+  // Firebase is unavailable (falls back to whatever is already in localStorage).
+  let _fbInited = false;
+  function syncFromCloud() {
+    return new Promise((resolve) => {
+      try {
+        if (typeof firebase === "undefined") return resolve();
+        if (!_fbInited) { firebase.initializeApp(FIREBASE_CONFIG); _fbInited = true; }
+        const ref = firebase.database().ref("tracker/state");
+        let done = false;
+        const finish = () => { if (!done) { done = true; resolve(); } };
+        ref.once("value", (snap) => {
+          const remote = snap.val();
+          if (remote && remote.state) {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote.state)); } catch (e) {}
+          }
+          finish();
+        }, () => finish());
+        setTimeout(finish, 4000); // don't hang if the network is slow
+      } catch (e) { resolve(); }
+    });
+  }
   const COIN_LIBRARY = [
     { id: "bitcoin",      sym: "BTC",  name: "Bitcoin",     color: "#f7931a" },
     { id: "ethereum",     sym: "ETH",  name: "Ethereum",    color: "#627eea" },
@@ -454,10 +490,17 @@
     running = false;
   }
 
+  // Sync coins/rows from the cloud first (so this page matches the tracker on any
+  // device), then analyze.
+  async function syncAndRun() {
+    await syncFromCloud();
+    run();
+  }
+
   // Initial run + automatic refresh. Also refresh when the tab is reopened.
-  run();
-  setInterval(run, REFRESH_MS);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) run(); });
+  syncAndRun();
+  setInterval(syncAndRun, REFRESH_MS);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) syncAndRun(); });
 </script>
 </body>
 </html>
