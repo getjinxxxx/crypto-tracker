@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<title>Market Signals</title>
+<link rel="manifest" href="manifest.json" />
+<style>
+  :root {
+    --bg: #000000; --panel: #16161a; --panel-2: #232329; --line: #2a2a30;
+    --text: #f2f2f7; --muted: #8e8e93; --gold: #d4a017; --gold-bright: #f5c542;
+    --green: #34d399; --red: #ff6b6b; --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); max-width: 820px; margin: 0 auto; padding: 18px 14px 60px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .topbar h1 { font-size: 22px; margin: 0; letter-spacing: .3px; }
+  .topbar h1 .sub { display: block; font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .back-link {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--gold-bright);
+    border-radius: 999px; padding: 8px 14px; font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+
+  .disclaimer {
+    background: linear-gradient(135deg, rgba(212,160,23,0.10), rgba(22,22,26,0.3));
+    border: 1px solid rgba(212,160,23,0.3); border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 16px; font-size: 12.5px; line-height: 1.5; color: var(--text);
+  }
+  .disclaimer b { color: var(--gold-bright); }
+
+  .status { color: var(--muted); font-size: 12px; text-align: center; margin: 10px 0 16px; }
+
+  .sig-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 14px 16px; margin-bottom: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    animation: cardIn .25s ease both;
+  }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .sig-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .sig-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .sig-name { font-size: 16px; font-weight: 700; }
+  .sig-sym { font-size: 12px; color: var(--muted); }
+  .sig-price { margin-left: auto; text-align: right; }
+  .sig-price .p { font-size: 16px; font-weight: 700; }
+  .sig-price .chg { font-size: 11px; }
+  .sig-price .chg.up { color: var(--green); } .sig-price .chg.down { color: var(--red); }
+
+  .verdict {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800;
+    padding: 8px 14px; border-radius: 12px; letter-spacing: .3px; margin-bottom: 10px;
+  }
+  .verdict.buy  { background: rgba(52,211,153,0.14); color: var(--green); border: 1px solid rgba(52,211,153,0.4); }
+  .verdict.sell { background: rgba(255,107,107,0.14); color: var(--red); border: 1px solid rgba(255,107,107,0.4); }
+  .verdict.hold { background: rgba(142,142,147,0.12); color: var(--text); border: 1px solid var(--line); }
+
+  .levels { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 10px; }
+  .level {
+    flex: 1; min-width: 130px; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 12px;
+  }
+  .level .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 3px; }
+  .level .v { font-size: 15px; font-weight: 700; }
+  .level.buy .v { color: var(--green); }
+  .level.sell .v { color: var(--red); }
+
+  .why { font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+  .why b { color: var(--text); font-weight: 600; }
+
+  .metrics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .metric { font-size: 11px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; }
+
+  .foot-note { text-align: center; color: var(--muted); font-size: 11.5px; margin-top: 18px; line-height: 1.5; padding: 0 10px; }
+  .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 20px; }
+
+  @media (prefers-reduced-motion: reduce) { .sig-card { animation: none; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Market Signals<span class="sub">Data-based buy / sell / hold read</span></h1>
+    <a class="back-link" href="index.html">&larr; Back to tracker</a>
+  </div>
+
+  <div class="disclaimer">
+    <b>Not financial advice.</b> These signals are computed only from the last 30 days of price
+    (RSI, trend, and position in the 30-day range). They react to what already happened &mdash; they
+    cannot predict the future and are often wrong. Crypto is very risky. Always decide for yourself and
+    only invest what you can afford to lose.
+  </div>
+
+  <div id="status" class="status">Loading your coins&hellip;</div>
+  <div id="cards"></div>
+
+  <div class="foot-note">
+    Signals use public technical-analysis formulas (RSI 14, 7-day vs 30-day average, 30-day high/low).
+    No external signal provider, no future prediction. Prices from CoinGecko.
+  </div>
+
+<script>
+  // ---------- Config shared with the main tracker ----------
+  const STORAGE_KEY = "cryptoTrackerState";
+  const COIN_LIBRARY = [
+    { id: "bitcoin",      sym: "BTC",  name: "Bitcoin",     color: "#f7931a" },
+    { id: "ethereum",     sym: "ETH",  name: "Ethereum",    color: "#627eea" },
+    { id: "solana",       sym: "SOL",  name: "Solana",      color: "#14f195" },
+    { id: "ripple",       sym: "XRP",  name: "XRP",         color: "#25a768" },
+    { id: "binancecoin",  sym: "BNB",  name: "BNB",         color: "#f0b90b" },
+    { id: "cardano",      sym: "ADA",  name: "Cardano",     color: "#0033ad" },
+    { id: "dogecoin",     sym: "DOGE", name: "Dogecoin",    color: "#c2a633" },
+    { id: "polkadot",     sym: "DOT",  name: "Polkadot",    color: "#e6007a" },
+    { id: "avalanche-2",  sym: "AVAX", name: "Avalanche",   color: "#e84142" },
+    { id: "chainlink",    sym: "LINK", name: "Chainlink",   color: "#2a5ada" },
+    { id: "matic-network",sym: "MATIC",name: "Polygon",     color: "#8247e5" },
+    { id: "litecoin",     sym: "LTC",  name: "Litecoin",    color: "#a6a9aa" },
+    { id: "tron",         sym: "TRX",  name: "TRON",        color: "#eb0029" },
+    { id: "the-open-network", sym: "TON", name: "Toncoin",  color: "#0098ea" },
+    { id: "shiba-inu",    sym: "SHIB", name: "Shiba Inu",   color: "#ffa409" },
+    { id: "bitcoin-cash", sym: "BCH",  name: "Bitcoin Cash",color: "#8dc351" },
+    { id: "pepe",         sym: "PEPE", name: "Pepe",        color: "#4caf50" },
+    { id: "tether",       sym: "USDT", name: "Tether (USDT)", color: "#26a17b" },
+    { id: "usd-coin",     sym: "USDC", name: "USD Coin",    color: "#2775ca" }
+  ];
+  function libById(id) { return COIN_LIBRARY.find(c => c.id === id); }
+
+  function fmtPeso(n) {
+    if (n == null || isNaN(n)) return "\u2014";
+    const dp = Math.abs(n) >= 100 ? 2 : (Math.abs(n) >= 1 ? 3 : 6);
+    return "\u20b1" + Number(n).toLocaleString("en-US", { maximumFractionDigits: dp });
+  }
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  // Which coins to analyze = the ones you added in the main tracker.
+  function getUserCoins() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const st = JSON.parse(raw);
+        if (st && Array.isArray(st.coins) && st.coins.length) return st.coins;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  // ---------- Indicators (same formulas as the tracker) ----------
+  function sma(arr, n) {
+    if (arr.length < n) n = arr.length;
+    const slice = arr.slice(-n);
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
+  }
+  function computeRSI(values) {
+    if (values.length < 15) return null;
+    const step = Math.max(1, Math.floor(values.length / 30));
+    const v = [];
+    for (let i = 0; i < values.length; i += step) v.push(values[i]);
+    if (v.length < 15) return null;
+    let gains = 0, losses = 0;
+    const period = 14;
+    for (let i = v.length - period; i < v.length; i++) {
+      const diff = v[i] - v[i - 1];
+      if (diff >= 0) gains += diff; else losses -= diff;
+    }
+    if (gains + losses === 0) return 50;
+    const avgGain = gains / period, avgLoss = losses / period;
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+  }
+
+  async function fetchJson(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
+
+  // ---------- Signal engine ----------
+  // Combines RSI, trend (7d vs 30d avg), and position in the 30-day range into
+  // a score. Positive score leans BUY, negative leans SELL.
+  function buildSignal(coinId, prices) {
+    const ys = prices.map(p => p[1]).filter(isFinite);
+    if (ys.length < 15) return null;
+    const last = ys[ys.length - 1];
+    const low30 = Math.min(...ys), high30 = Math.max(...ys);
+    const rsi = computeRSI(ys);
+    const sma7 = sma(ys, Math.max(2, Math.floor(ys.length * 7 / 30)));
+    const sma30 = ys.reduce((a, b) => a + b, 0) / ys.length;
+    const range = high30 - low30;
+    const posn = range > 0 ? (last - low30) / range : 0.5; // 0 = at low, 1 = at high
+
+    let score = 0;
+    const reasons = [];
+
+    // RSI factor
+    if (rsi != null) {
+      if (rsi < 35) { score += 2; reasons.push("RSI " + rsi.toFixed(0) + " (oversold)"); }
+      else if (rsi > 65) { score -= 2; reasons.push("RSI " + rsi.toFixed(0) + " (overbought)"); }
+      else { reasons.push("RSI " + rsi.toFixed(0) + " (neutral)"); }
+    }
+    // Range position factor
+    if (posn <= 0.30) { score += 2; reasons.push("near 30-day low"); }
+    else if (posn >= 0.70) { score -= 2; reasons.push("near 30-day high"); }
+    else { reasons.push("mid-range"); }
+    // Trend factor (recent avg vs long avg)
+    if (sma7 < sma30 * 0.98) { score += 1; reasons.push("short-term trend down"); }
+    else if (sma7 > sma30 * 1.02) { score -= 1; reasons.push("short-term trend up"); }
+    else { reasons.push("flat trend"); }
+
+    let verdict, cls;
+    if (score >= 2) { verdict = "BUY ZONE"; cls = "buy"; }
+    else if (score <= -2) { verdict = "CONSIDER SELLING / TAKE PROFIT"; cls = "sell"; }
+    else { verdict = "HOLD / WAIT"; cls = "hold"; }
+
+    // Suggested price levels (data-based, not guarantees):
+    //  - Buy here: lower part of the range (25% up from the low)
+    //  - Sell here: upper part of the range (25% down from the high)
+    const buyHere = low30 + range * 0.25;
+    const sellHere = high30 - range * 0.25;
+
+    return { coinId, last, low30, high30, rsi, posn, sma7, sma30, score, reasons, verdict, cls, buyHere, sellHere };
+  }
+
+  function renderCard(sig) {
+    const lib = libById(sig.coinId) || { sym: sig.coinId, name: sig.coinId, color: "#888" };
+    const card = document.createElement("div");
+    card.className = "sig-card";
+
+    const chgTxt = ""; // 24h change not needed for the read
+
+    const buyWord = sig.cls === "buy" ? "Buy around here" : "Buy if it dips to";
+    const sellWord = sig.cls === "sell" ? "Sell around here" : "Sell / take profit near";
+
+    card.innerHTML =
+      '<div class="sig-head">' +
+        '<span class="sig-dot" style="background:' + lib.color + '"></span>' +
+        '<div><div class="sig-name">' + lib.name + '</div><div class="sig-sym">' + lib.sym + '</div></div>' +
+        '<div class="sig-price"><div class="p">' + fmtPeso(sig.last) + '</div></div>' +
+      '</div>' +
+      '<div class="verdict ' + sig.cls + '">' + verdictIcon(sig.cls) + ' ' + sig.verdict + '</div>' +
+      '<div class="levels">' +
+        '<div class="level buy"><div class="lbl">' + buyWord + '</div><div class="v">' + fmtPeso(sig.buyHere) + '</div></div>' +
+        '<div class="level sell"><div class="lbl">' + sellWord + '</div><div class="v">' + fmtPeso(sig.sellHere) + '</div></div>' +
+      '</div>' +
+      '<div class="why"><b>Why:</b> ' + sig.reasons.join(" \u00b7 ") + '.</div>' +
+      '<div class="metrics">' +
+        '<span class="metric">RSI ' + (sig.rsi != null ? sig.rsi.toFixed(0) : "\u2014") + '</span>' +
+        '<span class="metric">30d low ' + fmtPeso(sig.low30) + '</span>' +
+        '<span class="metric">30d high ' + fmtPeso(sig.high30) + '</span>' +
+        '<span class="metric">now ' + (sig.posn * 100).toFixed(0) + '% of range</span>' +
+      '</div>';
+    return card;
+  }
+  function verdictIcon(cls) {
+    if (cls === "buy") return "\uD83D\uDFE2";
+    if (cls === "sell") return "\uD83D\uDD34";
+    return "\u26AA";
+  }
+
+  // ---------- Main ----------
+  async function run() {
+    const coins = getUserCoins();
+    const statusEl = document.getElementById("status");
+    const cardsEl = document.getElementById("cards");
+
+    if (!coins) {
+      statusEl.textContent = "";
+      cardsEl.innerHTML = '<div class="empty">No coins found yet. Open the tracker, add some coins, then come back here.</div>';
+      return;
+    }
+
+    const results = [];
+    for (let i = 0; i < coins.length; i++) {
+      const coinId = coins[i];
+      const lib = libById(coinId) || { sym: coinId };
+      statusEl.textContent = "Analyzing " + lib.sym + " (" + (i + 1) + "/" + coins.length + ")\u2026";
+      try {
+        const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/market_chart?vs_currency=php&days=30");
+        const prices = (j.prices || []).filter(p => isFinite(p[1]));
+        const sig = buildSignal(coinId, prices);
+        if (sig) results.push(sig);
+      } catch (e) { /* skip on rate-limit / error */ }
+      await sleep(1100); // stay under the free CoinGecko rate limit
+    }
+
+    // Sort: strongest BUY first, strongest SELL last
+    results.sort((a, b) => b.score - a.score);
+
+    cardsEl.innerHTML = "";
+    if (!results.length) {
+      statusEl.textContent = "";
+      cardsEl.innerHTML = '<div class="empty">Couldn\u2019t load prices right now (rate-limited). Pull to refresh in a minute.</div>';
+      return;
+    }
+    statusEl.textContent = "Updated " + new Date().toLocaleTimeString() + " \u00b7 " + results.length + " coin(s)";
+    results.forEach(sig => cardsEl.appendChild(renderCard(sig)));
+  }
+
+  run();
+</script>
+</body>
+</html>

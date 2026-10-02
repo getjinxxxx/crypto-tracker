@@ -421,6 +421,7 @@
   <!-- ALERTS -->
   <div style="text-align:center;margin-bottom:16px">
     <button id="alertBtn" style="background:var(--panel-2);color:var(--gold-bright);border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:13px;cursor:pointer">&#128276; Enable buy/sell alerts</button>
+    <a href="signals.html" style="display:inline-block;margin-left:8px;background:var(--panel-2);color:var(--gold-bright);border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:13px;text-decoration:none">&#128200; Market signals</a>
     <div id="alertStatus" style="font-size:11px;color:var(--muted);margin-top:5px"></div>
   </div>
 
@@ -2614,7 +2615,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 43;
+  const APP_VERSION = 44;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
