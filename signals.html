@@ -78,6 +78,12 @@
   .metrics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .metric { font-size: 11px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; }
 
+  /* Your entry prices: a small, non-cramped grid of chips */
+  .entry-box { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin: 2px 0 10px; }
+  .entry-title { font-size: 9.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin-bottom: 6px; }
+  .entry-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .entry-chip { font-size: 11px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; white-space: nowrap; }
+
   .foot-note { text-align: center; color: var(--muted); font-size: 11.5px; margin-top: 18px; line-height: 1.5; padding: 0 10px; }
   .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 20px; }
 
@@ -174,24 +180,24 @@
     return "PHP";
   }
   // Your actual entry prices for a coin (the "Entry Price" you typed per row).
-  // Only rows that match the coin's display currency, deduped and sorted.
-  function coinEntries(coinId, ccy) {
+  // Returns ALL entries regardless of currency, each tagged with its own currency,
+  // so nothing is hidden just because the card's display currency differs.
+  function coinEntries(coinId) {
     const st = getState();
     if (!st || !st.rows || !st.rows[coinId]) return [];
-    const wantUsd = ccy === "USD";
     const vals = [];
     st.rows[coinId].forEach(r => {
       if (!r) return;
-      const rUsd = (r.currency === "USDT" || r.currency === "USDC");
-      if (rUsd !== wantUsd) return;          // only entries in the same currency we display
       const p = parseFloat(r.price);
-      if (p > 0) vals.push(p);
+      if (!(p > 0)) return;                 // skip blank / zero entries
+      const rUsd = (r.currency === "USDT" || r.currency === "USDC");
+      vals.push({ price: p, ccy: rUsd ? "USD" : "PHP" });
     });
-    // dedupe (rounded) + sort ascending
+    // dedupe (same price + currency) + sort ascending by price
     const seen = {};
     const out = [];
-    vals.sort((a, b) => a - b).forEach(v => {
-      const k = v.toFixed(6);
+    vals.sort((a, b) => a.price - b.price).forEach(v => {
+      const k = v.ccy + ":" + v.price.toFixed(6);
       if (!seen[k]) { seen[k] = 1; out.push(v); }
     });
     return out;
@@ -346,15 +352,26 @@
     if (cls === "sell") return "\uD83D\uDD34";
     return "\u26AA";
   }
-  // Small grayed line showing where YOU entered (your typed entry prices).
+  // Small grayed TABLE showing where YOU entered (your typed entry prices),
+  // each in its own currency. Also marks whether each entry is below/above the
+  // current price so you can see which ones are in profit.
   function entriesLine(sig) {
     const es = sig.entries || [];
     if (!es.length) return "";
-    const isUsd = sig.ccy === "USD";
-    const fmt = isUsd ? fmtUsd : fmtPeso;
-    const shown = es.slice(0, 6).map(fmt).join(", ") + (es.length > 6 ? "\u2026" : "");
-    return '<div style="font-size:10.5px;color:var(--muted);margin:0 0 6px;line-height:1.4">' +
-           'Your entry' + (es.length > 1 ? ' prices' : ' price') + ': ' + shown + '</div>';
+    const cells = es.map((e, i) => {
+      const fmt = e.ccy === "USD" ? fmtUsd : fmtPeso;
+      // Compare entry vs current price only when both are the same currency as the card.
+      let tag = "", color = "var(--muted)";
+      if (e.ccy === sig.ccy && sig.last != null) {
+        if (e.price < sig.last) { tag = " \u25b2"; color = "var(--green)"; }      // below current = up
+        else if (e.price > sig.last) { tag = " \u25bc"; color = "var(--red)"; }   // above current = down
+      }
+      return '<span class="entry-chip" style="color:' + color + '">#' + (i + 1) + ' ' + fmt(e.price) + tag + '</span>';
+    }).join("");
+    return '<div class="entry-box">' +
+             '<div class="entry-title">Your entr' + (es.length > 1 ? 'ies' : 'y') + '</div>' +
+             '<div class="entry-grid">' + cells + '</div>' +
+           '</div>';
   }
 
   // Draw whatever signals we have (merged live + cached), sorted buy-first.
@@ -410,7 +427,7 @@
             if (fx && fx.tether && fx.tether.php) phpRate = fx.tether.php;
           } catch (e) {}
         }
-        const entries = coinEntries(coinId, ccy);
+        const entries = coinEntries(coinId);
         const sig = buildSignal(coinId, prices, ccy, phpRate, entries);
         if (sig) {
           merged[coinId] = sig;
