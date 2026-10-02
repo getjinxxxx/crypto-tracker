@@ -173,6 +173,29 @@
     if (usd && !php) return "USD";
     return "PHP";
   }
+  // Your actual entry prices for a coin (the "Entry Price" you typed per row).
+  // Only rows that match the coin's display currency, deduped and sorted.
+  function coinEntries(coinId, ccy) {
+    const st = getState();
+    if (!st || !st.rows || !st.rows[coinId]) return [];
+    const wantUsd = ccy === "USD";
+    const vals = [];
+    st.rows[coinId].forEach(r => {
+      if (!r) return;
+      const rUsd = (r.currency === "USDT" || r.currency === "USDC");
+      if (rUsd !== wantUsd) return;          // only entries in the same currency we display
+      const p = parseFloat(r.price);
+      if (p > 0) vals.push(p);
+    });
+    // dedupe (rounded) + sort ascending
+    const seen = {};
+    const out = [];
+    vals.sort((a, b) => a - b).forEach(v => {
+      const k = v.toFixed(6);
+      if (!seen[k]) { seen[k] = 1; out.push(v); }
+    });
+    return out;
+  }
 
   // ---------- Indicators (same formulas as the tracker) ----------
   function sma(arr, n) {
@@ -233,7 +256,7 @@
   // ---------- Signal engine ----------
   // Combines RSI, trend (7d vs 30d avg), and position in the 30-day range into
   // a score. Positive score leans BUY, negative leans SELL.
-  function buildSignal(coinId, prices, ccy, phpRate) {
+  function buildSignal(coinId, prices, ccy, phpRate, entries) {
     const ys = prices.map(p => p[1]).filter(isFinite);
     if (ys.length < 15) return null;
     const last = ys[ys.length - 1];
@@ -274,7 +297,7 @@
     const sellHere = high30 - range * 0.25;
 
     return { coinId, last, low30, high30, rsi, posn, sma7, sma30, score, reasons, verdict, cls, buyHere, sellHere,
-             ccy: ccy || "PHP", phpRate: phpRate || null };
+             ccy: ccy || "PHP", phpRate: phpRate || null, entries: entries || [] };
   }
 
   function renderCard(sig) {
@@ -308,6 +331,7 @@
         '<div class="level buy"><div class="lbl">' + buyWord + '</div><div class="v">' + money(sig.buyHere) + '</div></div>' +
         '<div class="level sell"><div class="lbl">' + sellWord + '</div><div class="v">' + money(sig.sellHere) + '</div></div>' +
       '</div>' +
+      entriesLine(sig) +
       '<div class="why"><b>Why:</b> ' + sig.reasons.join(" \u00b7 ") + '.</div>' +
       '<div class="metrics">' +
         '<span class="metric">RSI ' + (sig.rsi != null ? sig.rsi.toFixed(0) : "\u2014") + '</span>' +
@@ -321,6 +345,16 @@
     if (cls === "buy") return "\uD83D\uDFE2";
     if (cls === "sell") return "\uD83D\uDD34";
     return "\u26AA";
+  }
+  // Small grayed line showing where YOU entered (your typed entry prices).
+  function entriesLine(sig) {
+    const es = sig.entries || [];
+    if (!es.length) return "";
+    const isUsd = sig.ccy === "USD";
+    const fmt = isUsd ? fmtUsd : fmtPeso;
+    const shown = es.slice(0, 6).map(fmt).join(", ") + (es.length > 6 ? "\u2026" : "");
+    return '<div style="font-size:10.5px;color:var(--muted);margin:0 0 6px;line-height:1.4">' +
+           'Your entry' + (es.length > 1 ? ' prices' : ' price') + ': ' + shown + '</div>';
   }
 
   // Draw whatever signals we have (merged live + cached), sorted buy-first.
@@ -376,7 +410,8 @@
             if (fx && fx.tether && fx.tether.php) phpRate = fx.tether.php;
           } catch (e) {}
         }
-        const sig = buildSignal(coinId, prices, ccy, phpRate);
+        const entries = coinEntries(coinId, ccy);
+        const sig = buildSignal(coinId, prices, ccy, phpRate, entries);
         if (sig) {
           merged[coinId] = sig;
           cache[coinId] = sig;      // keep a fresh copy
