@@ -233,14 +233,11 @@
       // pending = waiting order (not bought yet) -> we'll show these in yellow
       vals.push({ price: p, ccy: rUsd ? "USD" : "PHP", pending: !!r.pending });
     });
-    // dedupe (same price + currency + pending state) + sort ascending by price
-    const seen = {};
-    const out = [];
-    vals.sort((a, b) => a.price - b.price).forEach(v => {
-      const k = v.ccy + ":" + v.price.toFixed(6) + ":" + (v.pending ? "p" : "a");
-      if (!seen[k]) { seen[k] = 1; out.push(v); }
-    });
-    return out;
+    // Sort ascending by price. NOTE: we do NOT dedupe — each row is a real order,
+    // so two orders at the same price (e.g. two pending buys at 4.7M) both show,
+    // matching the exact count of rows you have in the tracker.
+    vals.sort((a, b) => a.price - b.price);
+    return vals;
   }
 
   // ---------- Indicators (same formulas as the tracker) ----------
@@ -398,27 +395,37 @@
   function entriesLine(sig) {
     const es = sig.entries || [];
     if (!es.length) return "";
-    let hasPending = false;
-    const cells = es.map((e, i) => {
+    const active = es.filter(e => !e.pending);   // bought
+    const pending = es.filter(e => e.pending);   // waiting orders (not bought yet)
+
+    // Active (bought) chip: green/red arrow vs current price.
+    function activeChip(e, i) {
       const fmt = e.ccy === "USD" ? fmtUsd : fmtPeso;
-      let tag = "", color = "var(--muted)", border = "var(--line)";
-      if (e.pending) {
-        // Not bought yet (waiting order) -> yellow to stand out.
-        hasPending = true;
-        color = "var(--gold-bright)";
-        border = "rgba(245,197,66,0.5)";
-        tag = " \u00b7 pending";
-      } else if (e.ccy === sig.ccy && sig.last != null) {
-        if (e.price < sig.last) { tag = " \u25b2"; color = "var(--green)"; }      // below current = up
-        else if (e.price > sig.last) { tag = " \u25bc"; color = "var(--red)"; }   // above current = down
+      let tag = "", color = "var(--muted)";
+      if (e.ccy === sig.ccy && sig.last != null) {
+        if (e.price < sig.last) { tag = " \u25b2"; color = "var(--green)"; }
+        else if (e.price > sig.last) { tag = " \u25bc"; color = "var(--red)"; }
       }
-      return '<span class="entry-chip" style="color:' + color + ';border-color:' + border + '">#' + (i + 1) + ' ' + fmt(e.price) + tag + '</span>';
-    }).join("");
-    const note = hasPending ? ' <span style="color:var(--gold-bright);font-weight:400">(yellow = not bought yet)</span>' : '';
-    return '<div class="entry-box">' +
-             '<div class="entry-title">Your entr' + (es.length > 1 ? 'ies' : 'y') + note + '</div>' +
-             '<div class="entry-grid">' + cells + '</div>' +
-           '</div>';
+      return '<span class="entry-chip" style="color:' + color + '">#' + (i + 1) + ' ' + fmt(e.price) + tag + '</span>';
+    }
+    // Pending (not bought) chip: always yellow.
+    function pendingChip(e, i) {
+      const fmt = e.ccy === "USD" ? fmtUsd : fmtPeso;
+      return '<span class="entry-chip" style="color:var(--gold-bright);border-color:rgba(245,197,66,0.5)">#' + (i + 1) + ' ' + fmt(e.price) + '</span>';
+    }
+
+    let html = '<div class="entry-box">';
+    if (active.length) {
+      html += '<div class="entry-title">Your entr' + (active.length > 1 ? 'ies' : 'y') + ' (bought) \u00b7 ' + active.length + '</div>' +
+              '<div class="entry-grid">' + active.map(activeChip).join("") + '</div>';
+    }
+    if (pending.length) {
+      html += '<div class="entry-title" style="color:var(--gold-bright);margin-top:' + (active.length ? '8px' : '0') + '">' +
+                'Pending orders (not bought yet) \u00b7 ' + pending.length + '</div>' +
+              '<div class="entry-grid">' + pending.map(pendingChip).join("") + '</div>';
+    }
+    html += '</div>';
+    return html;
   }
 
   // Draw signals IN PLACE: update existing cards, add new ones, remove stale ones,
