@@ -230,13 +230,14 @@
       const p = parseFloat(r.price);
       if (!(p > 0)) return;                 // skip blank / zero entries
       const rUsd = (r.currency === "USDT" || r.currency === "USDC");
-      vals.push({ price: p, ccy: rUsd ? "USD" : "PHP" });
+      // pending = waiting order (not bought yet) -> we'll show these in yellow
+      vals.push({ price: p, ccy: rUsd ? "USD" : "PHP", pending: !!r.pending });
     });
-    // dedupe (same price + currency) + sort ascending by price
+    // dedupe (same price + currency + pending state) + sort ascending by price
     const seen = {};
     const out = [];
     vals.sort((a, b) => a.price - b.price).forEach(v => {
-      const k = v.ccy + ":" + v.price.toFixed(6);
+      const k = v.ccy + ":" + v.price.toFixed(6) + ":" + (v.pending ? "p" : "a");
       if (!seen[k]) { seen[k] = 1; out.push(v); }
     });
     return out;
@@ -397,18 +398,25 @@
   function entriesLine(sig) {
     const es = sig.entries || [];
     if (!es.length) return "";
+    let hasPending = false;
     const cells = es.map((e, i) => {
       const fmt = e.ccy === "USD" ? fmtUsd : fmtPeso;
-      // Compare entry vs current price only when both are the same currency as the card.
-      let tag = "", color = "var(--muted)";
-      if (e.ccy === sig.ccy && sig.last != null) {
+      let tag = "", color = "var(--muted)", border = "var(--line)";
+      if (e.pending) {
+        // Not bought yet (waiting order) -> yellow to stand out.
+        hasPending = true;
+        color = "var(--gold-bright)";
+        border = "rgba(245,197,66,0.5)";
+        tag = " \u00b7 pending";
+      } else if (e.ccy === sig.ccy && sig.last != null) {
         if (e.price < sig.last) { tag = " \u25b2"; color = "var(--green)"; }      // below current = up
         else if (e.price > sig.last) { tag = " \u25bc"; color = "var(--red)"; }   // above current = down
       }
-      return '<span class="entry-chip" style="color:' + color + '">#' + (i + 1) + ' ' + fmt(e.price) + tag + '</span>';
+      return '<span class="entry-chip" style="color:' + color + ';border-color:' + border + '">#' + (i + 1) + ' ' + fmt(e.price) + tag + '</span>';
     }).join("");
+    const note = hasPending ? ' <span style="color:var(--gold-bright);font-weight:400">(yellow = not bought yet)</span>' : '';
     return '<div class="entry-box">' +
-             '<div class="entry-title">Your entr' + (es.length > 1 ? 'ies' : 'y') + '</div>' +
+             '<div class="entry-title">Your entr' + (es.length > 1 ? 'ies' : 'y') + note + '</div>' +
              '<div class="entry-grid">' + cells + '</div>' +
            '</div>';
   }
@@ -471,9 +479,18 @@
     }
 
     // Show cached signals immediately so you see all your coins right away.
+    // IMPORTANT: entries + currency come from your LIVE rows (localStorage), not the
+    // cached copy, so edits/additions to entries show instantly even before prices load.
     const cache = cacheGet();
     const merged = {};
-    coins.forEach(id => { if (cache[id]) merged[id] = cache[id]; });
+    coins.forEach(id => {
+      if (cache[id]) {
+        const c = Object.assign({}, cache[id]);
+        c.entries = coinEntries(id);          // refresh entries from current rows
+        c.ccy = coinCurrency(id);             // refresh display currency too
+        merged[id] = c;
+      }
+    });
     if (draw(merged) > 0) statusEl.textContent = "Showing saved signals \u2014 refreshing\u2026";
     else statusEl.textContent = "Loading your " + coins.length + " coin(s)\u2026";
 
@@ -506,6 +523,12 @@
         } else { failed++; }
       } catch (e) {
         failed++;                   // keep any cached card for this coin on screen
+        // Even if the price fetch failed, keep this coin's entries up to date.
+        if (merged[coinId]) {
+          merged[coinId].entries = coinEntries(coinId);
+          merged[coinId].ccy = coinCurrency(coinId);
+          draw(merged);
+        }
       }
       await sleep(1600);            // gentle gap to avoid the free-tier rate limit
     }
