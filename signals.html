@@ -39,6 +39,16 @@
 
   .status { color: var(--muted); font-size: 12px; text-align: center; margin: 10px 0 16px; }
 
+  /* Fear & Greed widget */
+  .fng { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line);
+         border-radius: 14px; padding: 12px 16px; margin-bottom: 14px; }
+  .fng .gauge { width: 54px; height: 54px; border-radius: 50%; flex: none; display: flex; align-items: center;
+                justify-content: center; font-size: 18px; font-weight: 800; color: #000; }
+  .fng .meta { flex: 1; }
+  .fng .meta .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .fng .meta .cls { font-size: 16px; font-weight: 800; margin-top: 2px; }
+  .fng .meta .note { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+
   .sig-card {
     background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
     padding: 14px 16px; margin-bottom: 14px;
@@ -108,6 +118,7 @@
     only invest what you can afford to lose.
   </div>
 
+  <div id="fngWidget" class="fng" style="display:none"></div>
   <div id="status" class="status">Loading your coins&hellip;</div>
   <div id="cards"></div>
 
@@ -288,6 +299,25 @@
     const hist = macd - signal;         // >0 = bullish momentum, <0 = bearish
     return { macd, signal, hist, bullish: hist >= 0 };
   }
+  // Bollinger Bands (20-period SMA +/- 2 standard deviations), downsampled to days.
+  // Returns { upper, lower, mid, pctB } where pctB = where price sits in the band
+  // (0 = at lower band, 1 = at upper band). null if not enough data.
+  function computeBollinger(values) {
+    const step = Math.max(1, Math.floor(values.length / 40));
+    const v = [];
+    for (let i = 0; i < values.length; i += step) v.push(values[i]);
+    const period = 20;
+    if (v.length < period) return null;
+    const slice = v.slice(-period);
+    const mid = slice.reduce((a, b) => a + b, 0) / period;
+    const variance = slice.reduce((a, b) => a + (b - mid) * (b - mid), 0) / period;
+    const sd = Math.sqrt(variance);
+    const upper = mid + 2 * sd, lower = mid - 2 * sd;
+    const last = v[v.length - 1];
+    const band = upper - lower;
+    const pctB = band > 0 ? (last - lower) / band : 0.5;
+    return { upper, lower, mid, pctB };
+  }
 
   // Fetch with retry + backoff. CoinGecko's free tier rate-limits (HTTP 429),
   // so we wait longer and try again instead of silently skipping the coin.
@@ -334,6 +364,7 @@
     const range = high30 - low30;
     const posn = range > 0 ? (last - low30) / range : 0.5; // 0 = at low, 1 = at high
     const macd = computeMACD(ys);
+    const bb = computeBollinger(ys);
 
     let score = 0;
     const reasons = [];
@@ -357,6 +388,11 @@
       if (macd.bullish) { score += 1; reasons.push("MACD bullish"); }
       else { score -= 1; reasons.push("MACD bearish"); }
     }
+    // Bollinger Bands factor: near/below lower band leans BUY, near/above upper leans SELL.
+    if (bb) {
+      if (bb.pctB <= 0.1) { score += 1; reasons.push("at lower Bollinger band"); }
+      else if (bb.pctB >= 0.9) { score -= 1; reasons.push("at upper Bollinger band"); }
+    }
 
     let verdict, cls;
     if (score >= 2) { verdict = "BUY ZONE"; cls = "buy"; }
@@ -371,7 +407,8 @@
 
     return { coinId, last, low30, high30, rsi, posn, sma7, sma30, score, reasons, verdict, cls, buyHere, sellHere,
              ccy: ccy || "PHP", phpRate: phpRate || null, entries: entries || [],
-             macdBullish: macd ? macd.bullish : null };
+             macdBullish: macd ? macd.bullish : null,
+             bbPctB: bb ? bb.pctB : null };
   }
 
   // Builds the inner HTML of a card (separated so we can update in place w/o a full rebuild).
@@ -403,6 +440,7 @@
       '<div class="metrics">' +
         '<span class="metric">RSI ' + (sig.rsi != null ? sig.rsi.toFixed(0) : "\u2014") + '</span>' +
         (sig.macdBullish != null ? '<span class="metric">MACD ' + (sig.macdBullish ? "\u25b2 bullish" : "\u25bc bearish") + '</span>' : '') +
+        (sig.bbPctB != null ? '<span class="metric">BB ' + (sig.bbPctB <= 0.1 ? "lower \u2193" : sig.bbPctB >= 0.9 ? "upper \u2191" : "mid") + '</span>' : '') +
         '<span class="metric">30d low ' + (isUsd ? fmtUsd(sig.low30) : fmtPeso(sig.low30)) + '</span>' +
         '<span class="metric">30d high ' + (isUsd ? fmtUsd(sig.high30) : fmtPeso(sig.high30)) + '</span>' +
         '<span class="metric">now ' + (sig.posn * 100).toFixed(0) + '% of range</span>' +
@@ -502,10 +540,40 @@
 
   let running = false;
 
+  // ---------- Fear & Greed Index (whole-market sentiment, 0-100) ----------
+  function fngColor(v) {
+    if (v <= 25) return "#ff6b6b";       // extreme fear (red)
+    if (v <= 45) return "#f0883e";       // fear (orange)
+    if (v <= 55) return "#f5c542";       // neutral (gold)
+    if (v <= 75) return "#9ccc65";       // greed (light green)
+    return "#34d399";                    // extreme greed (green)
+  }
+  async function loadFearGreed() {
+    const host = document.getElementById("fngWidget");
+    if (!host) return;
+    try {
+      const j = await fetchJson("https://api.alternative.me/fng/?limit=1", 2);
+      const d = j && j.data && j.data[0];
+      if (!d) return;
+      const val = parseInt(d.value, 10);
+      const cls = d.value_classification || "";
+      const note = val <= 45
+        ? "Market is fearful \u2014 historically some see dips as opportunities."
+        : (val >= 55 ? "Market is greedy \u2014 historically a time some take profit." : "Market is neutral.");
+      host.style.display = "flex";
+      host.innerHTML =
+        '<div class="gauge" style="background:' + fngColor(val) + '">' + val + '</div>' +
+        '<div class="meta"><div class="lbl">Crypto Fear &amp; Greed Index</div>' +
+        '<div class="cls" style="color:' + fngColor(val) + '">' + cls + '</div>' +
+        '<div class="note">' + note + ' Not advice \u2014 just overall sentiment.</div></div>';
+    } catch (e) { /* leave hidden on failure */ }
+  }
+
   // ---------- Main ----------
   async function run() {
     if (running) return;          // avoid overlapping runs
     running = true;
+    loadFearGreed();              // fire-and-forget; updates when it arrives
     const coins = getUserCoins();
     const statusEl = document.getElementById("status");
     const cardsEl = document.getElementById("cards");

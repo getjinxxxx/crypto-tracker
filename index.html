@@ -213,6 +213,37 @@
   .alloc-bar { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
   .alloc-bar .fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--gold), var(--gold-bright)); }
 
+  /* Today's change banner */
+  .today-stat { text-align: center; font-size: 14px; font-weight: 700; padding: 10px 14px; margin-bottom: 14px;
+                border-radius: 12px; border: 1px solid var(--line); background: var(--panel); }
+  .today-stat.up { color: var(--green); } .today-stat.down { color: var(--red); }
+  .today-stat .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+
+  /* Fear & Greed widget */
+  .fng { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line);
+         border-radius: 14px; padding: 12px 16px; margin-bottom: 14px; }
+  .fng .gauge { width: 50px; height: 50px; border-radius: 50%; flex: none; display: flex; align-items: center;
+                justify-content: center; font-size: 17px; font-weight: 800; color: #000; }
+  .fng .meta { flex: 1; }
+  .fng .meta .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .fng .meta .cls { font-size: 15px; font-weight: 800; margin-top: 2px; }
+
+  /* Collapsible coin card */
+  .coin-card.collapsed .collapsible { display: none !important; }
+  .coin-head .collapse-btn { background: none; border: none; color: var(--muted); font-size: 15px; cursor: pointer; padding: 2px 6px; }
+  .coin-head .collapse-btn:hover { color: var(--gold-bright); }
+
+  /* Per-coin note */
+  .coin-note-input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    font: inherit; font-size: 12px; border-radius: 8px; padding: 6px 10px; margin: 2px 0 10px; }
+  .coin-note-input::placeholder { color: var(--muted); }
+
+  /* History platform toggle */
+  .history-toggle { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 10px; }
+  .history-toggle .hist-btn { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; font-size: 11px; padding: 4px 12px; cursor: pointer; }
+  .history-toggle .hist-btn.active { background: var(--gold); color: #000; border-color: var(--gold); font-weight: 700; }
+
   .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center; margin-top: 20px; font-size: 11px; color: var(--muted); }
   .legend .item { display: inline-flex; align-items: center; gap: 5px; }
   .legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
@@ -488,6 +519,7 @@
   <div class="coin-card adv-only" id="historyCard" style="display:none">
     <div class="coin-head"><span class="name">Portfolio value over time</span>
       <span class="help" data-help="history" style="margin-left:6px">?</span></div>
+    <div class="history-toggle" id="historyToggle"></div>
     <div class="chart-box" style="height:130px"><canvas id="historyChart"></canvas></div>
     <div class="coin-stat" id="historyNote"></div>
   </div>
@@ -497,6 +529,10 @@
     <div class="cap">Pending money (waiting orders), per coin <span class="help" data-help="pending">?</span></div>
     <div id="summaryLines"></div>
   </div>
+
+  <!-- QUICK STATS (today's change) + FEAR & GREED -->
+  <div id="todayStat" class="today-stat" style="display:none"></div>
+  <div id="fngWidget" class="fng" style="display:none"></div>
 
   <!-- PLATFORM TOGGLE (All / Coins.ph / Binance) -->
   <div id="platformToggle" class="platform-toggle"></div>
@@ -725,6 +761,8 @@
   let platformFilter = "all";
   // How to order coin cards within each section: "default" | "value" | "pl".
   let coinSort = "default";
+  // Which coin cards are collapsed (UI-only, per coinId). Not synced.
+  let collapsed = {};
 
   // ---------- Multi-currency (per-row base currency) ----------
   // A row can be bought in PHP, USDT, or USDC. USDT/USDC are ~$1 stablecoins,
@@ -1018,17 +1056,31 @@
     card.setAttribute("data-key", key);
     card.setAttribute("data-platform", platform || "all");
 
+    if (collapsed[coinId]) card.classList.add("collapsed");
+
     // header
     const head = document.createElement("div");
     head.className = "coin-head";
     head.innerHTML =
+      '<button class="collapse-btn" title="Collapse / expand">' + (collapsed[coinId] ? "\u25b6" : "\u25bc") + '</button>' +
       '<span class="dot" style="background:' + lib.color + '"></span>' +
       '<div><div class="name">' + lib.name + '</div><div class="sym">' + lib.sym + '</div></div>' +
       '<div class="price-box"><div class="price" data-role="price">\u2014</div>' +
       '<div class="chg" data-role="chg"></div></div>' +
       '<button class="remove-coin" title="Remove coin">\u00d7</button>';
     head.querySelector(".remove-coin").onclick = () => removeCoin(coinId);
+    head.querySelector(".collapse-btn").onclick = () => { collapsed[coinId] = !collapsed[coinId]; render(); };
     card.appendChild(head);
+
+    // per-coin note (free text, synced). Shown under the header.
+    const noteInput = document.createElement("input");
+    noteInput.className = "coin-note-input collapsible";
+    noteInput.type = "text";
+    noteInput.placeholder = "Note for " + lib.sym + " (e.g. long-term hold, high risk)\u2026";
+    if (!state.coinNotes) state.coinNotes = {};
+    noteInput.value = state.coinNotes[coinId] || "";
+    noteInput.oninput = () => { if (!state.coinNotes) state.coinNotes = {}; state.coinNotes[coinId] = noteInput.value; saveState(); };
+    card.appendChild(noteInput);
 
     // range tabs
     // Short intraday windows (advanced) + standard ranges.
@@ -1078,6 +1130,10 @@
     canvas.id = "chart_" + key;
     chartBox.appendChild(canvas);
 
+    chartBox.classList.add("collapsible");
+    tabs.classList.add("collapsible");
+    shortTabs.classList.add("collapsible");
+    typeTabs.classList.add("collapsible");
     card.appendChild(chartBox);
     card.appendChild(tabs);
     card.appendChild(shortTabs);
@@ -1085,13 +1141,13 @@
 
     // insight text ("what happened in this window")
     const insight = document.createElement("div");
-    insight.className = "insight";
+    insight.className = "insight collapsible";
     insight.setAttribute("data-role", "insight");
     card.appendChild(insight);
 
     // per-coin stat line
     const stat = document.createElement("div");
-    stat.className = "coin-stat";
+    stat.className = "coin-stat collapsible";
     stat.innerHTML = 'Active: <b data-role="active">0</b> &middot; Pending: <b data-role="pending">0</b>' +
       '<span class="hl-line adv-only" data-role="hl24"></span>' +
       '<span class="avg-line" data-role="avg"></span>' +
@@ -1104,7 +1160,7 @@
 
     // row controls: filter + sort — advanced only
     const controls = document.createElement("div");
-    controls.className = "row-controls adv-only";
+    controls.className = "row-controls adv-only collapsible";
     const curFilter = filterMode[coinId] || "all";
     const curSort = sortMode[coinId] || "default";
     [["all","All"],["active","Active"],["pending","Pending"]].forEach(([f, label]) => {
@@ -1126,7 +1182,7 @@
 
     // table
     const wrap = document.createElement("div");
-    wrap.className = "table-wrap";
+    wrap.className = "table-wrap collapsible";
     const table = document.createElement("table");
     table.innerHTML =
       '<thead><tr>' +
@@ -1175,12 +1231,14 @@
       // inline take-profit form (when opened)
       if (e.row._showTP) tbody.appendChild(buildTPForm(coinId, e.idx));
       if (e.row.note || e.row._showNote) tbody.appendChild(buildNoteRow(coinId, e.idx));
+      if (e.row._showAlert) tbody.appendChild(buildAlertRow(coinId, e.idx));
     });
     wrap.appendChild(table);
     card.appendChild(wrap);
 
     // quick add + add row
     const addWrap = document.createElement("div");
+    addWrap.className = "collapsible";
     addWrap.style.display = "flex"; addWrap.style.gap = "6px"; addWrap.style.flexWrap = "wrap";
     const addBtn = document.createElement("button");
     addBtn.className = "add-row";
@@ -1223,6 +1281,45 @@
     inp.value = (state.rows[coinId][i] && state.rows[coinId][i].note) || "";
     inp.oninput = () => { state.rows[coinId][i].note = inp.value; saveState(); };
     td.appendChild(inp);
+    tr.appendChild(td);
+    return tr;
+  }
+
+  // Inline row to set a target (notify when price rises to it) and/or stop (notify when price falls to it).
+  function buildAlertRow(coinId, i) {
+    const row = state.rows[coinId][i];
+    const sym = ccySymbol(rowCcy(row));
+    const tr = document.createElement("tr");
+    tr.className = "note-row";
+    const td = document.createElement("td");
+    td.colSpan = 12;
+    const inStyle = "background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px;width:120px";
+    td.innerHTML =
+      '<div style="padding:6px 8px 10px 8px;background:var(--panel-2);border-radius:10px;margin:2px 0 8px">' +
+        '<div style="font-size:12px;color:var(--gold-bright);margin-bottom:8px">\u{1F514} Price alert \u2014 notify me when ' + (libById(coinId) || {sym:coinId}).sym + ' crosses</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">' +
+          '<label style="font-size:11px;color:var(--muted)">Target \u2191 (sell idea, ' + sym + ')<br><input data-f="target" inputmode="decimal" style="' + inStyle + '"></label>' +
+          '<label style="font-size:11px;color:var(--muted)">Stop \u2193 (loss guard, ' + sym + ')<br><input data-f="stop" inputmode="decimal" style="' + inStyle + '"></label>' +
+          '<button data-f="save" style="background:var(--gold);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Save</button>' +
+          '<button data-f="clear" style="background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer">Clear</button>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:8px">Alerts need the \uD83D\uDD14 button at the top to be ON (and the app open / on Home Screen).</div>' +
+      '</div>';
+    const tI = td.querySelector('[data-f="target"]');
+    const sI = td.querySelector('[data-f="stop"]');
+    if (num(row.target) > 0) tI.value = row.target;
+    if (num(row.stop) > 0) sI.value = row.stop;
+    td.querySelector('[data-f="save"]').onclick = () => {
+      const t = num(tI.value), s = num(sI.value);
+      if (t > 0) row.target = t; else delete row.target;
+      if (s > 0) row.stop = s; else delete row.stop;
+      delete row._showAlert;
+      saveState(); render();
+    };
+    td.querySelector('[data-f="clear"]').onclick = () => {
+      delete row.target; delete row.stop; delete row._showAlert;
+      saveState(); render();
+    };
     tr.appendChild(td);
     return tr;
   }
@@ -1412,6 +1509,14 @@
     noteBtn.title = "Add / edit note";
     noteBtn.style.fontSize = "13px";
     noteBtn.onclick = () => { state.rows[coinId][i]._showNote = !state.rows[coinId][i]._showNote; render(); };
+    // Target / stop-loss alert toggle
+    const alertBtn = document.createElement("button");
+    alertBtn.className = "del";
+    const hasAlert = num(row.target) > 0 || num(row.stop) > 0;
+    alertBtn.textContent = hasAlert ? "\u{1F514}" : "\u{1F515}"; // bell if set, muted bell otherwise
+    alertBtn.title = "Set a price alert (target / stop) for this row";
+    alertBtn.style.fontSize = "13px";
+    alertBtn.onclick = () => { state.rows[coinId][i]._showAlert = !state.rows[coinId][i]._showAlert; render(); };
     const del = document.createElement("button");
     del.className = "del"; del.textContent = "\u00d7"; del.title = "Delete row";
     del.onclick = () => {
@@ -1422,6 +1527,7 @@
       }
     };
     tdAct.appendChild(noteBtn);
+    tdAct.appendChild(alertBtn);
     tdAct.appendChild(del);
 
     tr.append(tdChk, tdPlat, tdCcy, tdPrice, tdPeso, tdPhp, tdCur, tdAmount, tdAmtPhp, tdPl, tdSig, tdAct);
@@ -1978,6 +2084,8 @@
     renderRealizedTotal();
     // ----- Allocation breakdown (by coin + by platform) -----
     renderAllocation();
+    // ----- Today's estimated change -----
+    renderTodayChange();
 
     // Plain-language summary (PHP holdings only)
     renderPlain(totalActiveInvested, totalCurrent, totalPending, anyMarket);
@@ -2069,6 +2177,60 @@
     '</div>';
   }
 
+  // ---------- Today's change (estimated 24h move of active PHP holdings) ----------
+  function renderTodayChange() {
+    const el = document.getElementById("todayStat");
+    if (!el) return;
+    let curTotal = 0, prevTotal = 0, any = false;
+    state.coins.forEach(coinId => {
+      const m = market[coinId];
+      if (!m || m.change24h == null) return;
+      // current PHP value of active holdings for this coin (all currencies -> PHP)
+      const s = sums(coinId);
+      let php = 0;
+      const b = s.byCcy["PHP"]; if (b && b.hasMarket) php += b.activeCurrent;
+      ["USDT", "USDC"].forEach(c => { const u = s.byCcy[c]; if (u && u.hasMarket) { const fx = usdToPhp(coinId); php += fx ? u.activeCurrent * fx : 0; } });
+      if (php <= 0) return;
+      any = true;
+      const factor = 1 + (m.change24h / 100);
+      curTotal += php;
+      prevTotal += factor > 0 ? php / factor : php;  // value ~24h ago
+    });
+    if (!any || prevTotal <= 0) { el.style.display = "none"; return; }
+    const diff = curTotal - prevTotal;
+    const pct = (diff / prevTotal) * 100;
+    const up = diff >= 0;
+    el.style.display = "block";
+    el.className = "today-stat " + (up ? "up" : "down");
+    el.innerHTML = "Today: " + (up ? "\u25b2 +" : "\u25bc \u2212") + fmtPeso(Math.abs(diff)) +
+      " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(2) + "%)" +
+      '<span class="sub">estimated 24h move of your active holdings</span>';
+  }
+
+  // ---------- Fear & Greed Index ----------
+  function fngColor(v) {
+    if (v <= 25) return "#ff6b6b";
+    if (v <= 45) return "#f0883e";
+    if (v <= 55) return "#f5c542";
+    if (v <= 75) return "#9ccc65";
+    return "#34d399";
+  }
+  async function loadFearGreedIndex() {
+    const host = document.getElementById("fngWidget");
+    if (!host) return;
+    try {
+      const j = await fetchJson("https://api.alternative.me/fng/?limit=1");
+      const d = j && j.data && j.data[0];
+      if (!d) return;
+      const val = parseInt(d.value, 10);
+      host.style.display = "flex";
+      host.innerHTML =
+        '<div class="gauge" style="background:' + fngColor(val) + '">' + val + '</div>' +
+        '<div class="meta"><div class="lbl">Crypto Fear &amp; Greed</div>' +
+        '<div class="cls" style="color:' + fngColor(val) + '">' + (d.value_classification || "") + '</div></div>';
+    } catch (e) {}
+  }
+
   // ---------- What-if calculator (#13) ----------
   function renderWhatIf(cardEl, coinId, s) {
     let box = cardEl.querySelector('[data-role="whatif"]');
@@ -2134,28 +2296,69 @@
   }
 
   // ---------- Portfolio history (#19) ----------
+  // PHP balance (active current + pending) limited to a platform (or all when omitted).
+  function platformPhpBalance(platform) {
+    let bal = 0;
+    state.coins.forEach(coinId => {
+      const s = sums(coinId, platform);
+      const b = s.byCcy["PHP"];
+      if (b) bal += (b.hasMarket ? b.activeCurrent : b.active) + b.pending;
+      // USD holdings converted to PHP for one comparable history line
+      ["USDT", "USDC"].forEach(c => {
+        const u = s.byCcy[c]; if (!u) return;
+        const fx = usdToPhp(coinId) || 0;
+        bal += ((u.hasMarket ? u.activeCurrent : u.active) + u.pending) * fx;
+      });
+    });
+    return bal;
+  }
+  // Which history series the chart shows: "all" | "Coins.ph" | "Binance".
+  let historyView = "all";
+
   // Record at most one point per ~6 hours to keep the log small.
   function recordHistory(totalBalance) {
     if (!isFinite(totalBalance) || totalBalance <= 0) return;
     if (!state.history) state.history = [];
+    if (!state.historyByPlatform) state.historyByPlatform = {};
     const now = Date.now();
-    const last = state.history[state.history.length - 1];
-    if (last && (now - last.t) < 6 * 3600 * 1000) {
-      last.value = totalBalance; last.t = now; // update the latest point within the window
-    } else {
-      state.history.push({ t: now, value: totalBalance });
-    }
-    if (state.history.length > 180) state.history = state.history.slice(-180); // keep last ~180 points
+    const within = (arr) => arr.length && (now - arr[arr.length - 1].t) < 6 * 3600 * 1000;
+    // overall
+    if (within(state.history)) { const l = state.history[state.history.length - 1]; l.value = totalBalance; l.t = now; }
+    else state.history.push({ t: now, value: totalBalance });
+    if (state.history.length > 180) state.history = state.history.slice(-180);
+    // per platform
+    PLATFORMS.forEach(p => {
+      const bal = platformPhpBalance(p);
+      if (bal <= 0) return;
+      if (!state.historyByPlatform[p]) state.historyByPlatform[p] = [];
+      const arr = state.historyByPlatform[p];
+      if (within(arr)) { const l = arr[arr.length - 1]; l.value = bal; l.t = now; }
+      else arr.push({ t: now, value: bal });
+      if (arr.length > 180) state.historyByPlatform[p] = arr.slice(-180);
+    });
     saveState();
   }
 
   function renderHistory() {
     const card = document.getElementById("historyCard");
-    const hist = state.history || [];
-    if (hist.length < 2) { if (card) card.style.display = "none"; return; }
+    // Pick the active series (overall or a platform)
+    const series = historyView === "all"
+      ? (state.history || [])
+      : ((state.historyByPlatform && state.historyByPlatform[historyView]) || []);
+    const hist = series;
+    if ((state.history || []).length < 2) { if (card) card.style.display = "none"; return; }
     if (card) card.style.display = "";
+    // Render a small platform toggle for the history chart (only if we have platform data)
+    renderHistoryToggle();
     const canvas = document.getElementById("historyChart");
     if (!canvas || typeof Chart === "undefined") return;
+    if (hist.length < 2) {
+      // chosen platform has too little data; show a note instead of a broken chart
+      if (historyChart) { historyChart.destroy(); historyChart = null; }
+      const note0 = document.getElementById("historyNote");
+      if (note0) note0.innerHTML = "<span style='color:var(--muted)'>Not enough history for " + historyView + " yet.</span>";
+      return;
+    }
     const labels = hist.map(h => new Date(h.t).toLocaleDateString([], { month: "short", day: "numeric" }));
     const values = hist.map(h => h.value);
     const up = values[values.length - 1] >= values[0];
@@ -2181,9 +2384,30 @@
     if (note) {
       const first = values[0], last = values[values.length - 1];
       const diff = last - first, pct = first > 0 ? (diff / first) * 100 : 0;
-      note.innerHTML = "Since tracking started: <b style='color:" + (diff >= 0 ? "#34d399" : "#ff6b6b") + "'>" +
+      const scope = historyView === "all" ? "" : " (" + historyView + ")";
+      note.innerHTML = "Since tracking started" + scope + ": <b style='color:" + (diff >= 0 ? "#34d399" : "#ff6b6b") + "'>" +
         (diff >= 0 ? "+" : "\u2212") + fmtPeso(Math.abs(diff)).slice(1) + " (" + (diff >= 0 ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)</b>";
     }
+  }
+
+  // Platform toggle for the history chart (only shows platforms that have data).
+  function renderHistoryToggle() {
+    const host = document.getElementById("historyToggle");
+    if (!host) return;
+    const opts = [["all", "All"]];
+    PLATFORMS.forEach(p => {
+      const arr = state.historyByPlatform && state.historyByPlatform[p];
+      if (arr && arr.length >= 2) opts.push([p, p]);
+    });
+    if (opts.length <= 1) { host.innerHTML = ""; return; } // nothing to switch
+    host.innerHTML = "";
+    opts.forEach(([v, label]) => {
+      const b = document.createElement("button");
+      b.className = "hist-btn" + (historyView === v ? " active" : "");
+      b.textContent = label;
+      b.onclick = () => { historyView = v; renderHistory(); };
+      host.appendChild(b);
+    });
   }
 
   // ---------- Live prices ----------
@@ -2895,6 +3119,22 @@
         const mkt = mktPrice(coinId, ccy);
         if (mkt == null) return;
         const entry = num(row.price);
+
+        // Custom per-row price alerts (target = notify when price rises to it; stop = when it falls to it)
+        const tgt = num(row.target), stp = num(row.stop);
+        if (tgt > 0 && mkt >= tgt) {
+          const key = coinId + ":target:" + i + ":" + tgt;
+          seen[key] = true;
+          fireAlert(key, "\uD83C\uDFAF Target hit \u2014 " + lib.sym,
+            lib.sym + " reached " + fmtMoney(mkt, ccy) + " (your target " + fmtMoney(tgt, ccy) + ").");
+        }
+        if (stp > 0 && mkt <= stp) {
+          const key = coinId + ":stop:" + i + ":" + stp;
+          seen[key] = true;
+          fireAlert(key, "\u26A0\uFE0F Stop level \u2014 " + lib.sym,
+            lib.sym + " fell to " + fmtMoney(mkt, ccy) + " (your stop " + fmtMoney(stp, ccy) + ").");
+        }
+
         if (row.pending) {
           // Ready to buy: market reached/deeper than your target
           if (entry > 0 && mkt <= entry) {
@@ -2938,6 +3178,7 @@
     appStarted = true;
     render();                 // render() triggers queueDataLoads()
     initAlerts();             // wire up the buy/sell alert button
+    loadFearGreedIndex();     // market sentiment widget
     cloudInit();              // connect Firebase + realtime sync
     setInterval(() => { taskQueue.push(() => loadPrices()); runQueue(); }, 120000);
     setInterval(() => { state.coins.forEach(coinId => taskQueue.push(() => loadChart(coinId))); runQueue(); }, 300000);
@@ -2947,7 +3188,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 53;
+  const APP_VERSION = 54;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
