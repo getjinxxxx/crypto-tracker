@@ -241,6 +241,32 @@
   /* In Simple view, hide advanced-only details */
   body.simple .adv-only { display: none !important; }
 
+  /* Platform toggle (All / Coins.ph / Binance) */
+  .platform-toggle { display: flex; justify-content: center; gap: 6px; margin: 0 auto 16px; flex-wrap: wrap; }
+  .platform-toggle .pf-btn {
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; font-size: 13px; font-weight: 600; padding: 7px 16px; cursor: pointer;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .platform-toggle .pf-btn:hover:not(.active) { border-color: var(--gold); color: var(--text); }
+  .platform-toggle .pf-btn.active { background: var(--gold); color: #000; border-color: var(--gold); }
+
+  /* Platform section header + subtotal (shown in "All" view) */
+  .platform-head {
+    display: flex; align-items: center; gap: 8px; margin: 6px 2px 10px;
+    font-size: 15px; font-weight: 800; color: var(--gold-bright); letter-spacing: .3px;
+  }
+  .platform-head .pf-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--gold); flex: none; }
+  .platform-head .pf-name { text-transform: uppercase; letter-spacing: .5px; font-size: 13px; }
+  .platform-subtotal {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 14px; margin: 2px 2px 22px;
+  }
+  .platform-subtotal .lbl { color: var(--muted); font-size: 13px; }
+  .platform-subtotal .val { color: var(--gold-bright); font-size: 18px; font-weight: 800; margin-left: auto; }
+  .platform-subtotal .usd { color: var(--muted); font-size: 12px; width: 100%; text-align: right; }
+
   /* Plain-language summary */
   .plain {
     background: linear-gradient(135deg, #1a2436, #141b28);
@@ -452,6 +478,9 @@
     <div id="summaryLines"></div>
   </div>
 
+  <!-- PLATFORM TOGGLE (All / Coins.ph / Binance) -->
+  <div id="platformToggle" class="platform-toggle"></div>
+
   <!-- COIN CARDS render here -->
   <div id="coinCards"></div>
 
@@ -659,6 +688,14 @@
   function fmtPlain(n) { return Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 }); }
   function fmtAmount(n) { if (!isFinite(n)) return "\u2014"; return Number(n).toLocaleString("en-US", { maximumFractionDigits: 8 }); }
 
+  // ---------- Platform / exchange (per-row) ----------
+  // Each buy can live on a different exchange. Missing platform = "Coins.ph"
+  // (keeps all your existing rows working, since those are all on Coins.ph).
+  const PLATFORMS = ["Coins.ph", "Binance"];
+  function rowPlatform(row) { const p = row && row.platform; return PLATFORMS.indexOf(p) >= 0 ? p : "Coins.ph"; }
+  // Current platform filter for the whole view: "all" | "Coins.ph" | "Binance".
+  let platformFilter = "all";
+
   // ---------- Multi-currency (per-row base currency) ----------
   // A row can be bought in PHP, USDT, or USDC. USDT/USDC are ~$1 stablecoins,
   // so both use the coin's USD market price. Missing currency = PHP (keeps old rows working).
@@ -694,12 +731,99 @@
   }
 
   // ---------- Rendering ----------
+  // Does a coin have any rows on the given platform? (used to decide which cards to show)
+  function coinHasPlatform(coinId, platform) {
+    return (state.rows[coinId] || []).some(r => rowPlatform(r) === platform);
+  }
+
+  // Platform toggle: All / Coins.ph / Binance
+  function renderPlatformToggle() {
+    const host = document.getElementById("platformToggle");
+    if (!host) return;
+    host.innerHTML = "";
+    [["all", "All"], ["Coins.ph", "Coins.ph"], ["Binance", "Binance"]].forEach(([val, label]) => {
+      const b = document.createElement("button");
+      b.className = "pf-btn" + (platformFilter === val ? " active" : "");
+      b.textContent = label;
+      b.onclick = () => { platformFilter = val; render(); };
+      host.appendChild(b);
+    });
+  }
+
+  // A heading row that labels a platform section (shown only in "All" view).
+  function buildPlatformHeader(platform) {
+    const h = document.createElement("div");
+    h.className = "platform-head";
+    h.innerHTML = '<span class="pf-dot"></span><span class="pf-name">' + platform + '</span>';
+    return h;
+  }
+
+  // A per-platform subtotal line (PHP holdings + a separate USD subtotal when present).
+  function buildPlatformSubtotal(platform) {
+    let php = 0, phpCur = 0, anyPhp = false, anyMkt = false;
+    let usd = 0, usdCur = 0, anyUsd = false, anyUsdMkt = false;
+    state.coins.forEach(coinId => {
+      const s = sums(coinId, platform);
+      const b = s.byCcy["PHP"];
+      if (b) { anyPhp = true; php += b.pending; phpCur += b.hasMarket ? b.activeCurrent : 0; if (b.hasMarket) anyMkt = true; php += b.active - (b.hasMarket ? 0 : 0); }
+      ["USDT", "USDC"].forEach(c => {
+        const u = s.byCcy[c];
+        if (u) { anyUsd = true; usd += u.pending + u.active; if (u.hasMarket) { anyUsdMkt = true; } usdCur += u.hasMarket ? u.activeCurrent : 0; }
+      });
+    });
+    // Recompute cleanly: PHP balance = current value of active + pending (same rule as grand total)
+    let phpBalance = 0, usdBalance = 0;
+    let hasPhp = false, hasUsd = false;
+    state.coins.forEach(coinId => {
+      const s = sums(coinId, platform);
+      const b = s.byCcy["PHP"];
+      if (b) { hasPhp = true; phpBalance += (b.hasMarket ? b.activeCurrent : b.active) + b.pending; }
+      ["USDT", "USDC"].forEach(c => {
+        const u = s.byCcy[c];
+        if (u) { hasUsd = true; usdBalance += (u.hasMarket ? u.activeCurrent : u.active) + u.pending; }
+      });
+    });
+    const el = document.createElement("div");
+    el.className = "platform-subtotal";
+    let html = '<span class="lbl">' + platform + ' total</span><span class="val">' + fmtPeso(phpBalance) + '</span>';
+    if (hasUsd) html += '<span class="usd">+ ' + fmtMoney(usdBalance, "USDT") + ' (USDT/USDC)</span>';
+    el.innerHTML = html;
+    return el;
+  }
+
   function render() {
     // Preserve scroll position so a background sync/refresh doesn't yank the page back to the top.
     const prevScroll = window.pageYOffset || document.documentElement.scrollTop || 0;
     const container = document.getElementById("coinCards");
     container.innerHTML = "";
-    state.coins.forEach(coinId => container.appendChild(buildCoinCard(coinId)));
+
+    renderPlatformToggle();
+
+    if (platformFilter === "all") {
+      // Separate section per platform, each with its own heading + subtotal.
+      PLATFORMS.forEach(platform => {
+        const coinsHere = state.coins.filter(id => coinHasPlatform(id, platform));
+        if (!coinsHere.length) return;
+        container.appendChild(buildPlatformHeader(platform));
+        coinsHere.forEach(coinId => container.appendChild(buildCoinCard(coinId, platform)));
+        container.appendChild(buildPlatformSubtotal(platform));
+      });
+      // Any coins with no platform tag at all are treated as Coins.ph already,
+      // so nothing extra is needed here.
+    } else {
+      // Single platform view.
+      const coinsHere = state.coins.filter(id => coinHasPlatform(id, platformFilter));
+      if (!coinsHere.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-note";
+        empty.style.cssText = "text-align:center;color:var(--muted);padding:30px 16px;font-size:14px";
+        empty.textContent = "No " + platformFilter + " holdings yet. Switch the platform on a row, or add one.";
+        container.appendChild(empty);
+      } else {
+        coinsHere.forEach(coinId => container.appendChild(buildCoinCard(coinId, platformFilter)));
+      }
+    }
+
     renderSummary();
     updateTotals();
     // Restore scroll after the DOM has been rebuilt.
@@ -762,12 +886,12 @@
   // Select a chart time range for a coin, update tab highlight across both groups.
   function selectRange(coinId, days, btn) {
     ranges[coinId] = days;
-    const card = document.getElementById("chart_" + coinId);
-    if (card) {
-      const cardEl = card.closest(".coin-card");
-      cardEl.querySelectorAll(".range-tabs button").forEach(bb => bb.classList.remove("active"));
-    }
-    if (btn) btn.classList.add("active");
+    // Sync the active range-tab highlight across ALL cards of this coin.
+    coinCards(coinId).forEach(cardEl => {
+      cardEl.querySelectorAll(".range-tabs button").forEach(bb => {
+        bb.classList.toggle("active", bb.textContent === (btn ? btn.textContent : ""));
+      });
+    });
     applyCachedChart(coinId);
     taskQueue.push(() => loadChart(coinId));
     runQueue();
@@ -777,33 +901,57 @@
     const days = ranges[coinId] || 7;
     const type = chartTypes[coinId] || "line";
     const color = (libById(coinId) || {}).color;
+    const keys = coinCards(coinId).map(c => c.getAttribute("data-key"));
+    if (!keys.length) return;
     if (days < 1) {
-      // short window: slice from cached 1-day data if available
       const cached = cacheGet("chart_" + coinId + "_1_line");
       if (cached && cached.v && cached.v.length) {
         const cutoff = Date.now() - days * 24 * 3600 * 1000;
         let points = cached.v.filter(p => p.t >= cutoff);
         if (points.length < 2) points = cached.v.slice(-Math.max(2, Math.ceil(cached.v.length * days)));
-        drawChart(coinId, points, days, color, "line");
+        keys.forEach(k => drawChart(k, coinId, points, days, color, "line"));
         showInsight(coinId, points, days);
       } else {
-        setChartStatus(coinId, "Loading chart\u2026");
+        keys.forEach(k => setChartStatus(k, "Loading chart\u2026"));
       }
       return;
     }
     const c = cacheGet("chart_" + coinId + "_" + days + "_" + type);
-    if (c && c.v && c.v.length) { drawChart(coinId, c.v, days, color, type); showInsight(coinId, c.v, days); }
-    else setChartStatus(coinId, "Loading chart\u2026");
+    if (c && c.v && c.v.length) { keys.forEach(k => drawChart(k, coinId, c.v, days, color, type)); showInsight(coinId, c.v, days); }
+    else keys.forEach(k => setChartStatus(k, "Loading chart\u2026"));
   }
   function applyCachedStats(coinId) {
     const c = cacheGet("stats_" + coinId);
     if (c && c.v) { stats[coinId] = c.v; showRange(coinId); show24(coinId); showMarketMood(coinId); refreshRows(coinId); }
   }
 
-  function buildCoinCard(coinId) {
+  // Unique key per rendered card. Charts/lookups are namespaced by this so the SAME
+  // coin can appear in multiple platform sections, each with its own chart.
+  function cardKey(coinId, platform) { return coinId + "__" + (platform || "all"); }
+  // All card elements currently showing this coin (may be 1 or more, one per platform section).
+  function coinCards(coinId) {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('.coin-card[data-coin="' + coinId + '"]')
+    );
+  }
+  // Run fn(cardEl, platform) for every card of this coin.
+  function forEachCoinCard(coinId, fn) {
+    coinCards(coinId).forEach(cardEl => fn(cardEl, cardEl.getAttribute("data-platform")));
+  }
+  // The platform a card represents, as a filter arg for sums()/entries ("all" -> undefined).
+  function cardPlatformArg(cardEl) {
+    const p = cardEl.getAttribute("data-platform");
+    return (p && p !== "all") ? p : undefined;
+  }
+
+  function buildCoinCard(coinId, platform) {
     const lib = libById(coinId) || { sym: coinId, name: coinId, color: "#888" };
+    const key = cardKey(coinId, platform);
     const card = document.createElement("div");
     card.className = "coin-card";
+    card.setAttribute("data-coin", coinId);
+    card.setAttribute("data-key", key);
+    card.setAttribute("data-platform", platform || "all");
 
     // header
     const head = document.createElement("div");
@@ -862,7 +1010,7 @@
     const chartBox = document.createElement("div");
     chartBox.className = "chart-box";
     const canvas = document.createElement("canvas");
-    canvas.id = "chart_" + coinId;
+    canvas.id = "chart_" + key;
     chartBox.appendChild(canvas);
 
     card.appendChild(chartBox);
@@ -918,6 +1066,7 @@
     table.innerHTML =
       '<thead><tr>' +
       '<th class="c"></th>' +
+      '<th class="l">Platform <span class="help" data-help="platform">?</span></th>' +
       '<th class="l">Cur. <span class="help" data-help="currency">?</span></th>' +
       '<th class="l">Entry Price <span class="help" data-help="entry">?</span></th>' +
       '<th>Invested <span class="help" data-help="invested">?</span></th>' +
@@ -932,6 +1081,8 @@
     const tbody = table.querySelector("tbody");
     // Build a list of {row, idx} then filter + sort for display (idx keeps data binding correct)
     let entries = (state.rows[coinId] || []).map((row, idx) => ({ row, idx }));
+    // Limit to the given platform (when a platform section/filter is active).
+    if (platform) entries = entries.filter(e => rowPlatform(e.row) === platform);
     if (curFilter === "active") entries = entries.filter(e => !e.row.pending);
     else if (curFilter === "pending") entries = entries.filter(e => e.row.pending);
     const mkt = market[coinId] ? market[coinId].price : null;
@@ -999,7 +1150,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 11;
+    td.colSpan = 12;
     const inp = document.createElement("input");
     inp.className = "note-input";
     inp.type = "text";
@@ -1052,7 +1203,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 11;
+    td.colSpan = 12;
     td.innerHTML =
       '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:12px;line-height:1.5;padding:2px 8px 6px 8px">' +
         '<span style="color:var(--gold-bright)">\u{1F4B0} Took profit</span>' +
@@ -1103,6 +1254,27 @@
       render(); // re-render so headers/labels/symbols update for this row
     };
     tdCcy.appendChild(ccySel);
+
+    // platform / exchange selector (Coins.ph / Binance)
+    const tdPlat = document.createElement("td");
+    tdPlat.style.textAlign = "left";
+    const platSel = document.createElement("select");
+    platSel.className = "cell-input";
+    platSel.style.padding = "4px 2px";
+    platSel.style.textAlign = "left";
+    const curPlat = rowPlatform(row);
+    PLATFORMS.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p; opt.textContent = p;
+      if (p === curPlat) opt.selected = true;
+      platSel.appendChild(opt);
+    });
+    platSel.onchange = () => {
+      state.rows[coinId][i].platform = platSel.value;
+      saveState();
+      render(); // re-render so the row moves to the right platform section
+    };
+    tdPlat.appendChild(platSel);
 
     const rowSym = ccySymbol(curCcy); // \u20b1 for PHP, $ for USDT/USDC
 
@@ -1187,7 +1359,7 @@
     tdAct.appendChild(noteBtn);
     tdAct.appendChild(del);
 
-    tr.append(tdChk, tdCcy, tdPrice, tdPeso, tdPhp, tdCur, tdAmount, tdAmtPhp, tdPl, tdSig, tdAct);
+    tr.append(tdChk, tdPlat, tdCcy, tdPrice, tdPeso, tdPhp, tdCur, tdAmount, tdAmtPhp, tdPl, tdSig, tdAct);
     setTimeout(() => updateRowComputed(coinId, i, tr), 0);
     return tr;
   }
@@ -1388,7 +1560,7 @@
     const tr = document.createElement("tr");
     tr.className = "note-row";
     const td = document.createElement("td");
-    td.colSpan = 11;
+    td.colSpan = 12;
 
     const inStyle = "background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font-size:13px;width:120px";
     const roStyle = inStyle + ";opacity:.75";
@@ -1464,9 +1636,12 @@
     render();
   }
 
+  // New rows inherit the currently selected platform (so adding under a section lands there).
+  function defaultPlatform() { return platformFilter === "all" ? "Coins.ph" : platformFilter; }
+
   function addRow(coinId) {
     if (!state.rows[coinId]) state.rows[coinId] = [];
-    state.rows[coinId].push({ price: "", peso: 0, pending: false, currency: "PHP" });
+    state.rows[coinId].push({ price: "", peso: 0, pending: false, currency: "PHP", platform: defaultPlatform() });
     saveState(); render();
   }
 
@@ -1475,7 +1650,7 @@
     const mkt = market[coinId] ? market[coinId].price : null;
     if (mkt == null) { alert("Live price not loaded yet. Try again in a moment."); return; }
     if (!state.rows[coinId]) state.rows[coinId] = [];
-    state.rows[coinId].push({ price: String(Math.round(mkt * 100) / 100), peso: 0, pending: false, currency: "PHP" });
+    state.rows[coinId].push({ price: String(Math.round(mkt * 100) / 100), peso: 0, pending: false, currency: "PHP", platform: defaultPlatform() });
     saveState(); render();
   }
 
@@ -1483,8 +1658,10 @@
   // we keep a per-currency breakdown in `byCcy`. The top-level fields (active, pending,
   // activeCurrent, ...) reflect the coin's DOMINANT currency (the one with the most
   // invested), so the existing single-currency UI keeps working for pure-PHP coins.
-  function sums(coinId) {
-    const rows = state.rows[coinId] || [];
+  // Optional `platform` arg limits the aggregation to rows on that exchange.
+  function sums(coinId, platform) {
+    let rows = state.rows[coinId] || [];
+    if (platform) rows = rows.filter(r => rowPlatform(r) === platform);
     const byCcy = {}; // ccy -> { active, pending, activeCurrent, activeAmount, realized, hasMarket }
     function bucket(ccy) {
       if (!byCcy[ccy]) byCcy[ccy] = { ccy, active: 0, pending: 0, activeCurrent: 0, activeAmount: 0, realized: 0, hasMarket: mktPrice(coinId, ccy) != null };
@@ -1588,6 +1765,7 @@
 
   // ---------- Help / glossary ----------
   const HELP_TEXT = {
+    platform: { t: "Platform", b: "Which exchange this buy lives on (Coins.ph or Binance). Use the toggle at the top to view All (each platform in its own section with its own subtotal) or just one platform.\n\nRows with no platform set are treated as Coins.ph." },
     currency: { t: "Currency", b: "The money you used to buy this row. PHP (\u20b1) uses peso prices. USDT or USDC (both \u2248 $1) use the coin\u2019s US-dollar price.\n\nEach row is tracked in its own currency, so a coin you bought with USDT shows its entry price, value, and P/L in dollars. USDT/USDC holdings are kept separate from your peso Total Balance." },
     entry: { t: "Entry Price", b: "The price of the coin when you bought (or plan to buy) it, per 1 whole coin. It\u2019s in the row\u2019s currency: \u20b1 for PHP rows, $ for USDT/USDC rows." },
     invested: { t: "Invested", b: "The amount you put into this row, in the row\u2019s currency (\u20b1 for PHP, $ for USDT/USDC). This is the only field you edit \u2014 the rest are calculated for you." },
@@ -1661,41 +1839,39 @@
         }
       });
 
-      // per-card stat (uses the coin's dominant currency)
-      const cardCcy = s.ccy || "PHP";
-      const card = document.getElementById("chart_" + coinId);
-      if (card) {
-        const cardEl = card.closest(".coin-card");
+      // Per-card stat block. Each card (platform section) gets its own platform-scoped sums.
+      forEachCoinCard(coinId, (cardEl) => {
+        const platArg = cardPlatformArg(cardEl);
+        const cs = sums(coinId, platArg);        // platform-scoped stats for THIS card
+        const cardCcy = cs.ccy || "PHP";
         const a = cardEl.querySelector('[data-role="active"]');
         const p = cardEl.querySelector('[data-role="pending"]');
-        if (a) a.textContent = fmtPlain(s.active);
-        if (p) p.textContent = fmtPlain(s.pending);
+        if (a) a.textContent = fmtPlain(cs.active);
+        if (p) p.textContent = fmtPlain(cs.pending);
 
-        // average buy price + DCA note (how market compares to your average)
         const avgEl = cardEl.querySelector('[data-role="avg"]');
         if (avgEl) {
           avgEl.style.display = "block";
-          if (s.avgPrice != null) {
-            let dca = "Avg buy price: <b>" + fmtMoney(s.avgPrice, cardCcy) + "</b>";
-            if (s.hasMarket) {
+          if (cs.avgPrice != null) {
+            let dca = "Avg buy price: <b>" + fmtMoney(cs.avgPrice, cardCcy) + "</b>";
+            if (cs.hasMarket) {
               const mkt = mktPrice(coinId, cardCcy);
-              const gap = ((mkt - s.avgPrice) / s.avgPrice) * 100;
-              const detail = (mkt < s.avgPrice)
+              const gap = ((mkt - cs.avgPrice) / cs.avgPrice) * 100;
+              const detail = (mkt < cs.avgPrice)
                 ? " \u2014 market is " + Math.abs(gap).toFixed(1) + "% below your average (buying now lowers it)"
                 : " \u2014 market is " + gap.toFixed(1) + "% above your average";
               dca += '<span class="adv-only">' + detail + '</span>';
             }
-            if (s.mixed) dca += '<span class="adv-only" style="color:var(--muted)"> \u2014 note: this coin has rows in more than one currency; card shows ' + cardCcy + ' rows</span>';
+            if (cs.mixed) dca += '<span class="adv-only" style="color:var(--muted)"> \u2014 note: this coin has rows in more than one currency; card shows ' + cardCcy + ' rows</span>';
             avgEl.innerHTML = dca;
           } else avgEl.innerHTML = "";
         }
-        // per-coin overall P/L (active only = coins you STILL hold)
-        const hasRealized = s.realized && Math.abs(s.realized) > 0.005;
+        const hasRealized = cs.realized && Math.abs(cs.realized) > 0.005;
         const plEl = cardEl.querySelector('[data-role="coinpl"]');
         if (plEl) {
-          if (s.hasMarket && s.active > 0) {
-            const diff = s.activeCurrent - s.active;
-            const pct = (diff / s.active) * 100;
+          if (cs.hasMarket && cs.active > 0) {
+            const diff = cs.activeCurrent - cs.active;
+            const pct = (diff / cs.active) * 100;
             const up = diff >= 0;
             plEl.style.display = "block";
             plEl.className = "coin-pl " + (up ? "up" : "down");
@@ -1703,21 +1879,17 @@
             plEl.textContent = (up ? "Up " : "Down ") + fmtMoney(Math.abs(diff), cardCcy) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)" + tail;
           } else { plEl.textContent = ""; }
         }
-
-        // realized profit (locked in from take-profit sells = cash that will not change)
         const realEl = cardEl.querySelector('[data-role="realized"]');
         if (realEl) {
           if (hasRealized) {
-            const up = s.realized >= 0;
+            const up = cs.realized >= 0;
             realEl.style.display = "block";
             realEl.className = "coin-pl " + (up ? "up" : "down");
-            realEl.textContent = "\u{1F4B0} Realized (cash, locked in): " + (up ? "+" : "\u2212") + fmtMoney(Math.abs(s.realized), cardCcy);
+            realEl.textContent = "\u{1F4B0} Realized (cash, locked in): " + (up ? "+" : "\u2212") + fmtMoney(Math.abs(cs.realized), cardCcy);
           } else { realEl.textContent = ""; }
         }
-
-        // what-if calculator (per coin)
-        renderWhatIf(cardEl, coinId, s);
-      }
+        renderWhatIf(cardEl, coinId, cs);
+      });
     });
     document.getElementById("grandPending").textContent = fmtPlain(totalPending);
     document.getElementById("grandCurrent").textContent = anyMarket ? fmtPeso(totalCurrent) : "\u2014";
@@ -1888,60 +2060,66 @@
 
   function applyPrices() {
     state.coins.forEach(coinId => {
-      const card = document.getElementById("chart_" + coinId);
-      if (!card) return;
-      const cardEl = card.closest(".coin-card");
       const m = market[coinId];
-      const priceEl = cardEl.querySelector('[data-role="price"]');
-      const chgEl = cardEl.querySelector('[data-role="chg"]');
-      if (m) {
-        // Show the header price in this coin's dominant row currency.
-        const cardCcy = sums(coinId).ccy || "PHP";
-        const p = mktPrice(coinId, cardCcy);
-        priceEl.textContent = p != null ? fmtMoney(p, cardCcy) : "\u2014";
-        if (m.change24h != null) {
-          const up = m.change24h >= 0;
-          chgEl.textContent = (up ? "\u25b2 +" : "\u25bc ") + m.change24h.toFixed(2) + "% (24h)";
-          chgEl.className = "chg " + (up ? "up" : "down");
+      forEachCoinCard(coinId, (cardEl, platform) => {
+        const platArg = cardPlatformArg(cardEl);
+        const priceEl = cardEl.querySelector('[data-role="price"]');
+        const chgEl = cardEl.querySelector('[data-role="chg"]');
+        if (m) {
+          // Header price in this card's (platform-scoped) dominant row currency.
+          const cardCcy = sums(coinId, platArg).ccy || "PHP";
+          const p = mktPrice(coinId, cardCcy);
+          if (priceEl) priceEl.textContent = p != null ? fmtMoney(p, cardCcy) : "\u2014";
+          if (chgEl && m.change24h != null) {
+            const up = m.change24h >= 0;
+            chgEl.textContent = (up ? "\u25b2 +" : "\u25bc ") + m.change24h.toFixed(2) + "% (24h)";
+            chgEl.className = "chg " + (up ? "up" : "down");
+          }
         }
-      }
-      // recompute rows
-      cardEl.querySelectorAll("tbody tr[data-idx]").forEach(tr => {
-        updateRowComputed(coinId, parseInt(tr.getAttribute("data-idx"), 10), tr);
+        // recompute rows in this card
+        cardEl.querySelectorAll("tbody tr[data-idx]").forEach(tr => {
+          updateRowComputed(coinId, parseInt(tr.getAttribute("data-idx"), 10), tr);
+        });
       });
     });
     updateTotals();
     checkAlerts();            // notify on Take-profit / Ready-to-buy signals
   }
 
-  // ---------- Charts (per coin) ----------
-  function setChartStatus(coinId, msg, isErr) {
-    const canvas = document.getElementById("chart_" + coinId);
+  // ---------- Charts (per rendered card) ----------
+  // Status/draw operate on a specific card KEY so duplicate coins (one per platform
+  // section) each get their own chart. charts[] is keyed by card key.
+  function setChartStatus(key, msg, isErr) {
+    const canvas = document.getElementById("chart_" + key);
     if (!canvas) return;
     const box = canvas.parentElement;
-    // only show a status overlay if there's no chart drawn yet
-    if (charts[coinId]) return;
+    if (charts[key]) return; // chart already drawn
     let s = box.querySelector(".chart-status");
     if (!s) { s = document.createElement("div"); s.className = "chart-status"; box.appendChild(s); }
     s.textContent = msg;
     s.classList.toggle("err", !!isErr);
     canvas.style.display = "none";
   }
-  function clearChartStatus(coinId) {
-    const canvas = document.getElementById("chart_" + coinId);
+  function clearChartStatus(key) {
+    const canvas = document.getElementById("chart_" + key);
     if (!canvas) return;
     const s = canvas.parentElement.querySelector(".chart-status");
     if (s) s.remove();
     canvas.style.display = "";
   }
 
+  // Fetch chart data once for a coin, then draw into EVERY card showing that coin.
   async function loadChart(coinId) {
-    const canvas = document.getElementById("chart_" + coinId);
-    if (!canvas) return;
+    const cards = coinCards(coinId);
+    if (!cards.length) return;
     const days = ranges[coinId] || 7;
     const type = chartTypes[coinId] || "line";
     const lib = libById(coinId) || { color: "#888" };
     const isShort = days < 1;
+    const keys = cards.map(c => c.getAttribute("data-key"));
+
+    const drawAll = (points) => { keys.forEach(k => { clearChartStatus(k); drawChart(k, coinId, points, days, lib.color, type === "candle" && points[0] && points[0].o != null ? "candle" : "line"); }); showInsight(coinId, points, days); };
+    const failAll = () => keys.forEach(k => setChartStatus(k, "Chart unavailable right now (rate-limited). Will retry.", true));
 
     // Short intraday windows reuse the 1-day line data (no extra API call, no rate-limit).
     if (isShort) {
@@ -1956,12 +2134,11 @@
           if (raw.length) { base = raw.map(p => ({ t: p[0], y: p[1] })); cacheSet(oneDayKey, base); }
         }
       } catch (e) { /* use cache if we have it */ }
-      if (!base || !base.length) { setChartStatus(coinId, "Chart unavailable right now (rate-limited). Will retry.", true); return; }
+      if (!base || !base.length) { failAll(); return; }
       const cutoff = Date.now() - days * 24 * 3600 * 1000;
       let points = base.filter(p => p.t >= cutoff);
       if (points.length < 2) points = base.slice(-Math.max(2, Math.ceil(base.length * days)));
-      clearChartStatus(coinId);
-      drawChart(coinId, points, days, lib.color, "line");
+      keys.forEach(k => { clearChartStatus(k); drawChart(k, coinId, points, days, lib.color, "line"); });
       showInsight(coinId, points, days);
       return;
     }
@@ -1970,7 +2147,6 @@
     try {
       let points;
       if (type === "candle") {
-        // OHLC: [ time, open, high, low, close ]
         const j = await fetchJson("https://api.coingecko.com/api/v3/coins/" + coinId + "/ohlc?vs_currency=php&days=" + days);
         if (!Array.isArray(j) || !j.length) throw new Error("no data");
         points = j.map(p => ({ t: p[0], o: p[1], h: p[2], l: p[3], c: p[4] }));
@@ -1981,13 +2157,12 @@
         points = raw.map(p => ({ t: p[0], y: p[1] }));
       }
       cacheSet(cacheKey, points);
-      clearChartStatus(coinId);
-      drawChart(coinId, points, days, lib.color, type);
+      keys.forEach(k => { clearChartStatus(k); drawChart(k, coinId, points, days, lib.color, type); });
       showInsight(coinId, points, days);
     } catch (e) {
       const c = cacheGet(cacheKey);
-      if (c && c.v && c.v.length) { clearChartStatus(coinId); drawChart(coinId, c.v, days, lib.color, type); showInsight(coinId, c.v, days); }
-      else setChartStatus(coinId, "Chart unavailable right now (rate-limited). Will retry.", true);
+      if (c && c.v && c.v.length) { keys.forEach(k => { clearChartStatus(k); drawChart(k, coinId, c.v, days, lib.color, type); }); showInsight(coinId, c.v, days); }
+      else failAll();
     }
   }
 
@@ -2002,14 +2177,12 @@
 
   // Build an "insight" of what happened over the window from the price points.
   function showInsight(coinId, points, days) {
-    const card = document.getElementById("chart_" + coinId);
-    if (!card) return;
-    const el = card.closest(".coin-card").querySelector('[data-role="insight"]');
-    if (!el) return;
-    if (!points || points.length < 2) { el.innerHTML = ""; return; }
+    const els = coinCards(coinId).map(c => c.querySelector('[data-role="insight"]')).filter(Boolean);
+    if (!els.length) return;
+    if (!points || points.length < 2) { els.forEach(el => el.innerHTML = ""); return; }
 
     const vals = points.map(p => (p.y != null ? p.y : p.c)).filter(v => isFinite(v));
-    if (vals.length < 2) { el.innerHTML = ""; return; }
+    if (vals.length < 2) { els.forEach(el => el.innerHTML = ""); return; }
     const first = vals[0], last = vals[vals.length - 1];
     const hi = Math.max(...vals), lo = Math.min(...vals);
     const diff = last - first;
@@ -2032,25 +2205,28 @@
 
     const arrow = up ? "\u25b2" : "\u25bc";
     const color = up ? "var(--green)" : "var(--red)";
-    el.innerHTML =
+    const html =
       '<div class="ins-head">In the last ' + rangeLabel(days) + ':</div>' +
       '<div class="ins-body">' + libById(coinId).sym + ' ' + word +
       ' <span style="color:' + color + '">' + arrow + ' ' + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(2) + '%</span> ' +
       '(' + fmtPeso(first) + ' \u2192 ' + fmtPeso(last) + ').<br>' +
       'High ' + fmtPeso(hi) + ' \u00b7 Low ' + fmtPeso(lo) + '.' + volNote + '</div>';
+    els.forEach(el => el.innerHTML = html);
   }
 
   function showRange(coinId) {
-    const card = document.getElementById("chart_" + coinId);
-    if (!card || !stats[coinId]) return;
-    const rangeEl = card.closest(".coin-card").querySelector('[data-role="range"]');
-    if (rangeEl) rangeEl.innerHTML = "30d range: <b>" + fmtPeso(stats[coinId].low30) + "</b> &ndash; <b>" + fmtPeso(stats[coinId].high30) + "</b> (entry suggestion basis)";
+    if (!stats[coinId]) return;
+    const html = "30d range: <b>" + fmtPeso(stats[coinId].low30) + "</b> &ndash; <b>" + fmtPeso(stats[coinId].high30) + "</b> (entry suggestion basis)";
+    coinCards(coinId).forEach(cardEl => {
+      const rangeEl = cardEl.querySelector('[data-role="range"]');
+      if (rangeEl) rangeEl.innerHTML = html;
+    });
   }
   function refreshRows(coinId) {
-    const card = document.getElementById("chart_" + coinId);
-    if (!card) return;
-    card.closest(".coin-card").querySelectorAll("tbody tr[data-idx]").forEach(tr => {
-      updateRowComputed(coinId, parseInt(tr.getAttribute("data-idx"), 10), tr);
+    coinCards(coinId).forEach(cardEl => {
+      cardEl.querySelectorAll("tbody tr[data-idx]").forEach(tr => {
+        updateRowComputed(coinId, parseInt(tr.getAttribute("data-idx"), 10), tr);
+      });
     });
   }
 
@@ -2178,12 +2354,10 @@
   }
 
   function showMarketMood(coinId) {
-    const card = document.getElementById("chart_" + coinId);
-    if (!card) return;
-    const el = card.closest(".coin-card").querySelector('[data-role="mood"]');
-    if (!el) return;
+    const els = coinCards(coinId).map(c => c.querySelector('[data-role="mood"]')).filter(Boolean);
+    if (!els.length) return;
     const m = marketMood(coinId);
-    if (!m) { el.innerHTML = ""; return; }
+    if (!m) { els.forEach(el => el.innerHTML = ""); return; }
     const rsiTxt = m.rsi != null ? "RSI " + Math.round(m.rsi) : "";
     const trendTxt = m.trendUp == null ? "" : (m.trendUp ? " \u00b7 trend \u25b2" : " \u00b7 trend \u25bc");
     // market structure line (higher highs / lower lows)
@@ -2193,18 +2367,21 @@
       structHtml = '<div style="margin-top:5px"><span class="badge ' + st.cls + '">' + st.trend + '</span> ' +
         '<span style="color:var(--muted);font-size:11px">' + st.label + '</span></div>';
     }
-    el.innerHTML =
+    const moodHtml =
       '<span class="badge ' + m.cls + '">' + m.mood + '</span> ' +
       '<span style="color:var(--muted);font-size:11px">' + rsiTxt + trendTxt + '</span>' +
       '<div style="color:var(--muted);font-size:11px;margin-top:3px">' + m.note + '</div>' +
       structHtml;
+    els.forEach(el => el.innerHTML = moodHtml);
   }
 
   function show24(coinId) {
-    const card = document.getElementById("chart_" + coinId);
-    if (!card || !stats[coinId] || stats[coinId].high24 == null) return;
-    const el = card.closest(".coin-card").querySelector('[data-role="hl24"]');
-    if (el) el.innerHTML = "24h high: <b>" + fmtPeso(stats[coinId].high24) + "</b> &middot; low: <b>" + fmtPeso(stats[coinId].low24) + "</b>";
+    if (!stats[coinId] || stats[coinId].high24 == null) return;
+    const html = "24h high: <b>" + fmtPeso(stats[coinId].high24) + "</b> &middot; low: <b>" + fmtPeso(stats[coinId].low24) + "</b>";
+    coinCards(coinId).forEach(cardEl => {
+      const el = cardEl.querySelector('[data-role="hl24"]');
+      if (el) el.innerHTML = html;
+    });
   }
 
   // Inline plugin: draws a dashed horizontal "break-even" line at the average buy price.
@@ -2243,19 +2420,22 @@
     }
   };
 
-  function drawChart(coinId, points, days, color, type) {
-    const canvas = document.getElementById("chart_" + coinId);
+  function drawChart(key, coinId, points, days, color, type) {
+    const canvas = document.getElementById("chart_" + key);
     if (!canvas || typeof Chart === "undefined") return;
-    if (charts[coinId]) { charts[coinId].destroy(); }
+    if (charts[key]) { charts[key].destroy(); }
     const ctx = canvas.getContext("2d");
-    const breakEven = (sums(coinId).avgPrice) || null;  // average buy price for this coin
+    // Break-even = average buy price for THIS card's platform (so each card's line is correct).
+    const cardEl = canvas.closest(".coin-card");
+    const platArg = cardEl ? cardPlatformArg(cardEl) : undefined;
+    const breakEven = (sums(coinId, platArg).avgPrice) || null;
 
     // ----- Candlestick mode -----
     // Requires the financial chart plugin (auto-registers) + a time-scale date adapter.
     if (type === "candle" && points.length && points[0].o != null && candlesReady()) {
       try {
         const data = points.map(p => ({ x: p.t, o: p.o, h: p.h, l: p.l, c: p.c }));
-        charts[coinId] = new Chart(ctx, {
+        charts[key] = new Chart(ctx, {
           type: "candlestick",
           data: { datasets: [{
             data: data,
@@ -2284,7 +2464,7 @@
         return;
       } catch (err) {
         // fall through to line chart if candlestick fails to render
-        if (charts[coinId]) { try { charts[coinId].destroy(); } catch (e) {} charts[coinId] = null; }
+        if (charts[key]) { try { charts[key].destroy(); } catch (e) {} charts[key] = null; }
       }
     }
 
@@ -2305,7 +2485,7 @@
     grad.addColorStop(0, (up ? "rgba(52,211,153,0.28)" : "rgba(255,107,107,0.28)"));
     grad.addColorStop(1, "rgba(0,0,0,0)");
 
-    charts[coinId] = new Chart(ctx, {
+    charts[key] = new Chart(ctx, {
       type: "line",
       data: { labels: labels, datasets: [{
         data: yvals, borderColor: lineColor, backgroundColor: grad,
@@ -2371,7 +2551,13 @@
     if (!confirm("Remove " + lib.sym + " and all its rows?")) return;
     state.coins = state.coins.filter(c => c !== coinId);
     delete state.rows[coinId];
-    if (charts[coinId]) { charts[coinId].destroy(); delete charts[coinId]; }
+    // Destroy any charts belonging to this coin (one per platform section it had).
+    Object.keys(charts).forEach(k => {
+      if (k === coinId || k.indexOf(coinId + "__") === 0) {
+        try { charts[k].destroy(); } catch (e) {}
+        delete charts[k];
+      }
+    });
     saveState();
     render();
   }
@@ -2615,7 +2801,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 51;
+  const APP_VERSION = 52;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
