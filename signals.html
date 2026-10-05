@@ -265,6 +265,30 @@
     return 100 - (100 / (1 + rs));
   }
 
+  // Exponential moving average over an array.
+  function ema(values, period) {
+    if (!values.length) return [];
+    const k = 2 / (period + 1);
+    const out = [values[0]];
+    for (let i = 1; i < values.length; i++) out.push(values[i] * k + out[i - 1] * (1 - k));
+    return out;
+  }
+  // MACD (12/26/9). Downsamples to ~daily points so it reflects days, not minutes.
+  // Returns { macd, signal, hist, bullish } or null if not enough data.
+  function computeMACD(values) {
+    const step = Math.max(1, Math.floor(values.length / 60));
+    const v = [];
+    for (let i = 0; i < values.length; i += step) v.push(values[i]);
+    if (v.length < 35) return null; // need enough points for 26 EMA + 9 signal
+    const ema12 = ema(v, 12), ema26 = ema(v, 26);
+    const macdLine = v.map((_, i) => ema12[i] - ema26[i]);
+    const signalLine = ema(macdLine, 9);
+    const macd = macdLine[macdLine.length - 1];
+    const signal = signalLine[signalLine.length - 1];
+    const hist = macd - signal;         // >0 = bullish momentum, <0 = bearish
+    return { macd, signal, hist, bullish: hist >= 0 };
+  }
+
   // Fetch with retry + backoff. CoinGecko's free tier rate-limits (HTTP 429),
   // so we wait longer and try again instead of silently skipping the coin.
   async function fetchJson(url, tries) {
@@ -309,6 +333,7 @@
     const sma30 = ys.reduce((a, b) => a + b, 0) / ys.length;
     const range = high30 - low30;
     const posn = range > 0 ? (last - low30) / range : 0.5; // 0 = at low, 1 = at high
+    const macd = computeMACD(ys);
 
     let score = 0;
     const reasons = [];
@@ -327,6 +352,11 @@
     if (sma7 < sma30 * 0.98) { score += 1; reasons.push("short-term trend down"); }
     else if (sma7 > sma30 * 1.02) { score -= 1; reasons.push("short-term trend up"); }
     else { reasons.push("flat trend"); }
+    // MACD momentum factor (12/26/9). Bullish crossover leans BUY, bearish leans SELL.
+    if (macd) {
+      if (macd.bullish) { score += 1; reasons.push("MACD bullish"); }
+      else { score -= 1; reasons.push("MACD bearish"); }
+    }
 
     let verdict, cls;
     if (score >= 2) { verdict = "BUY ZONE"; cls = "buy"; }
@@ -340,7 +370,8 @@
     const sellHere = high30 - range * 0.25;
 
     return { coinId, last, low30, high30, rsi, posn, sma7, sma30, score, reasons, verdict, cls, buyHere, sellHere,
-             ccy: ccy || "PHP", phpRate: phpRate || null, entries: entries || [] };
+             ccy: ccy || "PHP", phpRate: phpRate || null, entries: entries || [],
+             macdBullish: macd ? macd.bullish : null };
   }
 
   // Builds the inner HTML of a card (separated so we can update in place w/o a full rebuild).
@@ -371,6 +402,7 @@
       '<div class="why"><b>Why:</b> ' + sig.reasons.join(" \u00b7 ") + '.</div>' +
       '<div class="metrics">' +
         '<span class="metric">RSI ' + (sig.rsi != null ? sig.rsi.toFixed(0) : "\u2014") + '</span>' +
+        (sig.macdBullish != null ? '<span class="metric">MACD ' + (sig.macdBullish ? "\u25b2 bullish" : "\u25bc bearish") + '</span>' : '') +
         '<span class="metric">30d low ' + (isUsd ? fmtUsd(sig.low30) : fmtPeso(sig.low30)) + '</span>' +
         '<span class="metric">30d high ' + (isUsd ? fmtUsd(sig.high30) : fmtPeso(sig.high30)) + '</span>' +
         '<span class="metric">now ' + (sig.posn * 100).toFixed(0) + '% of range</span>' +

@@ -197,6 +197,21 @@
   .grand .lbl { color: var(--muted); font-size: 14px; }
   .grand .val { color: var(--gold-bright); font-size: 18px; font-weight: 800; }
   .grand .row.big .val { font-size: 21px; }
+  #grandRealizedRow .val.up { color: var(--green); } #grandRealizedRow .val.down { color: var(--red); }
+
+  /* Allocation breakdown */
+  .alloc-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-top: 14px; }
+  .alloc-title { font-size: 13px; font-weight: 800; color: var(--gold-bright); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 10px; }
+  .alloc-section { margin-bottom: 12px; }
+  .alloc-section:last-child { margin-bottom: 0; }
+  .alloc-sub { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; margin-bottom: 6px; }
+  .alloc-row { margin-bottom: 8px; }
+  .alloc-row .top { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 3px; }
+  .alloc-row .nm { font-weight: 600; }
+  .alloc-row .pct { color: var(--gold-bright); font-weight: 700; }
+  .alloc-row .amt { color: var(--muted); font-size: 11px; margin-left: 6px; font-weight: 400; }
+  .alloc-bar { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+  .alloc-bar .fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--gold), var(--gold-bright)); }
 
   .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center; margin-top: 20px; font-size: 11px; color: var(--muted); }
   .legend .item { display: inline-flex; align-items: center; gap: 5px; }
@@ -250,6 +265,11 @@
   }
   .platform-toggle .pf-btn:hover:not(.active) { border-color: var(--gold); color: var(--text); }
   .platform-toggle .pf-btn.active { background: var(--gold); color: #000; border-color: var(--gold); }
+  .platform-toggle .coin-sort { width: 100%; display: flex; justify-content: center; margin-top: 4px; }
+  .platform-toggle .coin-sort select {
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; font-size: 12px; padding: 6px 14px; cursor: pointer; width: auto;
+  }
 
   /* Platform section header + subtotal (shown in "All" view) */
   .platform-head {
@@ -493,6 +513,14 @@
     <div class="row"><span class="lbl">Current Value of Active (all) <span class="help" data-help="current">?</span></span><span class="val" id="grandCurrent">&mdash;</span></div>
     <div class="row big"><span class="lbl">Total Balance (active + pending) <span class="help" data-help="balance">?</span></span><span class="val" id="grandBalance">&mdash;</span></div>
     <div class="row" id="grandUsdRow" style="display:none"><span class="lbl">USDT/USDC holdings (kept separate)</span><span class="val" id="grandUsd">&mdash;</span></div>
+    <div class="row" id="grandRealizedRow" style="display:none"><span class="lbl">&#128176; Realized profit (cashed out, lifetime)</span><span class="val" id="grandRealized">&mdash;</span></div>
+  </div>
+
+  <!-- ALLOCATION BREAKDOWN -->
+  <div class="alloc-card adv-only" id="allocCard" style="display:none">
+    <div class="alloc-title">Allocation</div>
+    <div class="alloc-section"><div class="alloc-sub">By coin (current value)</div><div id="allocByCoin"></div></div>
+    <div class="alloc-section" id="allocPlatWrap"><div class="alloc-sub">By platform</div><div id="allocByPlatform"></div></div>
   </div>
 
   <div class="reminder" id="reminder"></div>
@@ -695,6 +723,8 @@
   function rowPlatform(row) { const p = row && row.platform; return PLATFORMS.indexOf(p) >= 0 ? p : "Coins.ph"; }
   // Current platform filter for the whole view: "all" | "Coins.ph" | "Binance".
   let platformFilter = "all";
+  // How to order coin cards within each section: "default" | "value" | "pl".
+  let coinSort = "default";
 
   // ---------- Multi-currency (per-row base currency) ----------
   // A row can be bought in PHP, USDT, or USDC. USDT/USDC are ~$1 stablecoins,
@@ -736,7 +766,28 @@
     return (state.rows[coinId] || []).some(r => rowPlatform(r) === platform);
   }
 
-  // Platform toggle: All / Coins.ph / Binance
+  // Order a list of coin ids by the active coinSort. "value" = current PHP value desc,
+  // "pl" = unrealized P/L % desc. `platform` scopes the stats to that section.
+  function sortCoinList(ids, platform) {
+    if (coinSort === "default") return ids;
+    const metric = (id) => {
+      const s = sums(id, platform);
+      // PHP-normalize current value across currency buckets for a fair comparison
+      let val = 0, invested = 0, cur = 0;
+      Object.keys(s.byCcy).forEach(ccy => {
+        const b = s.byCcy[ccy];
+        const fx = ccy === "PHP" ? 1 : (usdToPhp(id) || 0);
+        const c = (b.hasMarket ? b.activeCurrent : b.active) * fx;
+        val += c; invested += b.active * fx; cur += c;
+      });
+      if (coinSort === "value") return val;
+      if (coinSort === "pl") return invested > 0 ? ((cur - invested) / invested) * 100 : -Infinity;
+      return 0;
+    };
+    return ids.slice().sort((a, b) => metric(b) - metric(a));
+  }
+
+  // Platform toggle: All / Coins.ph / Binance  (+ a coin-card sort selector)
   function renderPlatformToggle() {
     const host = document.getElementById("platformToggle");
     if (!host) return;
@@ -748,6 +799,19 @@
       b.onclick = () => { platformFilter = val; render(); };
       host.appendChild(b);
     });
+    // Sort selector (advanced-only to keep Simple view clean)
+    const sortWrap = document.createElement("div");
+    sortWrap.className = "coin-sort adv-only";
+    const sel = document.createElement("select");
+    sel.className = "cell-input";
+    [["default", "Sort: Added"], ["value", "Sort: Biggest value"], ["pl", "Sort: Best P/L"]].forEach(([v, label]) => {
+      const o = document.createElement("option"); o.value = v; o.textContent = label;
+      if (coinSort === v) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => { coinSort = sel.value; render(); };
+    sortWrap.appendChild(sel);
+    host.appendChild(sortWrap);
   }
 
   // A heading row that labels a platform section (shown only in "All" view).
@@ -802,8 +866,9 @@
     if (platformFilter === "all") {
       // Separate section per platform, each with its own heading + subtotal.
       PLATFORMS.forEach(platform => {
-        const coinsHere = state.coins.filter(id => coinHasPlatform(id, platform));
+        let coinsHere = state.coins.filter(id => coinHasPlatform(id, platform));
         if (!coinsHere.length) return;
+        coinsHere = sortCoinList(coinsHere, platform);
         container.appendChild(buildPlatformHeader(platform));
         coinsHere.forEach(coinId => container.appendChild(buildCoinCard(coinId, platform)));
         container.appendChild(buildPlatformSubtotal(platform));
@@ -820,7 +885,7 @@
         empty.textContent = "No " + platformFilter + " holdings yet. Switch the platform on a row, or add one.";
         container.appendChild(empty);
       } else {
-        coinsHere.forEach(coinId => container.appendChild(buildCoinCard(coinId, platformFilter)));
+        sortCoinList(coinsHere, platformFilter).forEach(coinId => container.appendChild(buildCoinCard(coinId, platformFilter)));
       }
     }
 
@@ -1909,6 +1974,11 @@
       }
     }
 
+    // ----- Total Realized profit (lifetime cash from take-profits), PHP + USD -----
+    renderRealizedTotal();
+    // ----- Allocation breakdown (by coin + by platform) -----
+    renderAllocation();
+
     // Plain-language summary (PHP holdings only)
     renderPlain(totalActiveInvested, totalCurrent, totalPending, anyMarket);
     // Total Balance = current value of active PHP holdings + PHP pending money set aside
@@ -1921,6 +1991,82 @@
     renderReminder(totalActiveInvested, totalPending);
     if (anyMarket) recordHistory(totalBalance);
     renderHistory();
+  }
+
+  // ---------- Total Realized profit (lifetime, from all take-profit sells) ----------
+  function renderRealizedTotal() {
+    let phpReal = 0, usdReal = 0;
+    state.coins.forEach(coinId => {
+      const s = sums(coinId);
+      const php = s.byCcy["PHP"]; if (php) phpReal += php.realized;
+      ["USDT", "USDC"].forEach(c => { const u = s.byCcy[c]; if (u) usdReal += u.realized; });
+    });
+    const row = document.getElementById("grandRealizedRow");
+    const el = document.getElementById("grandRealized");
+    if (!row || !el) return;
+    const hasAny = Math.abs(phpReal) > 0.005 || Math.abs(usdReal) > 0.005;
+    if (!hasAny) { row.style.display = "none"; return; }
+    row.style.display = "";
+    const up = (phpReal + usdReal) >= 0;
+    let txt = (phpReal >= 0 ? "+" : "\u2212") + fmtMoney(Math.abs(phpReal), "PHP");
+    if (Math.abs(usdReal) > 0.005) txt += ' <span style="font-size:11px;color:var(--muted);font-weight:400">+ ' + (usdReal >= 0 ? "" : "\u2212") + fmtMoney(Math.abs(usdReal), "USDT") + '</span>';
+    el.className = "val " + (up ? "up" : "down");
+    el.innerHTML = txt;
+  }
+
+  // ---------- Allocation breakdown (by coin + by platform, by current value) ----------
+  function renderAllocation() {
+    const card = document.getElementById("allocCard");
+    if (!card) return;
+    // Current peso value of each coin's ACTIVE holdings (USD converted to PHP for one comparable scale).
+    function coinPhpValue(coinId, platform) {
+      const s = sums(coinId, platform);
+      let v = 0;
+      const php = s.byCcy["PHP"];
+      if (php && php.hasMarket) v += php.activeCurrent; else if (php) v += php.active;
+      ["USDT", "USDC"].forEach(c => {
+        const u = s.byCcy[c]; if (!u) return;
+        const base = u.hasMarket ? u.activeCurrent : u.active;
+        const fx = usdToPhp(coinId);
+        v += fx != null ? base * fx : 0;
+      });
+      return v;
+    }
+    // by coin
+    const coinVals = state.coins.map(id => ({ id, v: coinPhpValue(id) })).filter(x => x.v > 0);
+    const totalV = coinVals.reduce((a, b) => a + b.v, 0);
+    if (totalV <= 0) { card.style.display = "none"; return; }
+    card.style.display = "";
+    coinVals.sort((a, b) => b.v - a.v);
+    const coinHost = document.getElementById("allocByCoin");
+    coinHost.innerHTML = coinVals.map(x => {
+      const lib = libById(x.id) || { sym: x.id };
+      const pct = (x.v / totalV) * 100;
+      return allocRow(lib.sym, pct, x.v);
+    }).join("");
+
+    // by platform
+    const platWrap = document.getElementById("allocPlatWrap");
+    const platHost = document.getElementById("allocByPlatform");
+    const platVals = PLATFORMS.map(p => {
+      let v = 0; state.coins.forEach(id => { v += coinPhpValue(id, p); });
+      return { p, v };
+    }).filter(x => x.v > 0);
+    if (platVals.length > 1) {
+      platWrap.style.display = "";
+      const totP = platVals.reduce((a, b) => a + b.v, 0);
+      platVals.sort((a, b) => b.v - a.v);
+      platHost.innerHTML = platVals.map(x => allocRow(x.p, (x.v / totP) * 100, x.v)).join("");
+    } else {
+      platWrap.style.display = "none";
+    }
+  }
+  function allocRow(name, pct, phpVal) {
+    return '<div class="alloc-row">' +
+      '<div class="top"><span class="nm">' + name + '<span class="amt">' + fmtPeso(phpVal) + '</span></span>' +
+      '<span class="pct">' + pct.toFixed(1) + '%</span></div>' +
+      '<div class="alloc-bar"><div class="fill" style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' +
+    '</div>';
   }
 
   // ---------- What-if calculator (#13) ----------
@@ -2801,7 +2947,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 52;
+  const APP_VERSION = 53;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
