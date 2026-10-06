@@ -238,6 +238,30 @@
     font: inherit; font-size: 12px; border-radius: 8px; padding: 6px 10px; margin: 2px 0 10px; }
   .coin-note-input::placeholder { color: var(--muted); }
 
+  /* Risk badge */
+  .risk-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    letter-spacing: .3px; margin-left: 8px; vertical-align: middle; }
+  .risk-badge.r-stable { background: rgba(39,161,123,0.18); color: #4fd1a5; }
+  .risk-badge.r-steady { background: rgba(79,140,255,0.18); color: #7fa8ff; }
+  .risk-badge.r-mid { background: rgba(245,197,66,0.18); color: var(--gold-bright); }
+  .risk-badge.r-high { background: rgba(255,107,107,0.18); color: #ff8a8a; }
+
+  /* Beginner plain-explain box per coin */
+  .coin-explain { background: linear-gradient(135deg, rgba(79,140,255,0.08), rgba(22,22,26,0.3));
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 2px 0 10px; font-size: 13px; line-height: 1.5; }
+  .coin-explain .big { font-weight: 800; font-size: 15px; }
+  .coin-explain .big.up { color: var(--green); } .coin-explain .big.down { color: var(--red); }
+  .coin-explain .calm { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .coin-explain .dca-help { margin-top: 8px; font-size: 12px; line-height: 1.6; }
+  .coin-explain .dca-input { width: 72px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 6px; padding: 3px 6px; font: inherit; font-size: 12px; }
+
+  /* Beginner journey + next-step */
+  .journey, .next-step { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px; margin-bottom: 14px; font-size: 13px; line-height: 1.5; }
+  .next-step { border-color: rgba(245,197,66,0.35); }
+  .next-step b { color: var(--gold-bright); }
+
   /* History platform toggle */
   .history-toggle { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 10px; }
   .history-toggle .hist-btn { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
@@ -530,6 +554,10 @@
     <div id="summaryLines"></div>
   </div>
 
+  <!-- BEGINNER: next-step guide + journey -->
+  <div id="nextStep" class="next-step" style="display:none"></div>
+  <div id="journey" class="journey" style="display:none"></div>
+
   <!-- QUICK STATS (today's change) + FEAR & GREED -->
   <div id="todayStat" class="today-stat" style="display:none"></div>
   <div id="fngWidget" class="fng" style="display:none"></div>
@@ -555,6 +583,7 @@
   <!-- ALLOCATION BREAKDOWN -->
   <div class="alloc-card adv-only" id="allocCard" style="display:none">
     <div class="alloc-title">Allocation</div>
+    <div class="alloc-donut-wrap" style="height:180px;margin-bottom:12px"><canvas id="allocDonut"></canvas></div>
     <div class="alloc-section"><div class="alloc-sub">By coin (current value)</div><div id="allocByCoin"></div></div>
     <div class="alloc-section" id="allocPlatWrap"><div class="alloc-sub">By platform</div><div id="allocByPlatform"></div></div>
   </div>
@@ -678,6 +707,18 @@
   ];
   function libById(id) { return COIN_LIBRARY.find(c => c.id === id); }
 
+  // Beginner-friendly risk read per coin. Stablecoins = safe; big caps = steadier;
+  // meme coins = very volatile; the rest = medium. Not advice, just a plain guide.
+  const RISK_STABLE = ["tether", "usd-coin"];
+  const RISK_STEADIER = ["bitcoin", "ethereum", "binancecoin"];
+  const RISK_HIGH = ["dogecoin", "shiba-inu", "pepe"];
+  function coinRisk(coinId) {
+    if (RISK_STABLE.indexOf(coinId) >= 0) return { label: "Stablecoin \u2014 stays near $1", cls: "r-stable", short: "Stable" };
+    if (RISK_STEADIER.indexOf(coinId) >= 0) return { label: "Larger, steadier coin", cls: "r-steady", short: "Steadier" };
+    if (RISK_HIGH.indexOf(coinId) >= 0) return { label: "Meme coin \u2014 very volatile, high risk", cls: "r-high", short: "High risk" };
+    return { label: "Mid-size coin \u2014 can swing a lot", cls: "r-mid", short: "Medium risk" };
+  }
+
   // ---------- Data model ----------
   // state.coins: ordered list of coin ids being tracked
   // state.rows[coinId]: array of { price, peso, pending }
@@ -714,6 +755,7 @@
   let sortMode = {};   // coinId -> "default" | "profit" | "price"
   let filterMode = {}; // coinId -> "all" | "active" | "pending"
   let historyChart = null;
+  let allocChart = null;   // doughnut of holdings allocation
   let whatIf = {};     // coinId -> target sell price for the what-if calculator
 
   // Is the candlestick controller available? (the financial plugin auto-registers it)
@@ -1061,10 +1103,11 @@
     // header
     const head = document.createElement("div");
     head.className = "coin-head";
+    const risk = coinRisk(coinId);
     head.innerHTML =
       '<button class="collapse-btn" title="Collapse / expand">' + (collapsed[coinId] ? "\u25b6" : "\u25bc") + '</button>' +
       '<span class="dot" style="background:' + lib.color + '"></span>' +
-      '<div><div class="name">' + lib.name + '</div><div class="sym">' + lib.sym + '</div></div>' +
+      '<div><div class="name">' + lib.name + '<span class="risk-badge ' + risk.cls + '" title="' + risk.label + '">' + risk.short + '</span></div><div class="sym">' + lib.sym + '</div></div>' +
       '<div class="price-box"><div class="price" data-role="price">\u2014</div>' +
       '<div class="chg" data-role="chg"></div></div>' +
       '<button class="remove-coin" title="Remove coin">\u00d7</button>';
@@ -1081,6 +1124,14 @@
     noteInput.value = state.coinNotes[coinId] || "";
     noteInput.oninput = () => { if (!state.coinNotes) state.coinNotes = {}; state.coinNotes[coinId] = noteInput.value; saveState(); };
     card.appendChild(noteInput);
+
+    // Beginner plain-language explain box (filled in updateTotals per card). Hidden in Advanced-only? No:
+    // we show it in BOTH views but keep it simple. It is marked collapsible so collapse hides it too.
+    const explain = document.createElement("div");
+    explain.className = "coin-explain collapsible";
+    explain.setAttribute("data-role", "explain");
+    explain.style.display = "none";
+    card.appendChild(explain);
 
     // range tabs
     // Short intraday windows (advanced) + standard ranges.
@@ -2059,6 +2110,8 @@
             realEl.textContent = "\u{1F4B0} Realized (cash, locked in): " + (up ? "+" : "\u2212") + fmtMoney(Math.abs(cs.realized), cardCcy);
           } else { realEl.textContent = ""; }
         }
+        // Beginner plain-language explain + avg-cost + calm note
+        renderCoinExplain(cardEl, coinId, cs, cardCcy);
         renderWhatIf(cardEl, coinId, cs);
       });
     });
@@ -2086,6 +2139,9 @@
     renderAllocation();
     // ----- Today's estimated change -----
     renderTodayChange();
+    // ----- Beginner journey + next-step guide -----
+    renderJourney();
+    renderNextStep(totalActiveInvested, totalCurrent, totalPending, anyMarket);
 
     // Plain-language summary (PHP holdings only)
     renderPlain(totalActiveInvested, totalCurrent, totalPending, anyMarket);
@@ -2152,6 +2208,8 @@
       const pct = (x.v / totalV) * 100;
       return allocRow(lib.sym, pct, x.v);
     }).join("");
+    // Donut chart of the same by-coin split
+    renderAllocDonut(coinVals);
 
     // by platform
     const platWrap = document.getElementById("allocPlatWrap");
@@ -2175,6 +2233,67 @@
       '<span class="pct">' + pct.toFixed(1) + '%</span></div>' +
       '<div class="alloc-bar"><div class="fill" style="width:' + Math.min(100, pct).toFixed(1) + '%"></div></div>' +
     '</div>';
+  }
+  // Doughnut chart of allocation by coin (coinVals = [{id, v}] already sorted).
+  function renderAllocDonut(coinVals) {
+    const canvas = document.getElementById("allocDonut");
+    if (!canvas || typeof Chart === "undefined") return;
+    const labels = coinVals.map(x => (libById(x.id) || { sym: x.id }).sym);
+    const data = coinVals.map(x => x.v);
+    const colors = coinVals.map(x => (libById(x.id) || { color: "#888" }).color);
+    if (allocChart) allocChart.destroy();
+    allocChart = new Chart(canvas.getContext("2d"), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#16161a", borderWidth: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: "62%",
+        plugins: {
+          legend: { position: "right", labels: { color: "#f2f2f7", font: { size: 11 }, boxWidth: 10, padding: 8 } },
+          tooltip: { callbacks: { label: (it) => it.label + ": \u20b1" + Number(it.parsed).toLocaleString("en-US", { maximumFractionDigits: 0 }) } }
+        }
+      }
+    });
+  }
+
+  // Beginner "journey" one-liner from portfolio history (first vs latest overall value).
+  function renderJourney() {
+    const el = document.getElementById("journey");
+    if (!el) return;
+    const hist = state.history || [];
+    if (hist.length < 2) { el.style.display = "none"; return; }
+    const first = hist[0].value, last = hist[hist.length - 1].value;
+    if (!(first > 0)) { el.style.display = "none"; return; }
+    const diff = last - first, pct = (diff / first) * 100, up = diff >= 0;
+    el.style.display = "block";
+    el.innerHTML = "\uD83D\uDCC8 Your journey: you started tracking at <b>" + fmtPeso(first) + "</b> and you\u2019re now at <b>" + fmtPeso(last) + "</b> \u2014 " +
+      '<b style="color:' + (up ? "var(--green)" : "var(--red)") + '">' + (up ? "up " : "down ") + fmtPeso(Math.abs(diff)) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)</b> overall.";
+  }
+
+  // Beginner "what should I do now?" guide based on current state.
+  function renderNextStep(totalActiveInvested, totalCurrent, totalPending, anyMarket) {
+    const el = document.getElementById("nextStep");
+    if (!el) return;
+    let msg = "";
+    const hasCoins = state.coins.length > 0;
+    const hasAnyRow = state.coins.some(id => (state.rows[id] || []).length > 0);
+    if (!hasCoins) {
+      msg = "<b>Start here:</b> tap \u201c+ Add cryptocurrency\u201d below to add your first coin (e.g. Bitcoin or Ethereum).";
+    } else if (!hasAnyRow) {
+      msg = "<b>Next step:</b> open a coin and tap \u201c+ Add row\u201d to log where you bought (or plan to buy). Then you\u2019ll see your profit/loss here.";
+    } else if (anyMarket && totalActiveInvested > 0) {
+      const diff = totalCurrent - totalActiveInvested;
+      if (diff >= 0) {
+        msg = "<b>You\u2019re in profit.</b> Nothing to do \u2014 holding is fine. If a coin hits a signal you like, you can take some profit. Never invest more than you can afford to lose.";
+      } else {
+        msg = "<b>You\u2019re down right now.</b> That\u2019s normal \u2014 it\u2019s only a paper loss until you sell. Avoid panic-selling; many beginners just hold and keep learning.";
+      }
+    } else if (totalPending > 0) {
+      msg = "<b>Waiting to buy:</b> you have pending orders. They\u2019ll fill when the price reaches your target. Prices update automatically.";
+    } else {
+      el.style.display = "none"; return;
+    }
+    el.style.display = "block";
+    el.innerHTML = "\uD83E\uDDED " + msg;
   }
 
   // ---------- Today's change (estimated 24h move of active PHP holdings) ----------
@@ -2229,6 +2348,78 @@
         '<div class="meta"><div class="lbl">Crypto Fear &amp; Greed</div>' +
         '<div class="cls" style="color:' + fngColor(val) + '">' + (d.value_classification || "") + '</div></div>';
     } catch (e) {}
+  }
+
+  // ---------- Beginner: plain explain + avg-cost note + calm reminder ----------
+  function renderCoinExplain(cardEl, coinId, s, ccy) {
+    const el = cardEl.querySelector('[data-role="explain"]');
+    if (!el) return;
+    const lib = libById(coinId) || { sym: coinId };
+    // Nothing bought yet on this card
+    if (!(s.active > 0) || s.activeAmount <= 0) {
+      if (s.pending > 0) {
+        el.style.display = "block";
+        el.innerHTML = "You have " + fmtMoney(s.pending, ccy) + " waiting to buy " + lib.sym +
+          " (pending orders). Nothing bought yet \u2014 this will fill when the price reaches your target.";
+      } else { el.style.display = "none"; }
+      return;
+    }
+    if (!s.hasMarket) { el.style.display = "none"; return; }
+
+    const cur = s.activeCurrent;
+    const diff = cur - s.active;
+    const pct = s.active > 0 ? (diff / s.active) * 100 : 0;
+    const up = diff >= 0;
+    const mkt = mktPrice(coinId, ccy);
+
+    // 1) plain explain line
+    let html = "You hold <b>" + fmtAmount(s.activeAmount) + " " + lib.sym + "</b>. " +
+      "You put in " + fmtMoney(s.active, ccy) + ", now worth " + fmtMoney(cur, ccy) + ".<br>" +
+      '<span class="big ' + (up ? "up" : "down") + '">' + (up ? "You\u2019re up " : "You\u2019re down ") +
+      fmtMoney(Math.abs(diff), ccy) + " (" + (up ? "+" : "\u2212") + Math.abs(pct).toFixed(1) + "%)</span>";
+
+    // 2) average-cost explainer (DCA concept)
+    if (s.avgPrice != null && mkt != null) {
+      const below = mkt < s.avgPrice;
+      html += '<div class="calm">Your average buy price is <b>' + fmtMoney(s.avgPrice, ccy) + "</b>. " +
+        (below
+          ? "The price now (" + fmtMoney(mkt, ccy) + ") is below your average \u2014 buying more here would lower your average cost (this is called DCA)."
+          : "The price now (" + fmtMoney(mkt, ccy) + ") is above your average, so your holdings are in profit.") + "</div>";
+    }
+
+    // 3) calm note when down (anti-panic)
+    if (!up) {
+      html += '<div class="calm">\uD83D\uDE4F ' + lib.sym + " is down right now. This is normal in crypto \u2014 it\u2019s only a <b>paper loss</b>, not a real one, unless you sell. Decide calmly and only invest what you can afford to lose.</div>";
+    }
+
+    // 4) DCA helper (advanced-only to keep it from cluttering Simple view)
+    if (mkt != null) {
+      html += '<div class="dca-help adv-only">\uD83D\uDCA1 DCA idea: if you add ' +
+        '<input type="text" inputmode="decimal" class="dca-input" data-role="dca-input" value="500"> ' + ccy +
+        ' at the current price, you\u2019d get <b data-role="dca-out"></b>. ' +
+        '<span class="calm" style="display:inline">Buying a fixed amount regularly (peso-cost averaging) smooths out the ups and downs.</span></div>';
+    }
+
+    el.style.display = "block";
+    el.innerHTML = html;
+
+    // Wire the DCA helper (if present)
+    const dcaIn = el.querySelector('[data-role="dca-input"]');
+    const dcaOut = el.querySelector('[data-role="dca-out"]');
+    if (dcaIn && dcaOut && mkt != null) {
+      const recompute = () => {
+        const add = num(dcaIn.value);
+        if (add <= 0 || mkt <= 0) { dcaOut.textContent = "\u2014"; return; }
+        const units = add / mkt;
+        // new average if you add this amount at the current price
+        const newUnits = s.activeAmount + units;
+        const newInvested = s.active + add;
+        const newAvg = newUnits > 0 ? newInvested / newUnits : mkt;
+        dcaOut.textContent = fmtAmount(units) + " " + lib.sym + " (new avg \u2248 " + fmtMoney(newAvg, ccy) + ")";
+      };
+      dcaIn.oninput = recompute;
+      recompute();
+    }
   }
 
   // ---------- What-if calculator (#13) ----------
@@ -3188,7 +3379,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 54;
+  const APP_VERSION = 55;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
