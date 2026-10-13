@@ -254,6 +254,21 @@
         <label>Person name<span class="sub">kanino ka may utang</span></label>
         <input type="text" class="name-in" id="newPerson" placeholder="e.g. Angel, Mico" />
       </div>
+      <div class="field" id="subCatField">
+        <label>Sub-category<span class="sub">saan napunta ang utang</span></label>
+        <select id="newSubCat" class="cat-sel">
+          <option value="food">Food</option>
+          <option value="groceries">Groceries</option>
+          <option value="entertainment">Entertainment</option>
+          <option value="shopping">Shopping</option>
+          <option value="bills">Bills / Utilities</option>
+          <option value="transport">Transportation</option>
+          <option value="health">Health / Medical</option>
+          <option value="travel">Travel</option>
+          <option value="emergency">Emergency</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
       <div class="field">
         <label>Name / label<span class="sub">optional, e.g. BPI Visa</span></label>
         <input type="text" class="name-in" id="newName" placeholder="e.g. Credit Card, Groceries" />
@@ -323,6 +338,15 @@
     onlineloan: "Online Loan", government: "Government", salaryloan: "Salary / Company Loan", other: "Other"
   };
   function catLabel(c) { return CATEGORIES[c] || "Other"; }
+
+  // Sub-categories (only for credit card & person)
+  const SUBCATS = {
+    food: "Food", groceries: "Groceries", entertainment: "Entertainment", shopping: "Shopping",
+    bills: "Bills / Utilities", transport: "Transportation", health: "Health / Medical",
+    travel: "Travel", emergency: "Emergency", other: "Other"
+  };
+  function subLabel(s) { return SUBCATS[s] || ""; }
+  function usesSubCat(category) { return category === "creditcard" || category === "person"; }
 
   function num(v) {
     if (v == null) return 0;
@@ -411,7 +435,11 @@
     const paidThisMonth = !!d.paidMonths[viewMonth];
     const title = (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category));
     const addCount = (d.additions || []).length;
-    const mergeNote = addCount > 0 ? '<div class="d-sub">Pinagsama: ' + (addCount + 1) + ' entries</div>' : "";
+    const subTag = (usesSubCat(d.category) && d.subCat) ? subLabel(d.subCat) : "";
+    const subBits = [];
+    if (subTag) subBits.push(subTag);
+    if (addCount > 0) subBits.push("Pinagsama: " + (addCount + 1) + " entries");
+    const mergeNote = subBits.length ? '<div class="d-sub">' + subBits.join(" &middot; ") + '</div>' : "";
 
     // Term row for THIS month
     let termRow = "";
@@ -583,15 +611,17 @@
   }
 
   // ---------- Add debt ----------
-  function mergeKey(category, person, name) {
-    if (category === "person") return "person::" + (person || "").trim().toLowerCase();
-    return category + "::" + (name || "").trim().toLowerCase();
+  function mergeKey(category, person, name, subCat) {
+    const sub = usesSubCat(category) ? ("::" + (subCat || "")) : "";
+    if (category === "person") return "person::" + (person || "").trim().toLowerCase() + sub;
+    return category + "::" + (name || "").trim().toLowerCase() + sub;
   }
 
   function addDebt() {
     const category = document.getElementById("newCategory").value;
     const person = document.getElementById("newPerson").value.trim();
     const name = document.getElementById("newName").value.trim();
+    const subCat = usesSubCat(category) ? document.getElementById("newSubCat").value : "";
     const amount = num(document.getElementById("newAmount").value);
     const terms = Math.max(1, Math.round(num(document.getElementById("newTerms").value) || 1));
 
@@ -602,8 +632,8 @@
     }
     if (amount <= 0) { document.getElementById("newAmount").focus(); return; }
 
-    const key = mergeKey(category, person, name);
-    const existing = state.debts.find(x => mergeKey(x.category, x.person, x.name) === key);
+    const key = mergeKey(category, person, name, subCat);
+    const existing = state.debts.find(x => mergeKey(x.category, x.person, x.name, x.subCat) === key);
 
     if (existing) {
       existing.amount = num(existing.amount) + amount;
@@ -613,7 +643,7 @@
     } else {
       state.debts.push({
         id: uid(), category: category, person: category === "person" ? person : "",
-        name: name, amount: amount, terms: terms,
+        name: name, subCat: subCat, amount: amount, terms: terms,
         startMonth: viewMonth, paidMonths: {}, additions: [], createdAt: Date.now()
       });
     }
@@ -639,12 +669,16 @@
     document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
     document.getElementById("nextMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, 1); renderAll(); });
 
-    // Person field toggle
+    // Person + sub-category field toggles
     const catSel = document.getElementById("newCategory");
     const personField = document.getElementById("personField");
-    function refreshPersonField() { personField.style.display = (catSel.value === "person") ? "" : "none"; }
-    catSel.addEventListener("change", refreshPersonField);
-    refreshPersonField();
+    const subCatField = document.getElementById("subCatField");
+    function refreshFields() {
+      personField.style.display = (catSel.value === "person") ? "" : "none";
+      subCatField.style.display = usesSubCat(catSel.value) ? "" : "none";
+    }
+    catSel.addEventListener("change", refreshFields);
+    refreshFields();
 
     // Live per-term preview in the add form
     const amtInp = document.getElementById("newAmount");
@@ -687,7 +721,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 68;
+  const APP_VERSION = 69;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
