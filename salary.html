@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="Salary" />
 <title>Salary</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #000000;
@@ -187,12 +188,17 @@
     <!-- BASE SALARY -->
     <div class="card">
       <h2>Base pay</h2>
-      <div class="hint">Ilagay ang <b>Salary</b> na nasa payslip mo (per cutoff / semi-monthly). Dito nakabase ang hourly rate para sa OT.</div>
+      <div class="hint">Fixed ang <b>Salary</b> mo per cutoff (kinsenas at katapusan). Naka-lock ito &mdash; pindutin ang <b>Edit</b> kung may salary increase para ma-update.</div>
       <div class="field">
         <label>Semi-monthly salary<span class="sub">per cutoff (kinsenas or katapusan)</span></label>
         <span class="suffix">PHP</span>
-        <input type="text" inputmode="decimal" id="baseSalary" placeholder="0.00" />
+        <input type="text" inputmode="decimal" id="baseSalary" placeholder="0.00" readonly />
       </div>
+      <div class="btn-row">
+        <button class="btn" id="editBaseBtn">Edit salary</button>
+        <button class="btn primary" id="saveBaseBtn" style="display:none">Save salary</button>
+      </div>
+      <div class="divider"></div>
       <div class="field">
         <label>Hourly rate<span class="sub">auto: monthly &times; 12 &divide; 313 days &divide; 8 hrs</span></label>
         <span class="suffix"></span>
@@ -218,27 +224,27 @@
     <!-- DEDUCTIONS -->
     <div class="card">
       <h2>Deductions</h2>
-      <div class="hint">Auto-computed ang PhilHealth. I-adjust lang kung iba ang nasa payslip mo. Ang SSS, Pag-IBIG, MPF at iba pa ay pwede mong palitan.</div>
+      <div class="hint">Fixed na mga kontribusyon &mdash; naka-lock lahat. Ang PhilHealth ay auto (5% ng monthly basic &divide; 2) at ang tax ay auto gamit ang TRAIN semi-monthly table.</div>
 
       <div class="field">
         <label>PhilHealth<span class="sub">auto: 5% of monthly basic &divide; 2</span></label>
         <span class="suffix">PHP</span>
-        <input type="text" inputmode="decimal" id="dPhilhealth" placeholder="0.00" />
+        <input type="text" inputmode="decimal" id="dPhilhealth" placeholder="0.00" readonly />
       </div>
       <div class="field">
         <label>SSS contribution</label>
         <span class="suffix">PHP</span>
-        <input type="text" inputmode="decimal" id="dSSS" placeholder="0.00" />
+        <input type="text" inputmode="decimal" id="dSSS" placeholder="0.00" readonly />
       </div>
       <div class="field">
         <label>Pag-IBIG (HDMF)</label>
         <span class="suffix">PHP</span>
-        <input type="text" inputmode="decimal" id="dHDMF" placeholder="0.00" />
+        <input type="text" inputmode="decimal" id="dHDMF" placeholder="0.00" readonly />
       </div>
       <div class="field">
         <label>MPF<span class="sub">provident / mandatory provident fund</span></label>
         <span class="suffix">PHP</span>
-        <input type="text" inputmode="decimal" id="dMPF" placeholder="0.00" />
+        <input type="text" inputmode="decimal" id="dMPF" placeholder="0.00" readonly />
       </div>
 
       <div class="divider"></div>
@@ -248,11 +254,10 @@
 
       <div class="divider"></div>
       <div class="field">
-        <label>Withholding tax<span class="sub" id="taxMode">auto (TRAIN semi-monthly table)</span></label>
+        <label>Withholding tax<span class="sub">auto (TRAIN semi-monthly table)</span></label>
         <span class="suffix">PHP</span>
-        <input type="text" inputmode="decimal" id="dTax" placeholder="0.00" />
+        <input type="text" inputmode="decimal" id="dTax" placeholder="0.00" readonly />
       </div>
-      <label class="note"><input type="checkbox" id="taxAuto" checked style="vertical-align:middle"> Auto-compute tax. Alisin ang check kung gusto mong manu-manong ilagay ang tax (eksaktong tugma sa payslip).</label>
     </div>
 
     <!-- NET PAY -->
@@ -288,6 +293,13 @@
         <button class="btn primary" id="saveBtn">Save to history</button>
         <button class="btn" id="clearBtn">Clear inputs</button>
       </div>
+    </div>
+
+    <!-- CHART -->
+    <div class="card" id="chartCard" style="display:none">
+      <h2>Take-home pay (last cutoffs)</h2>
+      <div class="hint">Mula sa naka-save mong history. Hover/tap sa bar para makita ang detalye.</div>
+      <div style="position:relative;height:240px"><canvas id="payChart"></canvas></div>
     </div>
 
     <!-- HISTORY -->
@@ -330,9 +342,10 @@
     base: "",
     ot: {},                 // key -> hours (string)
     extraEarn: [],          // { name, amount, taxable }
-    deduct: { philhealth: "", sss: "", hdmf: "", mpf: "", tax: "" },
-    otherDeduct: [],        // { name, amount }
-    taxAuto: true
+    // PhilHealth + tax are auto-computed. SSS / Pag-IBIG(HDMF) / MPF are fixed values
+    // (defaults seeded from the payslip) and shown read-only.
+    deduct: { philhealth: "", sss: "1000", hdmf: "200", mpf: "750", tax: "" },
+    otherDeduct: []         // { name, amount }
   };
 
   function loadState() {
@@ -342,7 +355,7 @@
         const s = JSON.parse(raw);
         state = Object.assign(state, s);
         if (!state.ot) state.ot = {};
-        if (!state.deduct) state.deduct = { philhealth: "", sss: "", hdmf: "", mpf: "", tax: "" };
+        if (!state.deduct) state.deduct = { philhealth: "", sss: "1000", hdmf: "200", mpf: "750", tax: "" };
         if (!Array.isArray(state.extraEarn)) state.extraEarn = [];
         if (!Array.isArray(state.otherDeduct)) state.otherDeduct = [];
       }
@@ -409,8 +422,10 @@
 
     const grossEarnings = base + otTotal + extraTaxable + extraNonTax;
 
-    // Mandatory contributions (reduce taxable income)
-    const philhealth = num(state.deduct.philhealth);
+    // Mandatory contributions (reduce taxable income).
+    // PhilHealth is auto (5% of monthly basic / 2 = base * 0.05). SSS/Pag-IBIG/MPF are
+    // fixed values kept in state (read-only in the UI).
+    const philhealth = base > 0 ? base * 0.05 : 0;
     const sss = num(state.deduct.sss);
     const hdmf = num(state.deduct.hdmf);
     const mpf = num(state.deduct.mpf);
@@ -420,14 +435,8 @@
     const taxableEarnings = base + otTotal + extraTaxable;
     const netTaxable = Math.max(0, taxableEarnings - mandatory);
 
-    // Tax (auto or manual)
-    let tax;
-    if (state.taxAuto) {
-      tax = computeTax(netTaxable);
-      state.deduct.tax = tax.toFixed(2);
-    } else {
-      tax = num(state.deduct.tax);
-    }
+    // Tax (always auto via TRAIN semi-monthly table)
+    const tax = computeTax(netTaxable);
 
     // Other (non-tax) deductions
     let otherDed = 0;
@@ -552,13 +561,11 @@
     // hourly rate field
     document.getElementById("hourlyRate").value = r.base > 0 ? peso(r.hourly) : "";
 
-    // auto PhilHealth suggestion if empty
-    const phInput = document.getElementById("dPhilhealth");
-    if (document.activeElement !== phInput && (state.deduct.philhealth === "" || state.deduct.philhealth == null) && r.base > 0) {
-      const autoPh = r.base * 0.05; // = 5% of monthly basic / 2
-      state.deduct.philhealth = autoPh.toFixed(2);
-      phInput.value = state.deduct.philhealth;
-    }
+    // deduction fields reflect the (read-only, auto) values
+    document.getElementById("dPhilhealth").value = r.philhealth > 0 ? r.philhealth.toFixed(2) : "";
+    document.getElementById("dSSS").value = r.sss > 0 ? r.sss.toFixed(2) : "";
+    document.getElementById("dHDMF").value = r.hdmf > 0 ? r.hdmf.toFixed(2) : "";
+    document.getElementById("dMPF").value = r.mpf > 0 ? r.mpf.toFixed(2) : "";
 
     // update OT amounts live
     const hourly = r.hourly;
@@ -570,9 +577,8 @@
       cell.classList.toggle("pos", amt > 0);
     });
 
-    // tax field (reflect auto value)
-    const taxInput = document.getElementById("dTax");
-    if (state.taxAuto && document.activeElement !== taxInput) taxInput.value = r.tax.toFixed(2);
+    // tax field (always auto)
+    document.getElementById("dTax").value = r.tax.toFixed(2);
 
     // net pay
     document.getElementById("netPay").textContent = peso(r.netPay);
@@ -648,6 +654,7 @@
       h.splice(+btn.getAttribute("data-hist-del"), 1);
       saveHistory(h);
       renderHistory();
+      renderChart();
     }));
 
     // current-month total
@@ -685,6 +692,7 @@
     if (existingIdx >= 0) hist[existingIdx] = entry; else hist.push(entry);
     saveHistory(hist);
     renderHistory();
+    renderChart();
     const btn = document.getElementById("saveBtn");
     const old = btn.textContent;
     btn.textContent = existingIdx >= 0 ? "Updated!" : "Saved!";
@@ -693,39 +701,38 @@
 
   // ---------- Wire inputs ----------
   function wireInputs() {
+    // Base salary: locked by default; "Edit" unlocks it (for a raise), "Save" re-locks.
     const baseInp = document.getElementById("baseSalary");
+    const editBtn = document.getElementById("editBaseBtn");
+    const saveBaseBtn = document.getElementById("saveBaseBtn");
     baseInp.value = state.base || "";
     baseInp.addEventListener("input", () => {
       state.base = baseInp.value;
-      // reset auto PhilHealth so it recomputes from the new base
+      saveState();
+      renderOTList();
+      recompute();
+    });
+    editBtn.addEventListener("click", () => {
+      baseInp.readOnly = false;
+      baseInp.focus();
+      baseInp.select();
+      editBtn.style.display = "none";
+      saveBaseBtn.style.display = "";
+    });
+    saveBaseBtn.addEventListener("click", () => {
+      baseInp.readOnly = true;
+      saveBaseBtn.style.display = "none";
+      editBtn.style.display = "";
+      state.base = baseInp.value;
       saveState();
       renderOTList();
       recompute();
     });
 
-    const deductMap = { dPhilhealth: "philhealth", dSSS: "sss", dHDMF: "hdmf", dMPF: "mpf", dTax: "tax" };
-    Object.keys(deductMap).forEach(id => {
-      const inp = document.getElementById(id);
-      inp.value = state.deduct[deductMap[id]] || "";
-      inp.addEventListener("input", () => {
-        state.deduct[deductMap[id]] = inp.value;
-        if (id === "dTax") state.taxAuto = false, document.getElementById("taxAuto").checked = false;
-        saveState();
-        recompute();
-      });
-    });
-
-    const taxAuto = document.getElementById("taxAuto");
-    taxAuto.checked = state.taxAuto;
-    document.getElementById("dTax").readOnly = state.taxAuto;
-    document.getElementById("taxMode").textContent = state.taxAuto ? "auto (TRAIN semi-monthly table)" : "manual entry";
-    taxAuto.addEventListener("change", () => {
-      state.taxAuto = taxAuto.checked;
-      document.getElementById("dTax").readOnly = state.taxAuto;
-      document.getElementById("taxMode").textContent = state.taxAuto ? "auto (TRAIN semi-monthly table)" : "manual entry";
-      saveState();
-      recompute();
-    });
+    // Deductions SSS / Pag-IBIG / MPF are read-only but seeded from saved state.
+    document.getElementById("dSSS").value = state.deduct.sss || "";
+    document.getElementById("dHDMF").value = state.deduct.hdmf || "";
+    document.getElementById("dMPF").value = state.deduct.mpf || "";
 
     document.getElementById("addEarnBtn").addEventListener("click", () => {
       state.extraEarn.push({ name: "", amount: "", taxable: true });
@@ -738,10 +745,16 @@
 
     document.getElementById("saveBtn").addEventListener("click", saveCurrentToHistory);
     document.getElementById("clearBtn").addEventListener("click", () => {
-      if (!confirm("I-clear ang lahat ng input? (Hindi mabubura ang naka-save na history.)")) return;
-      state = { base: "", ot: {}, extraEarn: [], deduct: { philhealth: "", sss: "", hdmf: "", mpf: "", tax: "" }, otherDeduct: [], taxAuto: true };
+      if (!confirm("I-clear ang OT at other earnings? (Hindi mabubura ang salary, fixed deductions, at history.)")) return;
+      // Keep base salary + fixed deductions; only clear the per-cutoff inputs.
+      state.ot = {};
+      state.extraEarn = [];
+      state.otherDeduct = [];
       saveState();
-      startApp(true);
+      renderOTList();
+      renderExtraEarn();
+      renderOtherDeduct();
+      recompute();
     });
 
     // default period = this month
@@ -751,6 +764,57 @@
       sp.value = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
     }
     sp.addEventListener("change", renderHistory);
+  }
+
+  // ---------- Chart (take-home pay per saved cutoff) ----------
+  let payChart = null;
+  function renderChart() {
+    const card = document.getElementById("chartCard");
+    const canvas = document.getElementById("payChart");
+    if (!canvas || typeof Chart === "undefined") { if (card) card.style.display = "none"; return; }
+
+    const hist = loadHistory();
+    if (hist.length < 1) { card.style.display = "none"; return; }
+    card.style.display = "";
+
+    // Oldest -> newest, keep the last 12 cutoffs.
+    const sorted = hist.slice().sort((a, b) => (a.period + a.cutoff).localeCompare(b.period + b.cutoff));
+    const recent = sorted.slice(-12);
+
+    const labels = recent.map(x => {
+      const d = new Date(x.period + "-01");
+      const m = isNaN(d) ? x.period : d.toLocaleDateString("en-PH", { month: "short", year: "2-digit" });
+      return m + " " + (x.cutoff === "1st" ? "(1st)" : "(2nd)");
+    });
+    const net = recent.map(x => Math.round(x.net));
+    const ded = recent.map(x => Math.round(x.deductions));
+
+    if (payChart) payChart.destroy();
+    payChart = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "Take-home (net)", data: net, backgroundColor: "#34d399", borderRadius: 6, stack: "pay" },
+          { label: "Deductions", data: ded, backgroundColor: "rgba(255,107,107,0.65)", borderRadius: 6, stack: "pay" }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: "#f2f2f7", font: { size: 11 }, boxWidth: 12, padding: 10 } },
+          tooltip: {
+            callbacks: {
+              label: (it) => it.dataset.label + ": \u20b1" + Number(it.parsed.y).toLocaleString("en-US")
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: "#8e8e93", font: { size: 10 }, maxRotation: 60, minRotation: 45 }, grid: { color: "rgba(255,255,255,0.05)" } },
+          y: { stacked: true, ticks: { color: "#8e8e93", font: { size: 10 }, callback: (v) => "\u20b1" + Number(v).toLocaleString("en-US") }, grid: { color: "rgba(255,255,255,0.05)" } }
+        }
+      }
+    });
   }
 
   // ---------- App start ----------
@@ -765,6 +829,7 @@
     renderOtherDeduct();
     recompute();
     renderHistory();
+    renderChart();
   }
 
   // ---------- Passcode lock (shared scheme) ----------
@@ -794,7 +859,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 56;
+  const APP_VERSION = 57;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
