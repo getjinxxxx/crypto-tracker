@@ -238,14 +238,39 @@
     }
   } catch (e) { fbDb = null; }
 
-  data = decode();
-  // default to the earliest start month so the recipient lands on a month with data
-  if (data && data.items.length) {
-    const starts = data.items.map(i => i.startMonth).filter(Boolean).sort();
-    if (starts.length && starts[0] > viewMonth) viewMonth = starts[0];
+  // A legacy base64 payload is long and contains JSON chars; a shareId is short/alphanumeric.
+  function looksLikeShareId(h) { return /^[a-z0-9]{6,24}$/i.test(h); }
+
+  function applyData(p) {
+    data = p;
+    if (data && Array.isArray(data.items) && data.items.length) {
+      const starts = data.items.map(i => i.startMonth).filter(Boolean).sort();
+      if (starts.length && starts[0] > viewMonth) viewMonth = starts[0];
+    }
+    render();
   }
-  render();
-  window.addEventListener("hashchange", () => { data = decode(); render(); });
+
+  function loadFromHash() {
+    const h = location.hash.replace(/^#/, "");
+    if (!h) { applyData(null); return; }
+
+    if (looksLikeShareId(h) && fbDb) {
+      // SHORT LINK: fetch the snapshot from Firebase, then keep it updated live.
+      const app = document.getElementById("app");
+      app.innerHTML = '<div class="err">Loading\u2026</div>';
+      fbDb.ref("shares/" + h + "/data").on("value", (snap) => {
+        const p = snap.val();
+        if (p && Array.isArray(p.items)) { p.shareId = h; applyData(p); }
+        else { applyData(null); }
+      }, () => applyData(null));
+      return;
+    }
+    // LEGACY: base64 payload embedded in the hash
+    applyData(decode());
+  }
+
+  loadFromHash();
+  window.addEventListener("hashchange", loadFromHash);
 </script>
 </body>
 </html>

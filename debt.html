@@ -670,19 +670,13 @@
   // ---------- Share link (URL-encoded snapshot + Firebase reply channel) ----------
   function newShareId() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
 
-  // Builds shared.html#<base64 payload>. Payload includes a shareId so the
-  // recipient can post a note back to Firebase at shares/<shareId>/reply.
-  function buildShareLink(cardKey) {
+  // Build the payload (this person's debts snapshot) for a card.
+  function sharePayload(cardKey, shareId) {
     const items = state.debts.filter(d => cardKeyOf(d) === cardKey);
     if (!items.length) return null;
     const person = (items[0].category === "person") ? (items[0].person || "") : (items[0].name || "");
-
-    // reuse an existing shareId for this person, or create one
-    let shareId = state.shareIds[cardKey];
-    if (!shareId) { shareId = newShareId(); state.shareIds[cardKey] = shareId; saveState(); fbWatchNote(shareId); }
-
-    const payload = {
-      v: 2,
+    return {
+      v: 3,
       person: person,
       shareId: shareId,
       madeAt: new Date().toISOString().slice(0, 10),
@@ -692,23 +686,38 @@
         paidTerms: d.paidTerms || {}, paid: !!d.paid, date: d.date || ""
       }))
     };
-    const json = JSON.stringify(payload);
-    const b64 = btoa(unescape(encodeURIComponent(json)));
-    const base = location.href.replace(/[^\/]*$/, "");
-    return base + "shared.html#" + b64;
   }
 
+  // Store the data in Firebase under shares/<shareId>/data and return a SHORT link.
   function openShareFor(cardKey) {
-    const link = buildShareLink(cardKey);
-    if (!link) { alert("Walang maibabahagi."); return; }
     const person = cardKey.replace(/^person::/, "");
-    const show = () => window.prompt("Share link para kay " + person + " (kopyahin at ipadala):", link);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(link).then(() => {
-        alert("Nakopya na ang link! Makikita lang ni " + person + " ang utang niya.\n\nKapag nag-submit siya ng note, lalabas ito sa card dito (naka-cloud sync).");
-        show();
-      }).catch(show);
-    } else { show(); }
+    let shareId = state.shareIds[cardKey];
+    if (!shareId) { shareId = newShareId(); state.shareIds[cardKey] = shareId; saveState(); fbWatchNote(shareId); }
+
+    const payload = sharePayload(cardKey, shareId);
+    if (!payload) { alert("Walang maibabahagi."); return; }
+
+    const base = location.href.replace(/[^\/]*$/, "");
+    const link = base + "shared.html#" + shareId;
+
+    const finish = () => {
+      const show = () => window.prompt("Short share link para kay " + person + " (kopyahin at ipadala):", link);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => {
+          alert("Nakopya na ang maikling link! Nasa cloud na ang data \u2014 walang nakikitang utang sa mismong URL.\n\nKapag nag-submit si " + person + " ng note, lalabas ito sa card dito.");
+          show();
+        }).catch(show);
+      } else { show(); }
+    };
+
+    if (fbDb) {
+      // write/refresh the shared snapshot, then give the short link
+      fbDb.ref("shares/" + shareId + "/data").set(payload)
+        .then(finish)
+        .catch(() => { alert("Hindi ma-save sa cloud (walang internet o naka-restrict ang Firebase rules sa 'shares'). Subukan ulit."); });
+    } else {
+      alert("Walang koneksyon sa cloud. Kailangan ng internet para gumawa ng short link.");
+    }
   }
 
   // ---------- Chart ----------
@@ -853,7 +862,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 74;
+  const APP_VERSION = 75;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
