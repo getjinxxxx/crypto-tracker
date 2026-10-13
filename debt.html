@@ -129,19 +129,24 @@
   .debt-head .d-del:hover { color: var(--danger); }
   .d-sub { color: var(--muted); font-size: 12px; margin: -4px 0 8px; }
 
-  /* Debt breakdown list */
-  .bd-list { margin-top: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
-  .bd-list .bd-title { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
-  .bd-list .bd-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 5px 0; border-top: 1px solid var(--line); }
-  .bd-list .bd-row:first-of-type { border-top: none; }
-  .bd-list .bd-check { width: 16px; height: 16px; flex: none; cursor: pointer; accent-color: #34d399; }
-  .bd-list .bd-label { flex: 1; }
-  .bd-list .bd-amt { font-weight: 600; }
-  .bd-list .bd-row.bd-paid .bd-label, .bd-list .bd-row.bd-paid .bd-amt { color: var(--muted); text-decoration: line-through; }
-  .bd-list .bd-date { color: var(--muted); font-size: 11px; text-decoration: none; }
+  /* Sub-category box inside a card */
+  .sub-box { margin-top: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .sub-box-head { display: flex; justify-content: space-between; font-size: 11px; color: var(--gold-bright);
+    text-transform: uppercase; letter-spacing: .4px; font-weight: 700; margin-bottom: 4px; }
 
-  .term-note { margin-top: 8px; color: var(--muted); font-size: 12px; background: var(--panel-2);
-    border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; }
+  /* Item rows (breakdown) */
+  .bd-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .bd-row:first-of-type { border-top: none; }
+  .bd-check { width: 16px; height: 16px; flex: none; cursor: pointer; accent-color: #34d399; }
+  .bd-label { flex: 1; }
+  .bd-amt { font-weight: 600; }
+  .bd-row.bd-paid .bd-label, .bd-row.bd-paid .bd-amt { color: var(--muted); text-decoration: line-through; }
+  .bd-date { color: var(--muted); font-size: 11px; text-decoration: none; }
+  .bd-term { display: inline-block; background: rgba(79,140,255,0.18); color: #7fa8ff; font-size: 10px;
+    font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
+  .bd-edit, .bd-del { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 3px; }
+  .bd-edit { font-size: 12px; } .bd-del { font-size: 15px; }
+  .bd-edit:hover { color: var(--gold-bright); } .bd-del:hover { color: var(--danger); }
 
   .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
   .d-amounts .seg { text-align: center; flex: 1; }
@@ -284,16 +289,12 @@
         </select>
       </div>
       <div class="field">
-        <label>Name / label<span class="sub">optional, e.g. BPI Visa</span></label>
-        <input type="text" class="name-in" id="newName" placeholder="e.g. Credit Card, Groceries" />
+        <label>Name / label<span class="sub">pangalan ng utang, e.g. Jollibee, BPI Visa</span></label>
+        <input type="text" class="name-in" id="newName" placeholder="e.g. Jollibee, Grab, BPI Visa" />
       </div>
       <div class="field">
         <label>Total amount owed<span class="sub">principal</span></label>
         <input type="text" inputmode="decimal" id="newAmount" placeholder="0.00" />
-      </div>
-      <div class="field">
-        <label>Note<span class="sub">optional, e.g. Jollibee, Netflix</span></label>
-        <input type="text" class="name-in" id="newNote" placeholder="saan / anong binili" />
       </div>
       <div class="field">
         <label>Number of terms<span class="sub">1 = isang bayad lang (walang hulugan)</span></label>
@@ -321,13 +322,17 @@
   // checkbox marking THIS month's term paid. Non-term debts (terms=1) show only
   // in their start month with a single paid checkbox.
   // =========================================================
-  const LS_KEY = "debtTrackerV2";
+  const LS_KEY = "debtTrackerV3";
 
-  // state.debts: [{
-  //   id, category, person, name, amount, terms (>=1), startMonth "YYYY-MM",
-  //   paidMonths: { "YYYY-MM": true },  // which months' terms are paid
-  //   additions: [{amt,date}], createdAt
-  // }]
+  // Each ADD = one debt ITEM. No merging. Items are grouped for display:
+  //   Category  ->  Card (per person, or per label for non-person)  ->  Sub-category box  ->  items
+  // item = {
+  //   id, category, person, name(label), subCat, amount, terms (>=1),
+  //   startMonth "YYYY-MM",
+  //   paidTerms: { "YYYY-MM": true },  // which months' terms are paid (installment)
+  //   paid: bool,                      // for one-time (terms==1)
+  //   date, createdAt
+  // }
   let state = { debts: [] };
   let viewMonth = ""; // "YYYY-MM" currently shown
 
@@ -340,16 +345,11 @@
       }
     } catch (e) {}
     state.debts.forEach(d => {
-      if (!d.paidMonths) d.paidMonths = {};
       if (!d.terms || d.terms < 1) d.terms = 1;
       if (!d.startMonth) d.startMonth = monthKey(new Date());
-      // Migrate to an entries[] breakdown.
-      if (!Array.isArray(d.entries)) {
-        d.entries = [];
-        const base = num(d.amount) - (d.additions || []).reduce((s, a) => s + num(a.amt), 0);
-        d.entries.push({ amt: Math.max(0, base), date: (d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : ""), note: "" });
-        (d.additions || []).forEach(a => d.entries.push({ amt: num(a.amt), date: a.date || "", note: "" }));
-      }
+      if (!d.paidTerms) d.paidTerms = {};
+      if (typeof d.paid !== "boolean") d.paid = false;
+      if (!d.date) d.date = d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : "";
     });
   }
   function saveState() {
@@ -410,25 +410,17 @@
     return idx >= 0 && idx < d.terms;
   }
 
-  // ---------- Derived amounts ----------
-  // Paid is driven by per-item checkboxes in the breakdown (each utang can be
-  // marked paid separately). perTerm = total / terms for installment display.
-  function perTermOf(d) { return d.terms > 0 ? num(d.amount) / d.terms : num(d.amount); }
+  // ---------- Derived amounts (per item) ----------
+  function perTermOf(d) { return d.terms > 1 ? num(d.amount) / d.terms : num(d.amount); }
+  function paidTermsCount(d) { return Object.keys(d.paidTerms || {}).filter(k => d.paidTerms[k]).length; }
   function paidOf(d) {
-    return (d.entries || []).reduce((s, e) => s + (e.paid ? num(e.amt) : 0), 0);
+    if (d.terms > 1) return paidTermsCount(d) * perTermOf(d);
+    return d.paid ? num(d.amount) : 0;
   }
   function remainingOf(d) { return Math.max(0, num(d.amount) - paidOf(d)); }
-  function allItemsPaid(d) {
-    const e = d.entries || [];
-    return e.length > 0 && e.every(x => x.paid);
-  }
-
-  function statusOf(d) {
-    if (remainingOf(d) <= 0.009) return { cls: "b-paid", text: "Fully paid" };
-    const items = (d.entries || []);
-    const paidCount = items.filter(x => x.paid).length;
-    if (items.length > 1) return { cls: "b-ok", text: paidCount + "/" + items.length + " paid" };
-    return { cls: "b-ok", text: "Unpaid" };
+  function isPaidThisMonth(d) {
+    if (d.terms > 1) return !!d.paidTerms[viewMonth];
+    return !!d.paid;
   }
 
   // ---------- Render ----------
@@ -443,11 +435,9 @@
     state.debts.forEach(d => {
       totalRemaining += remainingOf(d);
       if (isActiveIn(d, viewMonth)) {
-        const per = perTermOf(d);
-        monthDue += per;
-        // paid portion of this month's due = paid share of items (capped at the term due)
-        const paidShare = Math.min(per, paidOf(d));
-        monthPaid += paidShare;
+        const due = d.terms > 1 ? perTermOf(d) : num(d.amount);
+        monthDue += due;
+        if (isPaidThisMonth(d)) monthPaid += due;
       }
     });
     document.getElementById("sumMonthDue").textContent = peso(monthDue);
@@ -456,79 +446,86 @@
     document.getElementById("sumTotalRemaining").textContent = peso(totalRemaining);
   }
 
-  function debtCardHtml(d) {
-    const per = perTermOf(d);
-    const amount = num(d.amount);
-    const paid = paidOf(d);
-    const remaining = remainingOf(d);
-    const pct = amount > 0 ? Math.min(100, (paid / amount) * 100) : 0;
-    const st = statusOf(d);
-    const paidOff = remaining <= 0.009;
+  // The "card" groups items by person (person category) or by label (others).
+  function cardKeyOf(d) {
+    if (d.category === "person") return "person::" + (d.person || "").trim().toLowerCase();
+    return d.category + "::" + (d.name || "").trim().toLowerCase();
+  }
+  function cardTitleOf(d) {
+    return (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category));
+  }
 
-    const idx = termIndexFor(d, viewMonth);        // which term is due this month (0-based)
-    const title = (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category));
-    const entries = d.entries || [];
-    const subTag = (usesSubCat(d.category) && d.subCat) ? subLabel(d.subCat) : "";
-    const subBits = [];
-    if (subTag) subBits.push(subTag);
-    if (entries.length > 1) subBits.push(entries.length + " items");
-    const mergeNote = subBits.length ? '<div class="d-sub">' + subBits.join(" &middot; ") + '</div>' : "";
-
-    // Breakdown: each individual utang with its OWN checkbox to mark it paid.
-    let breakdownHtml = "";
-    if (entries.length) {
-      let rows = "";
-      entries.forEach((en, i) => {
-        const dt = en.date ? new Date(en.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
-        const label = (en.note && en.note.trim()) ? en.note : "Name/Label";
-        rows += '<div class="bd-row' + (en.paid ? " bd-paid" : "") + '">' +
-          '<input type="checkbox" class="bd-check" data-item="' + d.id + '" data-idx="' + i + '"' + (en.paid ? " checked" : "") + '>' +
-          '<span class="bd-label">' + label + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
-          '<span class="bd-amt">' + peso(num(en.amt)) + '</span></div>';
-      });
-      breakdownHtml = '<div class="bd-list"><div class="bd-title">Breakdown &mdash; tsek kung bayad na</div>' + rows + '</div>';
-    }
-
-    // For installments (terms > 1), show which term month this is (info only).
-    let termRow = "";
+  // One item row inside a sub-category box, with its own paid checkbox.
+  function itemRowHtml(d) {
+    const dt = d.date ? new Date(d.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
+    const label = (d.name && d.name.trim()) ? d.name : (d.person ? d.person : "Name/Label");
+    const paidNow = isPaidThisMonth(d);
+    const amtShown = d.terms > 1 ? perTermOf(d) : num(d.amount);
+    // Installment term indicator: 1/3 = this month's term / total terms
+    let termTag = "";
     if (d.terms > 1) {
-      termRow = '<div class="term-note">Installment: Term ' + (idx + 1) + ' of ' + d.terms + ' this month &middot; ' + peso(per) + '/term</div>';
+      const idx = termIndexFor(d, viewMonth);
+      termTag = ' <span class="bd-term">' + (idx + 1) + '/' + d.terms + '</span>';
     }
-
-    // Edit panel (hidden by default)
-    const editPanel =
+    return '<div class="bd-row' + (paidNow ? " bd-paid" : "") + '">' +
+      '<input type="checkbox" class="bd-check" data-item="' + d.id + '"' + (paidNow ? " checked" : "") + '>' +
+      '<span class="bd-label">' + label + termTag + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
+      '<span class="bd-amt">' + peso(amtShown) + '</span>' +
+      '<button class="bd-edit" data-edit="' + d.id + '" title="Edit">\u270E</button>' +
+      '<button class="bd-del" data-del="' + d.id + '" title="Delete">&times;</button>' +
+      '</div>' +
+      // inline edit panel for this item
       '<div class="edit-panel" id="edit-' + d.id + '" style="display:none">' +
-        '<div class="efield"><label>Total amount owed</label><input type="text" inputmode="decimal" data-eamt="' + d.id + '" value="' + amount + '"></div>' +
+        '<div class="efield"><label>Amount</label><input type="text" inputmode="decimal" data-eamt="' + d.id + '" value="' + num(d.amount) + '"></div>' +
         '<div class="efield"><label>Number of terms</label><input type="text" inputmode="numeric" data-eterms="' + d.id + '" value="' + d.terms + '"></div>' +
-        '<div class="efield"><label>Payment per term</label><input type="text" readonly data-eper="' + d.id + '" value="' + per.toFixed(2) + '"></div>' +
+        '<div class="efield"><label>Payment per term</label><input type="text" readonly data-eper="' + d.id + '" value="' + perTermOf(d).toFixed(2) + '"></div>' +
         '<div class="ebtns"><button class="save" data-esave="' + d.id + '">Save</button><button class="cancel" data-ecancel="' + d.id + '">Cancel</button></div>' +
       '</div>';
+  }
+
+  // One card = all items for a person/label, with sub-category boxes inside.
+  function cardHtml(title, category, items) {
+    const owed = items.reduce((s, d) => s + num(d.amount), 0);
+    const paid = items.reduce((s, d) => s + paidOf(d), 0);
+    const remaining = Math.max(0, owed - paid);
+    const pct = owed > 0 ? Math.min(100, (paid / owed) * 100) : 0;
+    const paidOff = remaining <= 0.009;
+
+    // group items by sub-category (for person & creditcard); others = single box
+    let boxesHtml = "";
+    if (usesSubCat(category)) {
+      const bySub = {};
+      items.forEach(d => { const s = d.subCat || "other"; (bySub[s] = bySub[s] || []).push(d); });
+      Object.keys(bySub).forEach(sub => {
+        const list = bySub[sub];
+        const boxDue = list.reduce((s, d) => s + (d.terms > 1 ? perTermOf(d) : remainingOf(d)), 0);
+        boxesHtml += '<div class="sub-box">' +
+          '<div class="sub-box-head"><span>' + subLabel(sub) + '</span><span>' + peso(boxDue) + '</span></div>' +
+          list.map(itemRowHtml).join("") +
+        '</div>';
+      });
+    } else {
+      boxesHtml = '<div class="sub-box">' + items.map(itemRowHtml).join("") + '</div>';
+    }
 
     return '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
       '<div class="debt-head">' +
         '<div class="d-name">' + title + '</div>' +
-        '<span class="d-badge ' + st.cls + '">' + st.text + '</span>' +
-        '<button class="d-edit" data-edit="' + d.id + '" title="Edit">\u270E</button>' +
-        '<button class="d-del" data-del="' + d.id + '" title="Delete debt">&times;</button>' +
+        '<span class="d-badge ' + (paidOff ? "b-paid" : "b-ok") + '">' + (paidOff ? "Fully paid" : (items.length + " item" + (items.length === 1 ? "" : "s"))) + '</span>' +
       '</div>' +
-      mergeNote +
       '<div class="d-amounts">' +
-        '<div class="seg"><div class="k">Owed</div><div class="v">' + peso(amount) + '</div></div>' +
+        '<div class="seg"><div class="k">Owed</div><div class="v">' + peso(owed) + '</div></div>' +
         '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(paid) + '</div></div>' +
         '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(remaining) + '</div></div>' +
       '</div>' +
       '<div class="d-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
-      '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span>' +
-        (d.terms > 1 ? d.terms + " terms \u00d7 " + peso(per) : "one-time") + '</span></div>' +
-      breakdownHtml +
-      termRow +
-      editPanel +
+      '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span></span></div>' +
+      boxesHtml +
     '</div>';
   }
 
   function renderList() {
     const el = document.getElementById("debtList");
-    // Only debts active this month
     const activeThisMonth = state.debts.filter(d => isActiveIn(d, viewMonth));
     if (!activeThisMonth.length) {
       el.innerHTML = '<div class="card"><div class="empty">Walang utang na aktibo sa ' + monthLabel(viewMonth) + '. Magdagdag sa ibaba o lumipat ng buwan.</div></div>';
@@ -542,39 +539,42 @@
     order.forEach(cat => {
       const list = groups[cat];
       if (!list || !list.length) return;
-      // category total = sum of THIS month's per-term dues
-      const catDue = list.reduce((s, d) => s + perTermOf(d), 0);
+      // category total = sum of THIS month's dues (per-term for installments)
+      const catDue = list.reduce((s, d) => s + (d.terms > 1 ? perTermOf(d) : remainingOf(d)), 0);
       html += '<div class="cat-group">' +
         '<div class="cat-header"><span class="cat-title">' + catLabel(cat) + '</span>' +
         '<span class="cat-total">Due: ' + peso(catDue) + '</span></div>';
-      list.forEach(d => { html += debtCardHtml(d); });
+      // group items within this category into cards (per person/label)
+      const cards = {};
+      const cardOrder = [];
+      list.forEach(d => { const k = cardKeyOf(d); if (!cards[k]) { cards[k] = []; cardOrder.push(k); } cards[k].push(d); });
+      cardOrder.forEach(k => { html += cardHtml(cardTitleOf(cards[k][0]), cat, cards[k]); });
       html += '</div>';
     });
     el.innerHTML = html;
 
-    // wire per-item paid checkbox (each utang in the breakdown marked separately)
+    // wire per-item paid checkbox
     el.querySelectorAll("[data-item]").forEach(chk => chk.addEventListener("change", () => {
       const d = state.debts.find(x => x.id === chk.getAttribute("data-item"));
-      if (!d || !d.entries) return;
-      const i = +chk.getAttribute("data-idx");
-      if (d.entries[i]) d.entries[i].paid = chk.checked;
+      if (!d) return;
+      if (d.terms > 1) {
+        if (chk.checked) d.paidTerms[viewMonth] = true; else delete d.paidTerms[viewMonth];
+      } else {
+        d.paid = chk.checked;
+      }
       saveState(); renderAll();
     }));
 
     // wire edit toggle
     el.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-edit");
-      const p = document.getElementById("edit-" + id);
+      const p = document.getElementById("edit-" + btn.getAttribute("data-edit"));
       if (p) p.style.display = (p.style.display === "none") ? "" : "none";
     }));
-    // edit: recompute per-term live when amount/terms change
     el.querySelectorAll("[data-eamt], [data-eterms]").forEach(inp => inp.addEventListener("input", () => {
       const id = inp.getAttribute("data-eamt") || inp.getAttribute("data-eterms");
-      const amtEl = el.querySelector('[data-eamt="' + id + '"]');
-      const termsEl = el.querySelector('[data-eterms="' + id + '"]');
-      const perEl = el.querySelector('[data-eper="' + id + '"]');
-      const amt = num(amtEl.value), terms = Math.max(1, Math.round(num(termsEl.value)));
-      perEl.value = (amt / terms).toFixed(2);
+      const amt = num(el.querySelector('[data-eamt="' + id + '"]').value);
+      const terms = Math.max(1, Math.round(num(el.querySelector('[data-eterms="' + id + '"]').value)));
+      el.querySelector('[data-eper="' + id + '"]').value = (amt / terms).toFixed(2);
     }));
     el.querySelectorAll("[data-esave]").forEach(btn => btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-esave");
@@ -584,22 +584,20 @@
       const terms = Math.max(1, Math.round(num(el.querySelector('[data-eterms="' + id + '"]').value)));
       if (amt <= 0) return;
       d.amount = amt; d.terms = terms;
-      // drop any paid months that fall outside the new term window
-      Object.keys(d.paidMonths).forEach(k => { if (!isActiveIn(d, k)) delete d.paidMonths[k]; });
+      Object.keys(d.paidTerms).forEach(k => { if (!isActiveIn(d, k)) delete d.paidTerms[k]; });
       saveState(); renderAll();
     }));
     el.querySelectorAll("[data-ecancel]").forEach(btn => btn.addEventListener("click", () => {
       const p = document.getElementById("edit-" + btn.getAttribute("data-ecancel"));
       if (p) p.style.display = "none";
-      renderAll();
     }));
 
     // wire delete
     el.querySelectorAll("[data-del]").forEach(btn => btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-del");
       const d = state.debts.find(x => x.id === id);
-      const dLabel = d ? ((d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category))) : "this debt";
-      if (!confirm("Delete \"" + dLabel + "\"? Buburahin ito sa lahat ng buwan. Hindi na mababawi.")) return;
+      const dLabel = d ? ((d.name && d.name.trim()) ? d.name : (d.person || catLabel(d.category))) : "this item";
+      if (!confirm("Delete \"" + dLabel + "\"? Hindi na mababawi.")) return;
       state.debts = state.debts.filter(x => x.id !== id);
       saveState(); renderAll();
     }));
@@ -646,20 +644,13 @@
     renderChart();
   }
 
-  // ---------- Add debt ----------
-  function mergeKey(category, person, name, subCat) {
-    const sub = usesSubCat(category) ? ("::" + (subCat || "")) : "";
-    if (category === "person") return "person::" + (person || "").trim().toLowerCase() + sub;
-    return category + "::" + (name || "").trim().toLowerCase() + sub;
-  }
-
+  // ---------- Add debt (each add = one standalone item) ----------
   function addDebt() {
     const category = document.getElementById("newCategory").value;
     const person = document.getElementById("newPerson").value.trim();
     const name = document.getElementById("newName").value.trim();
     const subCat = usesSubCat(category) ? document.getElementById("newSubCat").value : "";
     const amount = num(document.getElementById("newAmount").value);
-    const note = document.getElementById("newNote").value.trim();
     const terms = Math.max(1, Math.round(num(document.getElementById("newTerms").value) || 1));
 
     if (category === "person") {
@@ -670,29 +661,17 @@
     if (amount <= 0) { document.getElementById("newAmount").focus(); return; }
 
     const today = new Date().toISOString().slice(0, 10);
-    const key = mergeKey(category, person, name, subCat);
-    const existing = state.debts.find(x => mergeKey(x.category, x.person, x.name, x.subCat) === key);
-
-    if (existing) {
-      existing.amount = num(existing.amount) + amount;
-      if (terms > 1 && existing.terms <= 1) existing.terms = terms; // adopt installment if provided
-      if (!existing.entries) existing.entries = [];
-      existing.entries.push({ amt: amount, date: today, note: note });
-    } else {
-      state.debts.push({
-        id: uid(), category: category, person: category === "person" ? person : "",
-        name: name, subCat: subCat, amount: amount, terms: terms,
-        startMonth: viewMonth, paidMonths: {},
-        entries: [{ amt: amount, date: today, note: note }],
-        createdAt: Date.now()
-      });
-    }
+    state.debts.push({
+      id: uid(), category: category, person: category === "person" ? person : "",
+      name: name, subCat: subCat, amount: amount, terms: terms,
+      startMonth: viewMonth, paidTerms: {}, paid: false,
+      date: today, createdAt: Date.now()
+    });
     saveState();
 
     document.getElementById("newPerson").value = "";
     document.getElementById("newName").value = "";
     document.getElementById("newAmount").value = "";
-    document.getElementById("newNote").value = "";
     document.getElementById("newTerms").value = "";
     document.getElementById("newPerTerm").value = "";
     renderAll();
@@ -762,7 +741,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 71;
+  const APP_VERSION = 72;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
