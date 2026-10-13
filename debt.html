@@ -13,6 +13,8 @@
 <meta name="apple-mobile-web-app-title" content="Debt" />
 <title>Debt Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   :root {
     --bg: #000000;
@@ -149,6 +151,11 @@
   .bd-edit, .bd-del { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 3px; }
   .bd-edit { font-size: 12px; } .bd-del { font-size: 15px; }
   .bd-edit:hover { color: var(--gold-bright); } .bd-del:hover { color: var(--danger); }
+
+  .reply-note { margin-top: 10px; background: linear-gradient(135deg, rgba(79,140,255,0.12), rgba(22,22,26,0.3));
+    border: 1px solid rgba(79,140,255,0.4); border-radius: 12px; padding: 9px 12px; }
+  .reply-note .rn-head { color: #7fa8ff; font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+  .reply-note .rn-body { font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
 
   .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
   .d-amounts .seg { text-align: center; flex: 1; }
@@ -335,8 +342,39 @@
   //   paid: bool,                      // for one-time (terms==1)
   //   date, createdAt
   // }
-  let state = { debts: [] };
+  let state = { debts: [], shareIds: {} }; // shareIds: cardKey -> shareId
   let viewMonth = ""; // "YYYY-MM" currently shown
+
+  // ---------- Firebase (reuse the tracker project) ----------
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyATaU8PnQwkMRvf6_j6Ccp1j0Qz8oeyELI",
+    authDomain: "crypto-tracker-bfefb.firebaseapp.com",
+    databaseURL: "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "crypto-tracker-bfefb",
+    storageBucket: "crypto-tracker-bfefb.firebasestorage.app",
+    messagingSenderId: "901782471631",
+    appId: "1:901782471631:web:5c7ec398e607b1777548ba"
+  };
+  let fbDb = null;
+  const shareNotes = {}; // shareId -> { note, updatedAt }
+  function fbInit() {
+    try {
+      if (typeof firebase === "undefined") return;
+      if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      fbDb = firebase.database();
+    } catch (e) { fbDb = null; }
+  }
+  // Listen for the recipient's note on a given shareId.
+  function fbWatchNote(shareId) {
+    if (!fbDb || !shareId) return;
+    try {
+      fbDb.ref("shares/" + shareId + "/reply").on("value", (snap) => {
+        const v = snap.val();
+        shareNotes[shareId] = v || null;
+        renderList(); // refresh cards so the owner sees the latest note
+      });
+    } catch (e) {}
+  }
 
   function loadState() {
     try {
@@ -346,6 +384,7 @@
         if (s && Array.isArray(s.debts)) state = s;
       }
     } catch (e) {}
+    if (!state.shareIds) state.shareIds = {};
     state.debts.forEach(d => {
       if (!d.terms || d.terms < 1) d.terms = 1;
       if (!d.startMonth) d.startMonth = monthKey(new Date());
@@ -515,6 +554,16 @@
       ? '<button class="d-share" data-share="' + encodeURIComponent(cardKey) + '" title="Share kay ' + title + '">\uD83D\uDD17</button>'
       : "";
 
+    // Recipient's note (from Firebase), if this person has a share with a reply.
+    let noteHtml = "";
+    const shareId = state.shareIds[cardKey];
+    if (shareId && shareNotes[shareId] && shareNotes[shareId].note) {
+      const r = shareNotes[shareId];
+      const when = r.updatedAt ? new Date(r.updatedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+      noteHtml = '<div class="reply-note"><div class="rn-head">\uD83D\uDCAC Note mula kay ' + title + (when ? ' &middot; ' + when : '') + '</div>' +
+        '<div class="rn-body">' + String(r.note).replace(/</g, "&lt;") + '</div></div>';
+    }
+
     return '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
       '<div class="debt-head">' +
         '<div class="d-name">' + title + '</div>' +
@@ -529,6 +578,7 @@
       '<div class="d-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
       '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span></span></div>' +
       boxesHtml +
+      noteHtml +
     '</div>';
   }
 
@@ -617,15 +667,24 @@
     }));
   }
 
-  // ---------- Share link (URL-encoded, read-only snapshot of ONE person) ----------
-  // Builds a link to shared.html#<base64 payload> containing only this person's debts.
+  // ---------- Share link (URL-encoded snapshot + Firebase reply channel) ----------
+  function newShareId() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+
+  // Builds shared.html#<base64 payload>. Payload includes a shareId so the
+  // recipient can post a note back to Firebase at shares/<shareId>/reply.
   function buildShareLink(cardKey) {
     const items = state.debts.filter(d => cardKeyOf(d) === cardKey);
     if (!items.length) return null;
     const person = (items[0].category === "person") ? (items[0].person || "") : (items[0].name || "");
+
+    // reuse an existing shareId for this person, or create one
+    let shareId = state.shareIds[cardKey];
+    if (!shareId) { shareId = newShareId(); state.shareIds[cardKey] = shareId; saveState(); fbWatchNote(shareId); }
+
     const payload = {
-      v: 1,
+      v: 2,
       person: person,
+      shareId: shareId,
       madeAt: new Date().toISOString().slice(0, 10),
       items: items.map(d => ({
         name: d.name || "", subCat: d.subCat || "", amount: num(d.amount),
@@ -633,10 +692,9 @@
         paidTerms: d.paidTerms || {}, paid: !!d.paid, date: d.date || ""
       }))
     };
-    // UTF-8 safe base64
     const json = JSON.stringify(payload);
     const b64 = btoa(unescape(encodeURIComponent(json)));
-    const base = location.href.replace(/[^\/]*$/, ""); // directory of current page
+    const base = location.href.replace(/[^\/]*$/, "");
     return base + "shared.html#" + b64;
   }
 
@@ -644,18 +702,13 @@
     const link = buildShareLink(cardKey);
     if (!link) { alert("Walang maibabahagi."); return; }
     const person = cardKey.replace(/^person::/, "");
-    // Try to copy to clipboard; always show the link too.
-    const show = () => {
-      window.prompt("Share link para kay " + person + " (kopyahin at ipadala):", link);
-    };
+    const show = () => window.prompt("Share link para kay " + person + " (kopyahin at ipadala):", link);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(link).then(() => {
-        alert("Nakopya na ang link! Makikita lang ni " + person + " ang utang niya sa'yo.\n\nKung hindi awtomatikong na-paste, nasa susunod na prompt ang link.");
+        alert("Nakopya na ang link! Makikita lang ni " + person + " ang utang niya.\n\nKapag nag-submit siya ng note, lalabas ito sa card dito (naka-cloud sync).");
         show();
       }).catch(show);
-    } else {
-      show();
-    }
+    } else { show(); }
   }
 
   // ---------- Chart ----------
@@ -740,6 +793,10 @@
     loadState();
     viewMonth = monthKey(new Date());
 
+    // Firebase: connect and watch notes for any person already shared
+    fbInit();
+    Object.keys(state.shareIds || {}).forEach(k => fbWatchNote(state.shareIds[k]));
+
     document.getElementById("addBtn").addEventListener("click", addDebt);
     document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
     document.getElementById("nextMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, 1); renderAll(); });
@@ -796,7 +853,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 73;
+  const APP_VERSION = 74;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });

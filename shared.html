@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#000000" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <title>Shared Debt</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   :root {
     --bg: #000000; --panel: #16161a; --panel-2: #232329; --line: #2a2a30;
@@ -67,6 +69,9 @@
   .note-box { width: 100%; min-height: 90px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
     border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical; }
   .note-box:focus { outline: none; border-color: var(--gold); }
+  .send-btn { margin-top: 10px; width: 100%; background: var(--gold); color: #000; border: none;
+    border-radius: 12px; padding: 12px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .send-btn:hover { filter: brightness(1.05); }
   .note-hint { color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 6px; }
   .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 24px; }
   .err { color: var(--danger); text-align: center; padding: 40px 20px; font-size: 14px; }
@@ -175,21 +180,63 @@
           '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(totalRemaining) + '</div></div>' +
         '</div>' + boxes +
       '</div>' +
-      '<div class="card"><h2>Note (optional)</h2>' +
+      '<div class="card"><h2>Note sa may-ari</h2>' +
         '<textarea class="note-box" id="noteBox" placeholder="Maglagay ng note dito (e.g. bayad na ako nitong buwan, o paalala)..."></textarea>' +
-        '<div class="note-hint">Ang note na ito ay naka-save sa device mo lang (hindi awtomatikong napupunta sa may-ari). I-screenshot o kopyahin kung gusto mong ipadala pabalik.</div>' +
+        '<button class="send-btn" id="sendNote">Submit note</button>' +
+        '<div class="note-hint" id="noteStatus">' + (data.shareId ? "Ang note mo ay direktang mapupunta sa may-ari (cloud sync)." : "Note mode: saved on this device only (walang reply channel sa link na ito).") + '</div>' +
       '</div>' +
       '<div class="foot">Personal use only &bull; read-only &bull; walang ibang utang ang ipinapakita dito</div>';
 
     document.getElementById("pm").onclick = () => { viewMonth = addMonths(viewMonth, -1); render(); };
     document.getElementById("nm").onclick = () => { viewMonth = addMonths(viewMonth, 1); render(); };
 
-    // local note (keyed by person so different links keep separate notes)
-    const noteKey = "sharedNote::" + (data.person || "x");
+    // Note channel: Firebase two-way if shareId present, else local-only fallback.
     const nb = document.getElementById("noteBox");
-    try { nb.value = localStorage.getItem(noteKey) || ""; } catch (e) {}
-    nb.addEventListener("input", () => { try { localStorage.setItem(noteKey, nb.value); } catch (e) {} });
+    const status = document.getElementById("noteStatus");
+    const sendBtn = document.getElementById("sendNote");
+    const localKey = "sharedNote::" + (data.person || "x");
+
+    if (data.shareId && fbDb) {
+      const ref = fbDb.ref("shares/" + data.shareId + "/reply");
+      // load current value once; keep editing area in sync if empty
+      ref.once("value").then(snap => {
+        const v = snap.val();
+        if (v && typeof v.note === "string" && !nb.value) nb.value = v.note;
+      }).catch(() => {});
+      sendBtn.onclick = () => {
+        const note = nb.value.trim();
+        status.textContent = "Sending\u2026";
+        ref.set({ note: note, updatedAt: Date.now() })
+          .then(() => { status.textContent = "\u2705 Naipadala sa may-ari! (" + new Date().toLocaleTimeString() + ")"; })
+          .catch(() => { status.textContent = "\u26A0\uFE0F Hindi naipadala (walang internet?). Subukan ulit."; });
+      };
+    } else {
+      // fallback: local only
+      try { nb.value = localStorage.getItem(localKey) || ""; } catch (e) {}
+      sendBtn.onclick = () => {
+        try { localStorage.setItem(localKey, nb.value); } catch (e) {}
+        status.textContent = "Saved on this device (walang cloud channel sa link na ito).";
+      };
+    }
   }
+
+  // Firebase (same project as the owner) for the note reply channel.
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyATaU8PnQwkMRvf6_j6Ccp1j0Qz8oeyELI",
+    authDomain: "crypto-tracker-bfefb.firebaseapp.com",
+    databaseURL: "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "crypto-tracker-bfefb",
+    storageBucket: "crypto-tracker-bfefb.firebasestorage.app",
+    messagingSenderId: "901782471631",
+    appId: "1:901782471631:web:5c7ec398e607b1777548ba"
+  };
+  let fbDb = null;
+  try {
+    if (typeof firebase !== "undefined") {
+      if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      fbDb = firebase.database();
+    }
+  } catch (e) { fbDb = null; }
 
   data = decode();
   // default to the earliest start month so the recipient lands on a month with data
