@@ -200,7 +200,17 @@
       </div>
       <div class="divider"></div>
       <div class="field">
-        <label>Hourly rate<span class="sub">auto: monthly &times; 12 &divide; 313 days &divide; 8 hrs</span></label>
+        <label>Monthly salary<span class="sub">auto: semi-monthly &times; 2</span></label>
+        <span class="suffix"></span>
+        <input type="text" id="monthlyRate" readonly />
+      </div>
+      <div class="field">
+        <label>Daily rate<span class="sub">auto: monthly &times; 12 &divide; 313 days</span></label>
+        <span class="suffix"></span>
+        <input type="text" id="dailyRate" readonly />
+      </div>
+      <div class="field">
+        <label>Hourly rate<span class="sub">auto: daily &divide; 8 hrs</span></label>
         <span class="suffix"></span>
         <input type="text" id="hourlyRate" readonly />
       </div>
@@ -216,7 +226,13 @@
     <!-- OTHER EARNINGS -->
     <div class="card">
       <h2>Other earnings (optional)</h2>
-      <div class="hint">Mga dagdag tulad ng bonus, allowance, o adjustment. Markahan kung <b>taxable</b> o hindi.</div>
+      <div class="hint">Ang <b>De Minimis</b> ay non-taxable benefit (hal. rice/meal/allowance) &mdash; hindi binabawasan ng tax. Pwede ka ring mag-add ng bonus/adjustment sa ibaba.</div>
+      <div class="field">
+        <label>De Minimis<span class="sub">non-taxable allowance</span></label>
+        <span class="suffix">PHP</span>
+        <input type="text" inputmode="decimal" id="deMinimis" placeholder="0.00" />
+      </div>
+      <div class="divider"></div>
       <div id="extraEarnList"></div>
       <div class="btn-row"><button class="btn" id="addEarnBtn">+ Add earning</button></div>
     </div>
@@ -347,6 +363,7 @@
 
   let state = {
     base: DEFAULT_BASE,
+    deMinimis: "",          // non-taxable allowance
     ot: {},                 // key -> hours (string)
     extraEarn: [],          // { name, amount, taxable }
     // PhilHealth + tax are auto-computed. SSS / Pag-IBIG(HDMF) / MPF are fixed values
@@ -365,6 +382,7 @@
         if (!state.deduct) state.deduct = { philhealth: "", sss: DEFAULT_SSS, hdmf: DEFAULT_HDMF, mpf: DEFAULT_MPF, tax: "" };
         if (!Array.isArray(state.extraEarn)) state.extraEarn = [];
         if (!Array.isArray(state.otherDeduct)) state.otherDeduct = [];
+        if (state.deMinimis == null) state.deMinimis = "";
         // Back-fill fixed values if an older saved state left them blank.
         if (state.base === "" || state.base == null) state.base = DEFAULT_BASE;
         if (!state.deduct.sss) state.deduct.sss = DEFAULT_SSS;
@@ -393,9 +411,17 @@
   function peso(n) {
     return "PHP " + (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
+  function monthlyFromBase(baseSemi) {
+    // monthly = semi-monthly * 2
+    return baseSemi * 2;
+  }
+  function dailyFromBase(baseSemi) {
+    // daily = monthly * 12 / 313 days
+    return monthlyFromBase(baseSemi) * 12 / 313;
+  }
   function hourlyFromBase(baseSemi) {
-    // monthly = semi * 2 ; hourly = monthly * 12 / 313 / 8
-    return baseSemi * 2 * 12 / 313 / 8;
+    // hourly = daily / 8
+    return dailyFromBase(baseSemi) / 8;
   }
 
   // ---------- TRAIN semi-monthly withholding tax ----------
@@ -425,8 +451,9 @@
       otTotal += amt;
     });
 
-    // Extra earnings
-    let extraTaxable = 0, extraNonTax = 0;
+    // Extra earnings. De Minimis is a non-taxable benefit (added to gross, not to taxable).
+    const deMinimis = num(state.deMinimis);
+    let extraTaxable = 0, extraNonTax = deMinimis;
     state.extraEarn.forEach(e => {
       const a = num(e.amount);
       if (e.taxable) extraTaxable += a; else extraNonTax += a;
@@ -458,7 +485,8 @@
     const netPay = grossEarnings - totalDeductions;
 
     return {
-      base, hourly, otTotal, otBreakdown, extraTaxable, extraNonTax,
+      base, monthly: monthlyFromBase(base), daily: dailyFromBase(base), hourly,
+      otTotal, otBreakdown, deMinimis, extraTaxable, extraNonTax,
       grossEarnings, philhealth, sss, hdmf, mpf, mandatory,
       netTaxable, tax, otherDed, totalDeductions, netPay
     };
@@ -570,7 +598,9 @@
   function recompute() {
     const r = compute();
 
-    // hourly rate field
+    // rate fields
+    document.getElementById("monthlyRate").value = r.base > 0 ? peso(r.monthly) : "";
+    document.getElementById("dailyRate").value = r.base > 0 ? peso(r.daily) : "";
     document.getElementById("hourlyRate").value = r.base > 0 ? peso(r.hourly) : "";
 
     // deduction fields reflect the (read-only, auto) values
@@ -617,8 +647,9 @@
         h += row(o.name + " (" + o.hrs + " hr" + (o.hrs === 1 ? "" : "s") + ")", peso(o.amt), "sub-line");
       });
     }
+    if (r.deMinimis > 0) h += row("De Minimis", peso(r.deMinimis), "", "non-taxable");
     if (r.extraTaxable > 0) h += row("Other taxable earnings", peso(r.extraTaxable));
-    if (r.extraNonTax > 0) h += row("Non-taxable earnings", peso(r.extraNonTax));
+    if ((r.extraNonTax - r.deMinimis) > 0) h += row("Other non-taxable earnings", peso(r.extraNonTax - r.deMinimis));
     h += row("Total earnings", peso(r.grossEarnings), "total");
 
     // Deductions
@@ -741,6 +772,15 @@
       recompute();
     });
 
+    // De Minimis (non-taxable) input
+    const dmInp = document.getElementById("deMinimis");
+    dmInp.value = state.deMinimis || "";
+    dmInp.addEventListener("input", () => {
+      state.deMinimis = dmInp.value;
+      saveState();
+      recompute();
+    });
+
     // Deductions SSS / Pag-IBIG / MPF are read-only but seeded from saved state.
     document.getElementById("dSSS").value = state.deduct.sss || "";
     document.getElementById("dHDMF").value = state.deduct.hdmf || "";
@@ -762,6 +802,8 @@
       state.ot = {};
       state.extraEarn = [];
       state.otherDeduct = [];
+      state.deMinimis = "";
+      document.getElementById("deMinimis").value = "";
       saveState();
       renderOTList();
       renderExtraEarn();
@@ -871,7 +913,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 58;
+  const APP_VERSION = 59;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
