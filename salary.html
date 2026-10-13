@@ -1230,7 +1230,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 86;
+  const APP_VERSION = 87;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1240,7 +1240,9 @@
         if (window.caches && caches.keys) {
           try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
         }
-        location.reload(true);
+        const u = new URL(location.href);
+        u.searchParams.set("v", String(j.version));
+        location.replace(u.toString());
       }
     } catch (e) {}
   }

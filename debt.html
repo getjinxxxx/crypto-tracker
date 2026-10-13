@@ -730,7 +730,7 @@
       msg += '</div>';
       el.innerHTML = '<div class="card">' + msg + '</div>';
       const jb = document.getElementById("jumpBtn");
-      if (jb) jb.addEventListener("click", () => { userPickedMonth = true; viewMonth = jumpMonth; renderAll(); });
+      if (jb) jb.addEventListener("click", () => { viewMonth = jumpMonth; renderAll(); });
       return;
     }
     const order = ["person", "creditcard", "bankloan", "onlineloan", "government", "salaryloan", "other"];
@@ -991,11 +991,13 @@
     });
     return Object.keys(set).sort();
   }
-  // If the user hasn't manually navigated and the current month is empty,
-  // jump to the nearest month that actually has data (prevents "blank" confusion).
-  let userPickedMonth = false;
+  // Auto-jump ONCE on first load if the current month is empty but data exists
+  // elsewhere. After the first jump (or any manual navigation) it never auto-moves,
+  // so clicking prev/next always shows exactly the month you picked.
+  let autoJumpDone = false;
   function maybeAutoJump() {
-    if (userPickedMonth) return;
+    if (autoJumpDone) return;
+    autoJumpDone = true;
     const hasHere = state.debts.some(d => isActiveIn(d, viewMonth));
     if (hasHere) return;
     const keys = monthsWithData();
@@ -1065,8 +1067,8 @@
     Object.keys(state.shareIds || {}).forEach(k => fbWatchNote(state.shareIds[k]));
 
     document.getElementById("addBtn").addEventListener("click", addDebt);
-    document.getElementById("prevMonth").addEventListener("click", () => { userPickedMonth = true; viewMonth = addMonths(viewMonth, -1); renderAll(); });
-    document.getElementById("nextMonth").addEventListener("click", () => { userPickedMonth = true; viewMonth = addMonths(viewMonth, 1); renderAll(); });
+    document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
+    document.getElementById("nextMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, 1); renderAll(); });
 
     // Person + sub-category field toggles
     const catSel = document.getElementById("newCategory");
@@ -1132,7 +1134,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 86;
+  const APP_VERSION = 87;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1142,7 +1144,10 @@
         if (window.caches && caches.keys) {
           try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
         }
-        location.reload(true);
+        // Force-fetch fresh HTML (bust the browser HTTP cache) instead of a plain reload.
+        const u = new URL(location.href);
+        u.searchParams.set("v", String(j.version));
+        location.replace(u.toString());
       }
     } catch (e) {}
   }
