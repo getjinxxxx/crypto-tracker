@@ -230,6 +230,8 @@
   .cutoff-box .cb-left.warn .cb-amt { color: var(--red); }
   .recur-tag { display: inline-block; background: rgba(176,124,255,0.18); color: #c7a3ff; font-size: 10px;
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
+  .due-tag { display: inline-block; background: rgba(245,197,66,0.15); color: var(--gold-bright); font-size: 10px;
+    font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
 </style>
 </head>
 <body class="locked">
@@ -325,6 +327,10 @@
       <div class="field">
         <label>Total amount owed<span class="sub">principal (o halaga kada buwan kung recurring)</span></label>
         <input type="text" inputmode="decimal" id="newAmount" placeholder="0.00" />
+      </div>
+      <div class="field">
+        <label>Due date / deadline<span class="sub">araw ng buwan (1-15 = kinsenas, 16-31 = katapusan)</span></label>
+        <input type="number" inputmode="numeric" id="newDueDay" min="1" max="31" placeholder="e.g. 15" />
       </div>
       <div class="field" id="recurringField">
         <label>Recurring bill<span class="sub">monthly, until further notice (hal. Netflix, Meralco)</span></label>
@@ -448,6 +454,7 @@
       if (!d.date) d.date = d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : "";
       if (typeof d.recurring !== "boolean") d.recurring = false;
       if (d.endMonth == null) d.endMonth = ""; // set when a recurring bill is stopped
+      if (d.dueDay == null) d.dueDay = 0;       // 0 = no deadline; 1-15 kinsenas, 16-31 katapusan
     });
   }
   function saveState() {
@@ -580,9 +587,15 @@
     const stopBtn = d.recurring
       ? '<button class="bd-edit" data-stop="' + d.id + '" title="Itigil ang recurring bill">\u23F9</button>'
       : "";
+    // Deadline tag: shows the due day + which cutoff it falls under.
+    let dueTag = "";
+    if (d.dueDay && d.dueDay >= 1 && d.dueDay <= 31) {
+      const cut = cutoffForDueDay(d.dueDay) === "1st" ? "kinsenas" : "katapusan";
+      dueTag = ' <span class="due-tag" title="Deadline">\uD83D\uDCC5 ' + d.dueDay + ' (' + cut + ')</span>';
+    }
     return '<div class="bd-row' + (paidNow ? " bd-paid" : "") + '">' +
       '<input type="checkbox" class="bd-check" data-item="' + d.id + '"' + (paidNow ? " checked" : "") + '>' +
-      '<span class="bd-label">' + label + termTag + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
+      '<span class="bd-label">' + label + termTag + dueTag + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
       '<span class="bd-amt">' + peso(amtShown) + '</span>' +
       stopBtn +
       '<button class="bd-edit" data-edit="' + d.id + '" title="Edit">\u270E</button>' +
@@ -591,6 +604,7 @@
       // inline edit panel for this item
       '<div class="edit-panel" id="edit-' + d.id + '" style="display:none">' +
         '<div class="efield"><label>Amount' + (d.recurring ? ' (per month)' : '') + '</label><input type="text" inputmode="decimal" data-eamt="' + d.id + '" value="' + num(d.amount) + '"></div>' +
+        '<div class="efield"><label>Due date (1-31)</label><input type="number" inputmode="numeric" min="1" max="31" data-edue="' + d.id + '" value="' + (d.dueDay || "") + '"></div>' +
         (d.recurring ? '' :
           '<div class="efield"><label>Number of terms</label><input type="text" inputmode="numeric" data-eterms="' + d.id + '" value="' + d.terms + '"></div>' +
           '<div class="efield"><label>Payment per term</label><input type="text" readonly data-eper="' + d.id + '" value="' + perTermOf(d).toFixed(2) + '"></div>') +
@@ -746,6 +760,8 @@
       const amt = num(el.querySelector('[data-eamt="' + id + '"]').value);
       if (amt <= 0) return;
       d.amount = amt;
+      const dueEl = el.querySelector('[data-edue="' + id + '"]');
+      if (dueEl) { let dd = Math.round(num(dueEl.value)); d.dueDay = (dd >= 1 && dd <= 31) ? dd : 0; }
       if (!d.recurring) {
         const termsEl = el.querySelector('[data-eterms="' + id + '"]');
         if (termsEl) d.terms = Math.max(1, Math.round(num(termsEl.value)));
@@ -873,6 +889,9 @@
   function loadSalaryHistory() {
     try { return JSON.parse(localStorage.getItem("salaryHistoryV1") || "[]"); } catch (e) { return []; }
   }
+  // Which cutoff does a due day fall under? 1-15 = 1st (kinsenas), 16-31 = 2nd (katapusan).
+  function cutoffForDueDay(day) { return (day >= 1 && day <= 15) ? "1st" : "2nd"; }
+
   function renderSalaryCard() {
     const card = document.getElementById("salaryCard");
     const el = document.getElementById("salaryCutoffs");
@@ -880,21 +899,34 @@
     if (!hist.length) { card.style.display = "none"; return; }
     card.style.display = "";
 
-    // Total utang due this month, split evenly across the saved cutoffs.
-    const monthDue = state.debts.filter(d => isActiveIn(d, viewMonth))
-      .reduce((s, d) => s + (d.terms > 1 ? perTermOf(d) : num(d.amount)), 0);
+    // Build this month's dues, assigned to a cutoff by each utang's deadline.
+    const active = state.debts.filter(d => isActiveIn(d, viewMonth));
+    const dueByCutoff = { "1st": 0, "2nd": 0 };
+    let noDeadlineTotal = 0;
+    active.forEach(d => {
+      const amt = d.terms > 1 ? perTermOf(d) : num(d.amount);
+      if (d.dueDay && d.dueDay >= 1 && d.dueDay <= 31) {
+        dueByCutoff[cutoffForDueDay(d.dueDay)] += amt;
+      } else {
+        noDeadlineTotal += amt; // no deadline -> split evenly later
+      }
+    });
+
     const cutoffs = hist.slice().sort((a, b) => (a.cutoff === "1st" ? 0 : 1) - (b.cutoff === "1st" ? 0 : 1));
-    const sharePerCutoff = monthDue / cutoffs.length;
+    const splitShare = noDeadlineTotal / Math.max(1, cutoffs.length);
 
     el.innerHTML = cutoffs.map(h => {
       const cutLabel = h.cutoff === "1st" ? "1st cutoff (kinsenas)" : "2nd cutoff (katapusan)";
       const takeHome = num(h.net);
-      const left = takeHome - sharePerCutoff;
+      const withDeadline = dueByCutoff[h.cutoff] || 0;
+      const totalDue = withDeadline + splitShare;
+      const left = takeHome - totalDue;
       const okCls = left >= 0 ? "ok" : "warn";
       return '<div class="cutoff-box">' +
         '<div class="cb-head"><span>' + cutLabel + '</span><span>' + peso(takeHome) + '</span></div>' +
         '<div class="cb-row"><span>Take-home pay</span><b>' + peso(takeHome) + '</b></div>' +
-        '<div class="cb-row"><span>Utang (hati ng buwan)</span><b>-' + peso(sharePerCutoff) + '</b></div>' +
+        '<div class="cb-row"><span>Utang na due dito (deadline)</span><b>-' + peso(withDeadline) + '</b></div>' +
+        (splitShare > 0 ? '<div class="cb-row"><span>Utang na walang deadline (hati)</span><b>-' + peso(splitShare) + '</b></div>' : '') +
         '<div class="cb-left ' + okCls + '"><span>Natitira</span><span class="cb-amt">' + peso(left) + '</span></div>' +
       '</div>';
     }).join("");
@@ -915,6 +947,8 @@
     const name = document.getElementById("newName").value.trim();
     const subCat = usesSubCat(category) ? document.getElementById("newSubCat").value : "";
     const amount = num(document.getElementById("newAmount").value);
+    let dueDay = Math.round(num(document.getElementById("newDueDay").value));
+    if (dueDay < 1 || dueDay > 31) dueDay = 0; // 0 = no deadline
     const recurring = document.getElementById("newRecurring").checked;
     const terms = recurring ? 1 : Math.max(1, Math.round(num(document.getElementById("newTerms").value) || 1));
 
@@ -929,7 +963,7 @@
     state.debts.push({
       id: uid(), category: category, person: category === "person" ? person : "",
       name: name, subCat: subCat, amount: amount, terms: terms,
-      recurring: recurring, endMonth: "",
+      recurring: recurring, endMonth: "", dueDay: dueDay,
       startMonth: viewMonth, paidTerms: {}, paid: false,
       date: today, createdAt: Date.now()
     });
@@ -938,6 +972,7 @@
     document.getElementById("newPerson").value = "";
     document.getElementById("newName").value = "";
     document.getElementById("newAmount").value = "";
+    document.getElementById("newDueDay").value = "";
     document.getElementById("newRecurring").checked = false;
     document.getElementById("newTerms").value = "";
     document.getElementById("newPerTerm").value = "";
@@ -1024,7 +1059,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 80;
+  const APP_VERSION = 81;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
