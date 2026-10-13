@@ -483,7 +483,10 @@
       fbRef = fbDb.ref("salary/state");
       fbRef.on("value", (snap) => {
         const remote = snap.val();
-        if (remote && remote.calc) {
+        const remoteHasData = remote && remote.calc && (
+          (remote.calc.base) || (Array.isArray(remote.history) && remote.history.length)
+        );
+        if (remoteHasData) {
           if (remote.client === CLIENT_ID) return; // ignore our own echo
           applyingRemote = true;
           try {
@@ -491,20 +494,25 @@
             if (Array.isArray(remote.history)) localStorage.setItem(HIST_KEY, JSON.stringify(remote.history));
           } catch (e) {}
           applyingRemote = false;
-          // re-render from the synced data (don't steal focus if typing)
           const a = document.activeElement;
           if (!(a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA"))) { appStarted = false; startApp(); }
         } else {
-          cloudSave(true); // seed cloud from local
+          // Cloud empty: only seed if WE have real data, so an empty device won't wipe it.
+          const hist = loadHistory();
+          if ((state.base && num(state.base) > 0) || hist.length) cloudSave(true);
         }
-      }, () => {});
+      }, (err) => { console.warn("[salary] firebase listen error:", err); });
     } catch (e) {}
   }
   function cloudSave(immediate) {
     if (!fbRef || applyingRemote) return;
     clearTimeout(saveTimer);
     const doSave = () => {
-      fbRef.set({ calc: state, history: loadHistory(), updatedAt: Date.now(), client: CLIENT_ID }).catch(() => {});
+      let calc, hist;
+      try { calc = JSON.parse(JSON.stringify(state)); } catch (e) { calc = {}; }
+      try { hist = JSON.parse(JSON.stringify(loadHistory())); } catch (e) { hist = []; }
+      fbRef.set({ calc: calc, history: hist, updatedAt: Date.now(), client: CLIENT_ID })
+        .catch((err) => { console.warn("[salary] firebase save failed:", err); });
     };
     if (immediate) doSave(); else saveTimer = setTimeout(doSave, 800);
   }
@@ -1222,7 +1230,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 81;
+  const APP_VERSION = 82;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });

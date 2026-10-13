@@ -402,7 +402,7 @@
       fbStateRef = fbDb.ref("debt/state");
       fbStateRef.on("value", (snap) => {
         const remote = snap.val();
-        if (remote && remote.state) {
+        if (remote && remote.state && Array.isArray(remote.state.debts)) {
           if (remote.client === CLIENT_ID) return; // ignore our own echo
           applyingRemote = true;
           try {
@@ -414,15 +414,24 @@
           applyingRemote = false;
           renderAll();
         } else {
-          cloudSaveState(true); // seed cloud from local the first time
+          // Cloud is empty/invalid. Only seed it if WE actually have data,
+          // so an empty device never wipes a populated cloud.
+          if (state.debts && state.debts.length) cloudSaveState(true);
         }
-      }, () => {});
+      }, (err) => { console.warn("[debt] firebase listen error:", err); });
     } catch (e) { fbDb = null; }
   }
   function cloudSaveState(immediate) {
     if (!fbStateRef || applyingRemote) return;
     clearTimeout(saveTimer);
-    const doSave = () => { fbStateRef.set({ state: state, updatedAt: Date.now(), client: CLIENT_ID }).catch(() => {}); };
+    const doSave = () => {
+      // Deep-clean to strip any undefined values (Firebase rejects undefined, which
+      // would silently fail the whole save and look like "data disappeared").
+      let clean;
+      try { clean = JSON.parse(JSON.stringify(state)); } catch (e) { clean = { debts: [], shareIds: {} }; }
+      fbStateRef.set({ state: clean, updatedAt: Date.now(), client: CLIENT_ID })
+        .catch((err) => { console.warn("[debt] firebase save failed:", err); });
+    };
     if (immediate) doSave(); else saveTimer = setTimeout(doSave, 800);
   }
   // Listen for the recipient's note on a given shareId.
@@ -1059,7 +1068,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 81;
+  const APP_VERSION = 82;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
