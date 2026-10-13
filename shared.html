@@ -87,19 +87,21 @@
     bills:"Bills / Utilities", transport:"Transportation", health:"Health / Medical", travel:"Travel", emergency:"Emergency", other:"Other" };
   function subLabel(s){ return SUBCATS[s] || "Other"; }
 
-  function monthKey(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
-  function monthLabel(k){ const d=new Date(k+"-01T00:00:00"); return isNaN(d)?k:d.toLocaleDateString("en-PH",{month:"long",year:"numeric"}); }
-  function addMonths(k,n){ const d=new Date(k+"-01T00:00:00"); d.setMonth(d.getMonth()+n); return monthKey(d); }
-  function termIndexFor(it,k){ const s=new Date(it.startMonth+"-01T00:00:00"), c=new Date(k+"-01T00:00:00");
-    return (c.getFullYear()-s.getFullYear())*12 + (c.getMonth()-s.getMonth()); }
-  function isActiveIn(it,k){ const i=termIndexFor(it,k); return i>=0 && i<(it.terms||1); }
-  function perTermOf(it){ return (it.terms>1) ? num(it.amount)/it.terms : num(it.amount); }
+  // Timezone-safe month math (pure strings, no Date parsing drift).
+  const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  function monthKey(d){ return (d instanceof Date) ? (d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")) : String(d).slice(0,7); }
+  function parseKey(k){ return [parseInt((k||"").slice(0,4),10), parseInt((k||"").slice(5,7),10)-1]; }
+  function monthLabel(k){ const[y,m]=parseKey(k); return (isNaN(y)||m<0||m>11)?k:(MONTH_NAMES[m]+" "+y); }
+  function addMonths(k,n){ let[y,m]=parseKey(k); const t=y*12+m+n; return Math.floor(t/12)+"-"+String((t%12)+1).padStart(2,"0"); }
+  function termIndexFor(it,k){ const[sy,sm]=parseKey(it.startMonth),[cy,cm]=parseKey(k); return (cy-sy)*12+(cm-sm); }
+  function isActiveIn(it,k){ const i=termIndexFor(it,k); if(i<0)return false; if(it.recurring)return !it.endMonth||k<=it.endMonth; return i<(it.terms||1); }
+  function isPaidThisMonth(it,k){ if(it.recurring||it.terms>1)return !!(it.paidTerms||{})[k]; return !!it.paid; }
+  function perTermOf(it){ return (it.terms>1 && !it.recurring) ? num(it.amount)/it.terms : num(it.amount); }
   function paidOf(it){
-    if (it.terms>1) return Object.keys(it.paidTerms||{}).filter(x=>it.paidTerms[x]).length * perTermOf(it);
+    if (it.recurring || it.terms>1) return Object.keys(it.paidTerms||{}).filter(x=>it.paidTerms[x]).length * perTermOf(it);
     return it.paid ? num(it.amount) : 0;
   }
-  function remainingOf(it){ return Math.max(0, num(it.amount)-paidOf(it)); }
-  function isPaidThisMonth(it,k){ return it.terms>1 ? !!(it.paidTerms||{})[k] : !!it.paid; }
+  function remainingOf(it){ if(it.recurring) return isPaidThisMonth(it, viewMonth)?0:num(it.amount); return Math.max(0, num(it.amount)-paidOf(it)); }
 
   let data = null;
   let viewMonth = monthKey(new Date());

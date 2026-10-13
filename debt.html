@@ -497,27 +497,35 @@
   }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
-  // ---------- Month helpers ----------
+  // ---------- Month helpers (pure string math, timezone-safe) ----------
+  const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   function monthKey(dateOrStr) {
-    const d = (dateOrStr instanceof Date) ? dateOrStr : new Date(dateOrStr + "-01T00:00:00");
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    if (dateOrStr instanceof Date) {
+      return dateOrStr.getFullYear() + "-" + String(dateOrStr.getMonth() + 1).padStart(2, "0");
+    }
+    return String(dateOrStr).slice(0, 7); // already "YYYY-MM..." -> "YYYY-MM"
+  }
+  // Parse "YYYY-MM" into [year, monthIndex0] without Date (avoids UTC drift).
+  function parseKey(key) {
+    const y = parseInt((key || "").slice(0, 4), 10);
+    const m = parseInt((key || "").slice(5, 7), 10) - 1;
+    return [y, m];
   }
   function monthLabel(key) {
-    const d = new Date(key + "-01T00:00:00");
-    return isNaN(d) ? key : d.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+    const [y, m] = parseKey(key);
+    if (isNaN(y) || isNaN(m) || m < 0 || m > 11) return key;
+    return MONTH_NAMES[m] + " " + y;
   }
-  // Add n months to a "YYYY-MM" key.
   function addMonths(key, n) {
-    const d = new Date(key + "-01T00:00:00");
-    d.setMonth(d.getMonth() + n);
-    return monthKey(d);
+    let [y, m] = parseKey(key);
+    const total = y * 12 + m + n;
+    return Math.floor(total / 12) + "-" + String((total % 12) + 1).padStart(2, "0");
   }
-  // How many months is "key" after the debt's start month? (0-based). null if before.
+  // How many months is "key" after the debt's start month? (0-based).
   function termIndexFor(d, key) {
-    const start = new Date(d.startMonth + "-01T00:00:00");
-    const cur = new Date(key + "-01T00:00:00");
-    const diff = (cur.getFullYear() - start.getFullYear()) * 12 + (cur.getMonth() - start.getMonth());
-    return diff;
+    const [sy, sm] = parseKey(d.startMonth);
+    const [cy, cm] = parseKey(key);
+    return (cy - sy) * 12 + (cm - sm);
   }
   // Is the debt active in the given month? Recurring bills run every month from
   // startMonth onward until stopped (endMonth set); otherwise it's N fixed terms.
@@ -1068,7 +1076,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 82;
+  const APP_VERSION = 83;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
