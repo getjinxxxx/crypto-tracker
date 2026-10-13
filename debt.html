@@ -113,6 +113,14 @@
   .d-badge.b-over { background: rgba(255,107,107,0.18); color: #ff8a8a; }
   .debt-head .d-del { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 4px; }
   .debt-head .d-del:hover { color: var(--danger); }
+  .d-cat { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: .3px;
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+  .d-sub { color: var(--muted); font-size: 12px; margin: -4px 0 8px; }
+  select.cat-sel {
+    width: 220px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 14px;
+  }
+  select.cat-sel:focus { outline: none; border-color: var(--gold); }
 
   .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
   .d-amounts .seg { text-align: center; flex: 1; }
@@ -207,8 +215,24 @@
       <h2>Add a debt</h2>
       <div class="hint">Ilagay ang pangalan at kabuuang utang. Pwede kang maglagay ng due date at interest kung meron.</div>
       <div class="field">
-        <label>Name</label>
-        <input type="text" class="name-in" id="newName" placeholder="e.g. Credit Card, Loan kay X" />
+        <label>Category</label>
+        <select id="newCategory" class="cat-sel">
+          <option value="person">Person (Utang sa tao)</option>
+          <option value="creditcard">Credit Card</option>
+          <option value="bankloan">Bank Loan</option>
+          <option value="onlineloan">Online Loan / App</option>
+          <option value="government">Government (SSS/Pag-IBIG/GSIS)</option>
+          <option value="salaryloan">Salary / Company Loan</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="field" id="personField">
+        <label>Person name<span class="sub">kanino ka may utang</span></label>
+        <input type="text" class="name-in" id="newPerson" placeholder="e.g. Juan, Tita Maria" />
+      </div>
+      <div class="field">
+        <label>Name / label<span class="sub">optional, e.g. BPI Visa</span></label>
+        <input type="text" class="name-in" id="newName" placeholder="e.g. Credit Card, Groceries loan" />
       </div>
       <div class="field">
         <label>Total amount owed<span class="sub">principal</span></label>
@@ -259,6 +283,18 @@
   function saveState() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
   }
+
+  // Category labels for display
+  const CATEGORIES = {
+    person: "Utang sa tao",
+    creditcard: "Credit Card",
+    bankloan: "Bank Loan",
+    onlineloan: "Online Loan",
+    government: "Government",
+    salaryloan: "Salary / Company Loan",
+    other: "Other"
+  };
+  function catLabel(c) { return CATEGORIES[c] || "Other"; }
 
   function num(v) {
     if (v == null) return 0;
@@ -338,12 +374,25 @@
           '<span>' + peso(num(p.amt)) + ' <button class="pdel" data-pdel="' + d.id + '" data-pidx="' + realIdx + '" title="Remove payment">&times;</button></span></div>';
       });
 
+      // Title: for a person debt, lead with the person's name ("Utang kay X").
+      let title;
+      if (d.category === "person" && d.person) {
+        title = "Utang kay " + d.person + (d.name ? " \u2014 " + d.name : "");
+      } else {
+        title = d.name || catLabel(d.category);
+      }
+      // Secondary line
+      let subLine = catLabel(d.category);
+      if (d.category === "person" && d.person && d.name) subLine = "Utang sa tao &middot; " + d.name;
+
       item.innerHTML =
         '<div class="debt-head">' +
-          '<div class="d-name">' + (d.name || "Unnamed debt") + '</div>' +
+          '<div class="d-name">' + title + '</div>' +
+          '<span class="d-cat">' + catLabel(d.category) + '</span>' +
           '<span class="d-badge ' + st.cls + '">' + st.text + '</span>' +
           '<button class="d-del" data-del="' + d.id + '" title="Delete debt">&times;</button>' +
         '</div>' +
+        '<div class="d-sub">' + subLine + '</div>' +
         '<div class="d-amounts">' +
           '<div class="seg"><div class="k">Owed</div><div class="v">' + peso(amount) + '</div></div>' +
           '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(paid) + '</div></div>' +
@@ -406,7 +455,7 @@
     if (!active.length) { card.style.display = "none"; return; }
     card.style.display = "";
 
-    const labels = active.map(d => d.name || "Unnamed");
+    const labels = active.map(d => (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category)));
     const data = active.map(d => remainingOf(d));
     const palette = ["#ff6b6b", "#f5c542", "#4f8cff", "#34d399", "#b07cff", "#ff9f6b", "#6bd3ff", "#ff6bd3"];
     const colors = active.map((d, i) => palette[i % palette.length]);
@@ -433,16 +482,25 @@
 
   // ---------- Add debt ----------
   function addDebt() {
+    const category = document.getElementById("newCategory").value;
+    const person = document.getElementById("newPerson").value.trim();
     const name = document.getElementById("newName").value.trim();
     const amount = num(document.getElementById("newAmount").value);
     const paid = num(document.getElementById("newPaid").value);
     const due = document.getElementById("newDue").value;
     const monthly = num(document.getElementById("newMonthly").value);
-    if (!name) { document.getElementById("newName").focus(); return; }
+
+    // For a person debt, require the person's name. Otherwise require a label/name.
+    if (category === "person") {
+      if (!person) { document.getElementById("newPerson").focus(); return; }
+    } else if (!name) {
+      document.getElementById("newName").focus(); return;
+    }
     if (amount <= 0) { document.getElementById("newAmount").focus(); return; }
 
     const debt = {
-      id: uid(), name: name, amount: amount, due: due || "",
+      id: uid(), category: category, person: category === "person" ? person : "",
+      name: name, amount: amount, due: due || "",
       monthly: monthly || 0, payments: [], createdAt: Date.now()
     };
     if (paid > 0) debt.payments.push({ amt: paid, date: new Date().toISOString().slice(0, 10), label: "Initial" });
@@ -450,6 +508,7 @@
     saveState();
 
     // clear form
+    document.getElementById("newPerson").value = "";
     document.getElementById("newName").value = "";
     document.getElementById("newAmount").value = "";
     document.getElementById("newPaid").value = "";
@@ -465,6 +524,16 @@
     appStarted = true;
     loadState();
     document.getElementById("addBtn").addEventListener("click", addDebt);
+
+    // Show the Person name field only when category = person.
+    const catSel = document.getElementById("newCategory");
+    const personField = document.getElementById("personField");
+    function refreshPersonField() {
+      personField.style.display = (catSel.value === "person") ? "" : "none";
+    }
+    catSel.addEventListener("change", refreshPersonField);
+    refreshPersonField();
+
     renderAll();
   }
 
@@ -495,7 +564,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 65;
+  const APP_VERSION = 66;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
