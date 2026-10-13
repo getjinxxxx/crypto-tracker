@@ -592,7 +592,8 @@
     const dt = d.date ? new Date(d.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
     const label = (d.name && d.name.trim()) ? d.name : (d.person ? d.person : "Name/Label");
     const paidNow = isPaidThisMonth(d);
-    const amtShown = num(d.amount);
+    // Show THIS MONTH's amount (per-term for installments), not the full total.
+    const amtShown = perTermOf(d);
     // Installment term indicator (1/3) or Recurring tag.
     let termTag = "";
     if (d.recurring) {
@@ -630,9 +631,10 @@
   }
 
   // One card = all items for a person/label, with sub-category boxes inside.
+  // Header shows THIS MONTH's figures (per-term dues for the viewed month).
   function cardHtml(title, category, items, cardKey) {
-    const owed = items.reduce((s, d) => s + num(d.amount), 0);
-    const paid = items.reduce((s, d) => s + paidOf(d), 0);
+    const owed = items.reduce((s, d) => s + perTermOf(d), 0);           // due this month
+    const paid = items.reduce((s, d) => s + (isPaidThisMonth(d) ? perTermOf(d) : 0), 0);
     const remaining = Math.max(0, owed - paid);
     const pct = owed > 0 ? Math.min(100, (paid / owed) * 100) : 0;
     const paidOff = remaining <= 0.009;
@@ -644,7 +646,7 @@
       items.forEach(d => { const s = d.subCat || "other"; (bySub[s] = bySub[s] || []).push(d); });
       Object.keys(bySub).forEach(sub => {
         const list = bySub[sub];
-        const boxDue = list.reduce((s, d) => s + (d.terms > 1 ? perTermOf(d) : remainingOf(d)), 0);
+        const boxDue = list.reduce((s, d) => s + perTermOf(d), 0);
         boxesHtml += '<div class="sub-box">' +
           '<div class="sub-box-head"><span>' + subLabel(sub) + '</span><span>' + peso(boxDue) + '</span></div>' +
           list.map(itemRowHtml).join("") +
@@ -683,7 +685,7 @@
         shareBtn +
       '</div>' +
       '<div class="d-amounts">' +
-        '<div class="seg"><div class="k">Owed</div><div class="v">' + peso(owed) + '</div></div>' +
+        '<div class="seg"><div class="k">Due this month</div><div class="v">' + peso(owed) + '</div></div>' +
         '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(paid) + '</div></div>' +
         '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(remaining) + '</div></div>' +
       '</div>' +
@@ -709,8 +711,8 @@
     order.forEach(cat => {
       const list = groups[cat];
       if (!list || !list.length) return;
-      // category total = sum of THIS month's dues (per-term for installments)
-      const catDue = list.reduce((s, d) => s + (d.terms > 1 ? perTermOf(d) : remainingOf(d)), 0);
+      // category total = sum of THIS month's dues (per-term amount for everyone)
+      const catDue = list.reduce((s, d) => s + perTermOf(d), 0);
       const open = catOpen[cat] !== false; // expanded by default
       html += '<div class="cat-group">' +
         '<div class="cat-header" data-cattoggle="' + cat + '">' +
@@ -1076,7 +1078,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 83;
+  const APP_VERSION = 84;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
