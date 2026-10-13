@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<link rel="manifest" href="manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="Debt" />
+<title>Debt Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #16161a;
+    --panel-2: #232329;
+    --line: #2a2a30;
+    --text: #f2f2f7;
+    --muted: #8e8e93;
+    --gold: #d4a017;
+    --gold-bright: #f5c542;
+    --danger: #ff6b6b;
+    --green: #34d399;
+    --red: #ff6b6b;
+    --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 14px 14px 60px;
+    line-height: 1.4;
+  }
+
+  /* Lock screen */
+  #lock {
+    position: fixed; inset: 0; background: var(--bg); z-index: 500;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
+  }
+  #lock .lock-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 24px; width: 100%; max-width: 340px; text-align: center;
+  }
+  #lock .lk-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  #lock .lk-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  #lock input {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px;
+  }
+  #lock input:focus { outline: none; border-color: var(--gold); }
+  #lock button {
+    width: 100%; background: var(--gold); color: #000; border: none; border-radius: 12px;
+    padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px;
+  }
+  #lock .lk-err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 16px; }
+  body.locked { overflow: hidden; }
+  #app.hidden { display: none; }
+
+  /* Top bar */
+  .topbar { display: flex; align-items: center; gap: 10px; margin: 6px 0 18px; }
+  .topbar .home-link {
+    color: var(--muted); text-decoration: none; font-size: 13px; border: 1px solid var(--line);
+    border-radius: 999px; padding: 5px 12px; background: var(--panel);
+  }
+  .topbar .home-link:hover { color: var(--text); border-color: var(--gold); }
+  .topbar .page-title { font-size: 18px; font-weight: 700; letter-spacing: .2px; margin-left: 2px; }
+
+  /* Summary */
+  .summary {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;
+  }
+  .summary .srow { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 14px; }
+  .summary .srow .lbl { color: var(--muted); }
+  .summary .srow .val { font-weight: 700; }
+  .summary .srow .val.owed { color: var(--red); }
+  .summary .srow .val.paid { color: var(--green); }
+  .summary .srow .val.gold { color: var(--gold-bright); }
+  .summary .big { font-size: 24px; font-weight: 800; }
+
+  /* Chart */
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 13px; color: var(--gold-bright); margin: 0 0 12px; text-transform: uppercase;
+    letter-spacing: .5px; font-weight: 700;
+  }
+  .card .hint { color: var(--muted); font-size: 12px; margin: -6px 0 12px; line-height: 1.5; }
+
+  /* Debt item */
+  .debt-item {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 14px 16px; margin-bottom: 14px;
+  }
+  .debt-item.paid-off { border-color: rgba(52,211,153,0.4); }
+  .debt-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .debt-head .d-name { font-size: 16px; font-weight: 700; flex: 1; }
+  .debt-head .d-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: .3px;
+  }
+  .d-badge.b-paid { background: rgba(52,211,153,0.18); color: var(--green); }
+  .d-badge.b-ok { background: rgba(79,140,255,0.18); color: #7fa8ff; }
+  .d-badge.b-soon { background: rgba(245,197,66,0.18); color: var(--gold-bright); }
+  .d-badge.b-over { background: rgba(255,107,107,0.18); color: #ff8a8a; }
+  .debt-head .d-del { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 4px; }
+  .debt-head .d-del:hover { color: var(--danger); }
+
+  .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+  .d-amounts .seg { text-align: center; flex: 1; }
+  .d-amounts .seg .k { color: var(--muted); font-size: 11px; }
+  .d-amounts .seg .v { font-weight: 700; font-size: 14px; margin-top: 1px; }
+  .d-amounts .seg .v.owed { color: var(--red); }
+  .d-amounts .seg .v.paid { color: var(--green); }
+
+  .d-bar { height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin: 6px 0 4px; }
+  .d-bar .fill { height: 100%; background: linear-gradient(90deg, var(--green), #4fd1a5); border-radius: 999px; }
+  .d-meta { color: var(--muted); font-size: 11.5px; display: flex; justify-content: space-between; margin-top: 4px; }
+
+  .d-pay { display: flex; gap: 8px; margin-top: 10px; }
+  .d-pay input {
+    flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 13px;
+  }
+  .d-pay input:focus { outline: none; border-color: var(--gold); }
+  .d-pay button {
+    background: var(--gold); color: #000; border: none; border-radius: 10px; padding: 8px 14px;
+    font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .d-payments { margin-top: 8px; }
+  .d-payments .ph {
+    display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted);
+    padding: 3px 0; border-top: 1px solid var(--line);
+  }
+  .d-payments .ph .pdel { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 4px; }
+  .d-payments .ph .pdel:hover { color: var(--danger); }
+
+  /* Add form */
+  .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; }
+  .field label { font-size: 14px; color: var(--text); flex: 1; }
+  .field label .sub { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
+  .field input {
+    width: 150px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 15px;
+  }
+  .field input[type="text"].name-in { width: 170px; }
+  .field input:focus { outline: none; border-color: var(--gold); }
+  .btn-row { display: flex; gap: 10px; margin-top: 8px; }
+  .btn {
+    flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn.primary { background: var(--gold); color: #000; border-color: var(--gold); }
+  .btn:hover { border-color: var(--gold); }
+
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 10px 0; }
+  .note { color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 2px; }
+</style>
+</head>
+<body class="locked">
+
+  <!-- LOCK SCREEN -->
+  <div id="lock">
+    <div class="lock-card">
+      <div class="lk-title">Debt Tracker</div>
+      <div class="lk-sub">Enter passcode to view</div>
+      <input id="lockInput" type="password" inputmode="numeric" maxlength="12" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="off" />
+      <button id="lockBtn">Unlock</button>
+      <div class="lk-err" id="lockErr"></div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="topbar">
+      <a class="home-link" href="home.html">&larr; Home</a>
+      <div class="page-title">Debt Tracker</div>
+    </div>
+
+    <!-- SUMMARY -->
+    <div class="summary">
+      <div class="srow"><div class="lbl">Total remaining balance</div><div class="val owed big" id="sumRemaining">PHP 0.00</div></div>
+      <div class="srow"><div class="lbl">Total original debt</div><div class="val" id="sumOriginal">PHP 0.00</div></div>
+      <div class="srow"><div class="lbl">Total paid</div><div class="val paid" id="sumPaid">PHP 0.00</div></div>
+      <div class="srow"><div class="lbl">Debts fully paid</div><div class="val gold" id="sumCount">0 / 0</div></div>
+    </div>
+
+    <!-- CHART -->
+    <div class="card" id="chartCard" style="display:none">
+      <h2>Remaining balance per debt</h2>
+      <div class="hint">Hover/tap sa slice para makita ang detalye.</div>
+      <div style="position:relative;height:220px"><canvas id="debtChart"></canvas></div>
+    </div>
+
+    <!-- DEBT LIST -->
+    <div id="debtList"></div>
+
+    <!-- ADD DEBT -->
+    <div class="card">
+      <h2>Add a debt</h2>
+      <div class="hint">Ilagay ang pangalan at kabuuang utang. Pwede kang maglagay ng due date at interest kung meron.</div>
+      <div class="field">
+        <label>Name</label>
+        <input type="text" class="name-in" id="newName" placeholder="e.g. Credit Card, Loan kay X" />
+      </div>
+      <div class="field">
+        <label>Total amount owed<span class="sub">principal</span></label>
+        <input type="text" inputmode="decimal" id="newAmount" placeholder="0.00" />
+      </div>
+      <div class="field">
+        <label>Already paid<span class="sub">optional</span></label>
+        <input type="text" inputmode="decimal" id="newPaid" placeholder="0.00" />
+      </div>
+      <div class="field">
+        <label>Due date<span class="sub">optional</span></label>
+        <input type="date" id="newDue" />
+      </div>
+      <div class="field">
+        <label>Monthly payment<span class="sub">optional, for payoff estimate</span></label>
+        <input type="text" inputmode="decimal" id="newMonthly" placeholder="0.00" />
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="addBtn">Add debt</button>
+      </div>
+    </div>
+
+    <div class="note" style="text-align:center">
+      Personal use only. All data stays on this device (nothing is sent anywhere).
+    </div>
+  </div>
+
+<script>
+  // =========================================================
+  // Debt Tracker - track loans/balances, log payments, payoff progress
+  // =========================================================
+  const LS_KEY = "debtTrackerV1";
+
+  // state.debts: [{ id, name, amount, due, monthly, payments:[{amt,date}], createdAt }]
+  // "paid" is derived from the sum of payments (plus an optional initial paid amount
+  // stored as the first payment labeled "initial").
+  let state = { debts: [] };
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && Array.isArray(s.debts)) state = s;
+      }
+    } catch (e) {}
+  }
+  function saveState() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function num(v) {
+    if (v == null) return 0;
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+    return isNaN(n) ? 0 : n;
+  }
+  function peso(n) {
+    return "PHP " + (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  function paidOf(d) {
+    return (d.payments || []).reduce((s, p) => s + num(p.amt), 0);
+  }
+  function remainingOf(d) {
+    return Math.max(0, num(d.amount) - paidOf(d));
+  }
+
+  // Status badge based on due date + whether it's paid off.
+  function statusOf(d) {
+    if (remainingOf(d) <= 0.009) return { cls: "b-paid", text: "Fully paid" };
+    if (!d.due) return { cls: "b-ok", text: "Ongoing" };
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const due = new Date(d.due + "T00:00:00");
+    const days = Math.round((due - today) / 86400000);
+    if (days < 0) return { cls: "b-over", text: "Overdue " + Math.abs(days) + "d" };
+    if (days <= 7) return { cls: "b-soon", text: "Due in " + days + "d" };
+    return { cls: "b-ok", text: "Due " + due.toLocaleDateString("en-PH", { month: "short", day: "numeric" }) };
+  }
+
+  // ---------- Render ----------
+  function renderSummary() {
+    let original = 0, paid = 0, remaining = 0, done = 0;
+    state.debts.forEach(d => {
+      original += num(d.amount);
+      paid += paidOf(d);
+      remaining += remainingOf(d);
+      if (remainingOf(d) <= 0.009) done++;
+    });
+    document.getElementById("sumRemaining").textContent = peso(remaining);
+    document.getElementById("sumOriginal").textContent = peso(original);
+    document.getElementById("sumPaid").textContent = peso(paid);
+    document.getElementById("sumCount").textContent = done + " / " + state.debts.length;
+  }
+
+  function renderList() {
+    const el = document.getElementById("debtList");
+    if (!state.debts.length) {
+      el.innerHTML = '<div class="card"><div class="empty">Wala pang debt. Magdagdag sa ibaba.</div></div>';
+      return;
+    }
+    el.innerHTML = "";
+    state.debts.forEach(d => {
+      const amount = num(d.amount);
+      const paid = paidOf(d);
+      const remaining = remainingOf(d);
+      const pct = amount > 0 ? Math.min(100, (paid / amount) * 100) : 0;
+      const st = statusOf(d);
+      const paidOff = remaining <= 0.009;
+
+      // payoff estimate
+      let payoffNote = "";
+      const monthly = num(d.monthly);
+      if (!paidOff && monthly > 0) {
+        const months = Math.ceil(remaining / monthly);
+        payoffNote = "~" + months + " month" + (months === 1 ? "" : "s") + " left at " + peso(monthly) + "/mo";
+      }
+
+      const item = document.createElement("div");
+      item.className = "debt-item" + (paidOff ? " paid-off" : "");
+
+      let paymentsHtml = "";
+      (d.payments || []).slice().reverse().forEach((p, revIdx) => {
+        const realIdx = (d.payments.length - 1) - revIdx;
+        const dt = p.date ? new Date(p.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
+        paymentsHtml += '<div class="ph"><span>' + (p.label ? p.label + " " : "Payment ") + dt + '</span>' +
+          '<span>' + peso(num(p.amt)) + ' <button class="pdel" data-pdel="' + d.id + '" data-pidx="' + realIdx + '" title="Remove payment">&times;</button></span></div>';
+      });
+
+      item.innerHTML =
+        '<div class="debt-head">' +
+          '<div class="d-name">' + (d.name || "Unnamed debt") + '</div>' +
+          '<span class="d-badge ' + st.cls + '">' + st.text + '</span>' +
+          '<button class="d-del" data-del="' + d.id + '" title="Delete debt">&times;</button>' +
+        '</div>' +
+        '<div class="d-amounts">' +
+          '<div class="seg"><div class="k">Owed</div><div class="v">' + peso(amount) + '</div></div>' +
+          '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(paid) + '</div></div>' +
+          '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(remaining) + '</div></div>' +
+        '</div>' +
+        '<div class="d-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+        '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span>' + payoffNote + '</span></div>' +
+        (paidOff ? "" :
+          '<div class="d-pay">' +
+            '<input type="text" inputmode="decimal" placeholder="Payment amount" data-payamt="' + d.id + '">' +
+            '<button data-paybtn="' + d.id + '">Add payment</button>' +
+          '</div>') +
+        (paymentsHtml ? '<div class="d-payments">' + paymentsHtml + '</div>' : "");
+
+      el.appendChild(item);
+    });
+
+    // wire delete debt
+    el.querySelectorAll("[data-del]").forEach(btn => btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-del");
+      const d = state.debts.find(x => x.id === id);
+      if (!confirm("Delete \"" + (d ? d.name : "this debt") + "\"? Hindi na ito mababawi.")) return;
+      state.debts = state.debts.filter(x => x.id !== id);
+      saveState(); renderAll();
+    }));
+
+    // wire add payment
+    el.querySelectorAll("[data-paybtn]").forEach(btn => btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-paybtn");
+      const inp = el.querySelector('[data-payamt="' + id + '"]');
+      const amt = num(inp.value);
+      if (amt <= 0) { inp.focus(); return; }
+      const d = state.debts.find(x => x.id === id);
+      if (!d) return;
+      if (!d.payments) d.payments = [];
+      const today = new Date();
+      d.payments.push({ amt: amt, date: today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0") });
+      saveState(); renderAll();
+    }));
+
+    // wire delete payment
+    el.querySelectorAll("[data-pdel]").forEach(btn => btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-pdel");
+      const pidx = +btn.getAttribute("data-pidx");
+      const d = state.debts.find(x => x.id === id);
+      if (!d || !d.payments) return;
+      d.payments.splice(pidx, 1);
+      saveState(); renderAll();
+    }));
+  }
+
+  // ---------- Chart ----------
+  let debtChart = null;
+  function renderChart() {
+    const card = document.getElementById("chartCard");
+    const canvas = document.getElementById("debtChart");
+    if (!canvas || typeof Chart === "undefined") { if (card) card.style.display = "none"; return; }
+
+    const active = state.debts.filter(d => remainingOf(d) > 0.009);
+    if (!active.length) { card.style.display = "none"; return; }
+    card.style.display = "";
+
+    const labels = active.map(d => d.name || "Unnamed");
+    const data = active.map(d => remainingOf(d));
+    const palette = ["#ff6b6b", "#f5c542", "#4f8cff", "#34d399", "#b07cff", "#ff9f6b", "#6bd3ff", "#ff6bd3"];
+    const colors = active.map((d, i) => palette[i % palette.length]);
+
+    if (debtChart) debtChart.destroy();
+    debtChart = new Chart(canvas.getContext("2d"), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#16161a", borderWidth: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: "60%",
+        plugins: {
+          legend: { position: "right", labels: { color: "#f2f2f7", font: { size: 11 }, boxWidth: 10, padding: 8 } },
+          tooltip: { callbacks: { label: (it) => it.label + ": \u20b1" + Number(it.parsed).toLocaleString("en-US", { maximumFractionDigits: 0 }) } }
+        }
+      }
+    });
+  }
+
+  function renderAll() {
+    renderSummary();
+    renderList();
+    renderChart();
+  }
+
+  // ---------- Add debt ----------
+  function addDebt() {
+    const name = document.getElementById("newName").value.trim();
+    const amount = num(document.getElementById("newAmount").value);
+    const paid = num(document.getElementById("newPaid").value);
+    const due = document.getElementById("newDue").value;
+    const monthly = num(document.getElementById("newMonthly").value);
+    if (!name) { document.getElementById("newName").focus(); return; }
+    if (amount <= 0) { document.getElementById("newAmount").focus(); return; }
+
+    const debt = {
+      id: uid(), name: name, amount: amount, due: due || "",
+      monthly: monthly || 0, payments: [], createdAt: Date.now()
+    };
+    if (paid > 0) debt.payments.push({ amt: paid, date: new Date().toISOString().slice(0, 10), label: "Initial" });
+    state.debts.push(debt);
+    saveState();
+
+    // clear form
+    document.getElementById("newName").value = "";
+    document.getElementById("newAmount").value = "";
+    document.getElementById("newPaid").value = "";
+    document.getElementById("newDue").value = "";
+    document.getElementById("newMonthly").value = "";
+    renderAll();
+  }
+
+  // ---------- App start ----------
+  let appStarted = false;
+  function startApp() {
+    if (appStarted) return;
+    appStarted = true;
+    loadState();
+    document.getElementById("addBtn").addEventListener("click", addDebt);
+    renderAll();
+  }
+
+  // ---------- Passcode lock (shared scheme) ----------
+  function simpleHash(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; }
+    return h;
+  }
+  const PASS_HASH = simpleHash("110299");
+  function unlock() {
+    const input = document.getElementById("lockInput");
+    const err = document.getElementById("lockErr");
+    if (simpleHash(input.value) === PASS_HASH) {
+      sessionStorage.setItem("ctUnlocked", "1");
+      revealApp();
+    } else {
+      err.textContent = "Wrong passcode. Try again.";
+      input.value = "";
+      input.focus();
+    }
+  }
+  function revealApp() {
+    document.getElementById("lock").style.display = "none";
+    document.body.classList.remove("locked");
+    document.getElementById("app").classList.remove("hidden");
+    startApp();
+  }
+
+  // ---------- Auto-update ----------
+  const APP_VERSION = 65;
+  async function checkForUpdate() {
+    try {
+      const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      const j = await res.json();
+      if (j && typeof j.version === "number" && j.version > APP_VERSION) {
+        if (window.caches && caches.keys) {
+          try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
+        }
+        location.reload(true);
+      }
+    } catch (e) {}
+  }
+
+  // Wire lock UI
+  document.getElementById("lockBtn").onclick = unlock;
+  document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+
+  if (sessionStorage.getItem("ctUnlocked") === "1") {
+    revealApp();
+  } else {
+    document.getElementById("lockInput").focus();
+  }
+
+  checkForUpdate();
+  setInterval(checkForUpdate, 60000);
+</script>
+</body>
+</html>
