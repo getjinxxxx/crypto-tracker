@@ -338,13 +338,20 @@
   // ---------- State ----------
   const LS_KEY = "salaryCalcV1";
   const HIST_KEY = "salaryHistoryV1";
+  // Default fixed values seeded from the payslip. Edit the salary with the Edit button
+  // if you get a raise; SSS / Pag-IBIG / MPF stay fixed.
+  const DEFAULT_BASE = "23825.16";
+  const DEFAULT_SSS = "1000";
+  const DEFAULT_HDMF = "200";
+  const DEFAULT_MPF = "750";
+
   let state = {
-    base: "",
+    base: DEFAULT_BASE,
     ot: {},                 // key -> hours (string)
     extraEarn: [],          // { name, amount, taxable }
     // PhilHealth + tax are auto-computed. SSS / Pag-IBIG(HDMF) / MPF are fixed values
     // (defaults seeded from the payslip) and shown read-only.
-    deduct: { philhealth: "", sss: "1000", hdmf: "200", mpf: "750", tax: "" },
+    deduct: { philhealth: "", sss: DEFAULT_SSS, hdmf: DEFAULT_HDMF, mpf: DEFAULT_MPF, tax: "" },
     otherDeduct: []         // { name, amount }
   };
 
@@ -355,9 +362,14 @@
         const s = JSON.parse(raw);
         state = Object.assign(state, s);
         if (!state.ot) state.ot = {};
-        if (!state.deduct) state.deduct = { philhealth: "", sss: "1000", hdmf: "200", mpf: "750", tax: "" };
+        if (!state.deduct) state.deduct = { philhealth: "", sss: DEFAULT_SSS, hdmf: DEFAULT_HDMF, mpf: DEFAULT_MPF, tax: "" };
         if (!Array.isArray(state.extraEarn)) state.extraEarn = [];
         if (!Array.isArray(state.otherDeduct)) state.otherDeduct = [];
+        // Back-fill fixed values if an older saved state left them blank.
+        if (state.base === "" || state.base == null) state.base = DEFAULT_BASE;
+        if (!state.deduct.sss) state.deduct.sss = DEFAULT_SSS;
+        if (!state.deduct.hdmf) state.deduct.hdmf = DEFAULT_HDMF;
+        if (!state.deduct.mpf) state.deduct.mpf = DEFAULT_MPF;
       }
     } catch (e) {}
   }
@@ -859,7 +871,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 57;
+  const APP_VERSION = 58;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
