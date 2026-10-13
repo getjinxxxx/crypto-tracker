@@ -108,8 +108,9 @@
   /* Category group */
   .cat-group { margin-bottom: 20px; }
   .cat-header { display: flex; align-items: center; justify-content: space-between;
-    padding: 2px 2px 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
+    padding: 2px 2px 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
   .cat-title { font-size: 13px; font-weight: 700; color: var(--gold-bright); text-transform: uppercase; letter-spacing: .5px; }
+  .cat-chev { font-size: 10px; display: inline-block; }
   .cat-total { font-size: 13px; font-weight: 700; color: var(--red); }
 
   /* Debt item */
@@ -382,6 +383,7 @@
   let fbDb = null;
   const shareNotes = {}; // shareId -> { note, updatedAt }
   const noteOpen = {};   // shareId -> bool (is the recipient note expanded?)
+  const catOpen = {};    // category -> bool (false = collapsed; default expanded)
   function fbInit() {
     try {
       if (typeof firebase === "undefined") return;
@@ -649,17 +651,29 @@
       if (!list || !list.length) return;
       // category total = sum of THIS month's dues (per-term for installments)
       const catDue = list.reduce((s, d) => s + (d.terms > 1 ? perTermOf(d) : remainingOf(d)), 0);
+      const open = catOpen[cat] !== false; // expanded by default
       html += '<div class="cat-group">' +
-        '<div class="cat-header"><span class="cat-title">' + catLabel(cat) + '</span>' +
-        '<span class="cat-total">Due: ' + peso(catDue) + '</span></div>';
-      // group items within this category into cards (per person/label)
-      const cards = {};
-      const cardOrder = [];
-      list.forEach(d => { const k = cardKeyOf(d); if (!cards[k]) { cards[k] = []; cardOrder.push(k); } cards[k].push(d); });
-      cardOrder.forEach(k => { html += cardHtml(cardTitleOf(cards[k][0]), cat, cards[k], k); });
+        '<div class="cat-header" data-cattoggle="' + cat + '">' +
+          '<span class="cat-title"><span class="cat-chev">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + catLabel(cat) + '</span>' +
+          '<span class="cat-total">Due: ' + peso(catDue) + '</span></div>';
+      if (open) {
+        // group items within this category into cards (per person/label)
+        const cards = {};
+        const cardOrder = [];
+        list.forEach(d => { const k = cardKeyOf(d); if (!cards[k]) { cards[k] = []; cardOrder.push(k); } cards[k].push(d); });
+        cardOrder.forEach(k => { html += cardHtml(cardTitleOf(cards[k][0]), cat, cards[k], k); });
+      }
       html += '</div>';
     });
     el.innerHTML = html;
+
+    // wire category collapse/expand
+    el.querySelectorAll("[data-cattoggle]").forEach(h => h.addEventListener("click", (e) => {
+      // ignore clicks that bubbled from inner controls (none here, header has no children buttons)
+      const c = h.getAttribute("data-cattoggle");
+      catOpen[c] = (catOpen[c] === false) ? true : false;
+      renderList();
+    }));
 
     // wire per-item paid checkbox
     el.querySelectorAll("[data-item]").forEach(chk => chk.addEventListener("change", () => {
@@ -981,7 +995,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 78;
+  const APP_VERSION = 79;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
