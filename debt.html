@@ -154,8 +154,10 @@
 
   .reply-note { margin-top: 10px; background: linear-gradient(135deg, rgba(79,140,255,0.12), rgba(22,22,26,0.3));
     border: 1px solid rgba(79,140,255,0.4); border-radius: 12px; padding: 9px 12px; }
-  .reply-note .rn-head { color: #7fa8ff; font-size: 11px; font-weight: 700; margin-bottom: 3px; }
-  .reply-note .rn-body { font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+  .reply-note .rn-head { color: #7fa8ff; font-size: 11px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; }
+  .reply-note .rn-chev { font-size: 10px; }
+  .reply-note .rn-body { font-size: 13px; line-height: 1.5; white-space: pre-wrap; margin-top: 4px; }
 
   .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
   .d-amounts .seg { text-align: center; flex: 1; }
@@ -379,6 +381,7 @@
   };
   let fbDb = null;
   const shareNotes = {}; // shareId -> { note, updatedAt }
+  const noteOpen = {};   // shareId -> bool (is the recipient note expanded?)
   function fbInit() {
     try {
       if (typeof firebase === "undefined") return;
@@ -595,13 +598,20 @@
       : "";
 
     // Recipient's note (from Firebase), if this person has a share with a reply.
+    // Collapsible: minimized by default; click the header to expand/hide.
     let noteHtml = "";
     const shareId = state.shareIds[cardKey];
     if (shareId && shareNotes[shareId] && shareNotes[shareId].note) {
       const r = shareNotes[shareId];
       const when = r.updatedAt ? new Date(r.updatedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
-      noteHtml = '<div class="reply-note"><div class="rn-head">\uD83D\uDCAC Note mula kay ' + title + (when ? ' &middot; ' + when : '') + '</div>' +
-        '<div class="rn-body">' + String(r.note).replace(/</g, "&lt;") + '</div></div>';
+      const open = !!noteOpen[shareId];
+      noteHtml = '<div class="reply-note">' +
+        '<div class="rn-head" data-notetoggle="' + shareId + '">' +
+          '<span>\uD83D\uDCAC Note mula kay ' + title + (when ? ' &middot; ' + when : '') + '</span>' +
+          '<span class="rn-chev">' + (open ? "\u25BC" : "\u25B6") + '</span>' +
+        '</div>' +
+        '<div class="rn-body"' + (open ? "" : ' style="display:none"') + '>' + String(r.note).replace(/</g, "&lt;") + '</div>' +
+      '</div>';
     }
 
     return '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
@@ -719,6 +729,13 @@
     el.querySelectorAll("[data-share]").forEach(btn => btn.addEventListener("click", () => {
       const key = decodeURIComponent(btn.getAttribute("data-share"));
       openShareFor(key);
+    }));
+
+    // wire recipient-note collapse/expand
+    el.querySelectorAll("[data-notetoggle]").forEach(h => h.addEventListener("click", () => {
+      const sid = h.getAttribute("data-notetoggle");
+      noteOpen[sid] = !noteOpen[sid];
+      renderList();
     }));
   }
 
@@ -964,7 +981,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 77;
+  const APP_VERSION = 78;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
