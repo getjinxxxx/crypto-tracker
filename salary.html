@@ -228,9 +228,9 @@
       <h2>Other earnings (optional)</h2>
       <div class="hint">Ang <b>De Minimis</b> ay non-taxable benefit (hal. rice/meal/allowance) &mdash; hindi binabawasan ng tax. Pwede ka ring mag-add ng bonus/adjustment sa ibaba.</div>
       <div class="field">
-        <label>De Minimis<span class="sub">non-taxable allowance</span></label>
+        <label>De Minimis<span class="sub">non-taxable allowance (fixed)</span></label>
         <span class="suffix">PHP</span>
-        <input type="text" inputmode="decimal" id="deMinimis" placeholder="0.00" />
+        <input type="text" inputmode="decimal" id="deMinimis" placeholder="0.00" readonly />
       </div>
       <div class="divider"></div>
       <div id="extraEarnList"></div>
@@ -360,10 +360,11 @@
   const DEFAULT_SSS = "1000";
   const DEFAULT_HDMF = "200";
   const DEFAULT_MPF = "750";
+  const DEFAULT_DEMINIMIS = "1100";
 
   let state = {
     base: DEFAULT_BASE,
-    deMinimis: "",          // non-taxable allowance
+    deMinimis: DEFAULT_DEMINIMIS,   // non-taxable allowance (fixed)
     ot: {},                 // key -> hours (string)
     extraEarn: [],          // { name, amount, taxable }
     // PhilHealth + tax are auto-computed. SSS / Pag-IBIG(HDMF) / MPF are fixed values
@@ -382,7 +383,7 @@
         if (!state.deduct) state.deduct = { philhealth: "", sss: DEFAULT_SSS, hdmf: DEFAULT_HDMF, mpf: DEFAULT_MPF, tax: "" };
         if (!Array.isArray(state.extraEarn)) state.extraEarn = [];
         if (!Array.isArray(state.otherDeduct)) state.otherDeduct = [];
-        if (state.deMinimis == null) state.deMinimis = "";
+        if (!state.deMinimis) state.deMinimis = DEFAULT_DEMINIMIS;
         // Back-fill fixed values if an older saved state left them blank.
         if (state.base === "" || state.base == null) state.base = DEFAULT_BASE;
         if (!state.deduct.sss) state.deduct.sss = DEFAULT_SSS;
@@ -772,14 +773,8 @@
       recompute();
     });
 
-    // De Minimis (non-taxable) input
-    const dmInp = document.getElementById("deMinimis");
-    dmInp.value = state.deMinimis || "";
-    dmInp.addEventListener("input", () => {
-      state.deMinimis = dmInp.value;
-      saveState();
-      recompute();
-    });
+    // De Minimis is a fixed, read-only non-taxable allowance (seeded from state).
+    document.getElementById("deMinimis").value = state.deMinimis || "";
 
     // Deductions SSS / Pag-IBIG / MPF are read-only but seeded from saved state.
     document.getElementById("dSSS").value = state.deduct.sss || "";
@@ -798,12 +793,10 @@
     document.getElementById("saveBtn").addEventListener("click", saveCurrentToHistory);
     document.getElementById("clearBtn").addEventListener("click", () => {
       if (!confirm("I-clear ang OT at other earnings? (Hindi mabubura ang salary, fixed deductions, at history.)")) return;
-      // Keep base salary + fixed deductions; only clear the per-cutoff inputs.
+      // Keep base salary, fixed deductions, and fixed De Minimis; only clear per-cutoff inputs.
       state.ot = {};
       state.extraEarn = [];
       state.otherDeduct = [];
-      state.deMinimis = "";
-      document.getElementById("deMinimis").value = "";
       saveState();
       renderOTList();
       renderExtraEarn();
@@ -913,7 +906,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 59;
+  const APP_VERSION = 60;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
