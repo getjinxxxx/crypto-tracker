@@ -132,9 +132,16 @@
   /* Debt breakdown list */
   .bd-list { margin-top: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
   .bd-list .bd-title { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
-  .bd-list .bd-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; border-top: 1px solid var(--line); }
+  .bd-list .bd-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 5px 0; border-top: 1px solid var(--line); }
   .bd-list .bd-row:first-of-type { border-top: none; }
-  .bd-list .bd-date { color: var(--muted); font-size: 11px; }
+  .bd-list .bd-check { width: 16px; height: 16px; flex: none; cursor: pointer; accent-color: #34d399; }
+  .bd-list .bd-label { flex: 1; }
+  .bd-list .bd-amt { font-weight: 600; }
+  .bd-list .bd-row.bd-paid .bd-label, .bd-list .bd-row.bd-paid .bd-amt { color: var(--muted); text-decoration: line-through; }
+  .bd-list .bd-date { color: var(--muted); font-size: 11px; text-decoration: none; }
+
+  .term-note { margin-top: 8px; color: var(--muted); font-size: 12px; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; }
 
   .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
   .d-amounts .seg { text-align: center; flex: 1; }
@@ -404,15 +411,23 @@
   }
 
   // ---------- Derived amounts ----------
+  // Paid is driven by per-item checkboxes in the breakdown (each utang can be
+  // marked paid separately). perTerm = total / terms for installment display.
   function perTermOf(d) { return d.terms > 0 ? num(d.amount) / d.terms : num(d.amount); }
-  function paidTermsCount(d) { return Object.keys(d.paidMonths || {}).filter(k => d.paidMonths[k]).length; }
-  function paidOf(d) { return paidTermsCount(d) * perTermOf(d); }
+  function paidOf(d) {
+    return (d.entries || []).reduce((s, e) => s + (e.paid ? num(e.amt) : 0), 0);
+  }
   function remainingOf(d) { return Math.max(0, num(d.amount) - paidOf(d)); }
+  function allItemsPaid(d) {
+    const e = d.entries || [];
+    return e.length > 0 && e.every(x => x.paid);
+  }
 
   function statusOf(d) {
     if (remainingOf(d) <= 0.009) return { cls: "b-paid", text: "Fully paid" };
-    const paidCount = paidTermsCount(d);
-    if (d.terms > 1) return { cls: "b-ok", text: paidCount + "/" + d.terms + " terms" };
+    const items = (d.entries || []);
+    const paidCount = items.filter(x => x.paid).length;
+    if (items.length > 1) return { cls: "b-ok", text: paidCount + "/" + items.length + " paid" };
     return { cls: "b-ok", text: "Unpaid" };
   }
 
@@ -430,7 +445,9 @@
       if (isActiveIn(d, viewMonth)) {
         const per = perTermOf(d);
         monthDue += per;
-        if (d.paidMonths[viewMonth]) monthPaid += per;
+        // paid portion of this month's due = paid share of items (capped at the term due)
+        const paidShare = Math.min(per, paidOf(d));
+        monthPaid += paidShare;
       }
     });
     document.getElementById("sumMonthDue").textContent = peso(monthDue);
@@ -449,7 +466,6 @@
     const paidOff = remaining <= 0.009;
 
     const idx = termIndexFor(d, viewMonth);        // which term is due this month (0-based)
-    const paidThisMonth = !!d.paidMonths[viewMonth];
     const title = (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category));
     const entries = d.entries || [];
     const subTag = (usesSubCat(d.category) && d.subCat) ? subLabel(d.subCat) : "";
@@ -458,37 +474,25 @@
     if (entries.length > 1) subBits.push(entries.length + " items");
     const mergeNote = subBits.length ? '<div class="d-sub">' + subBits.join(" &middot; ") + '</div>' : "";
 
-    // Breakdown of each individual debt that makes up this entry.
+    // Breakdown: each individual utang with its OWN checkbox to mark it paid.
     let breakdownHtml = "";
     if (entries.length) {
       let rows = "";
-      entries.forEach(en => {
+      entries.forEach((en, i) => {
         const dt = en.date ? new Date(en.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
-        const label = (en.note && en.note.trim()) ? en.note : "Utang";
-        rows += '<div class="bd-row"><span>' + label + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
-          '<span>' + peso(num(en.amt)) + '</span></div>';
+        const label = (en.note && en.note.trim()) ? en.note : "Name/Label";
+        rows += '<div class="bd-row' + (en.paid ? " bd-paid" : "") + '">' +
+          '<input type="checkbox" class="bd-check" data-item="' + d.id + '" data-idx="' + i + '"' + (en.paid ? " checked" : "") + '>' +
+          '<span class="bd-label">' + label + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
+          '<span class="bd-amt">' + peso(num(en.amt)) + '</span></div>';
       });
-      breakdownHtml = '<div class="bd-list"><div class="bd-title">Breakdown ng utang</div>' + rows + '</div>';
+      breakdownHtml = '<div class="bd-list"><div class="bd-title">Breakdown &mdash; tsek kung bayad na</div>' + rows + '</div>';
     }
 
-    // Term row for THIS month
+    // For installments (terms > 1), show which term month this is (info only).
     let termRow = "";
     if (d.terms > 1) {
-      termRow =
-        '<div class="term-row' + (paidThisMonth ? " paid" : "") + '">' +
-          '<input type="checkbox" class="term-check" data-chk="' + d.id + '"' + (paidThisMonth ? " checked" : "") + '>' +
-          '<div class="term-info"><div class="ti-main">Term ' + (idx + 1) + ' of ' + d.terms + '</div>' +
-            '<div class="ti-sub">' + (paidThisMonth ? "Paid this month" : "Mark as paid this month") + '</div></div>' +
-          '<div class="term-amt">' + peso(per) + '</div>' +
-        '</div>';
-    } else {
-      termRow =
-        '<div class="term-row' + (paidThisMonth ? " paid" : "") + '">' +
-          '<input type="checkbox" class="term-check" data-chk="' + d.id + '"' + (paidThisMonth ? " checked" : "") + '>' +
-          '<div class="term-info"><div class="ti-main">' + (paidThisMonth ? "Paid" : "Mark as paid") + '</div>' +
-            '<div class="ti-sub">One-time (no installment)</div></div>' +
-          '<div class="term-amt">' + peso(amount) + '</div>' +
-        '</div>';
+      termRow = '<div class="term-note">Installment: Term ' + (idx + 1) + ' of ' + d.terms + ' this month &middot; ' + peso(per) + '/term</div>';
     }
 
     // Edit panel (hidden by default)
@@ -548,11 +552,12 @@
     });
     el.innerHTML = html;
 
-    // wire checkbox (mark this month's term paid)
-    el.querySelectorAll("[data-chk]").forEach(chk => chk.addEventListener("change", () => {
-      const d = state.debts.find(x => x.id === chk.getAttribute("data-chk"));
-      if (!d) return;
-      if (chk.checked) d.paidMonths[viewMonth] = true; else delete d.paidMonths[viewMonth];
+    // wire per-item paid checkbox (each utang in the breakdown marked separately)
+    el.querySelectorAll("[data-item]").forEach(chk => chk.addEventListener("change", () => {
+      const d = state.debts.find(x => x.id === chk.getAttribute("data-item"));
+      if (!d || !d.entries) return;
+      const i = +chk.getAttribute("data-idx");
+      if (d.entries[i]) d.entries[i].paid = chk.checked;
       saveState(); renderAll();
     }));
 
@@ -757,7 +762,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 70;
+  const APP_VERSION = 71;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
