@@ -64,13 +64,21 @@
   #app.hidden { display: none; }
 
   /* Top bar */
-  .topbar { display: flex; align-items: center; gap: 10px; margin: 6px 0 18px; }
+  .topbar { display: flex; align-items: center; gap: 10px; margin: 6px 0 14px; }
   .topbar .home-link {
     color: var(--muted); text-decoration: none; font-size: 13px; border: 1px solid var(--line);
     border-radius: 999px; padding: 5px 12px; background: var(--panel);
   }
   .topbar .home-link:hover { color: var(--text); border-color: var(--gold); }
   .topbar .page-title { font-size: 18px; font-weight: 700; letter-spacing: .2px; margin-left: 2px; }
+
+  /* Month selector */
+  .month-bar { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+  .month-bar button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; width: 38px; height: 38px; font-size: 18px; cursor: pointer; }
+  .month-bar button:hover { border-color: var(--gold); }
+  .month-bar .m-label { font-size: 16px; font-weight: 700; min-width: 150px; text-align: center; }
 
   /* Summary */
   .summary {
@@ -85,7 +93,6 @@
   .summary .srow .val.gold { color: var(--gold-bright); }
   .summary .big { font-size: 24px; font-weight: 800; }
 
-  /* Chart */
   .card {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;
@@ -96,6 +103,13 @@
   }
   .card .hint { color: var(--muted); font-size: 12px; margin: -6px 0 12px; line-height: 1.5; }
 
+  /* Category group */
+  .cat-group { margin-bottom: 20px; }
+  .cat-header { display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 2px 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .cat-title { font-size: 13px; font-weight: 700; color: var(--gold-bright); text-transform: uppercase; letter-spacing: .5px; }
+  .cat-total { font-size: 13px; font-weight: 700; color: var(--red); }
+
   /* Debt item */
   .debt-item {
     background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
@@ -104,30 +118,16 @@
   .debt-item.paid-off { border-color: rgba(52,211,153,0.4); }
   .debt-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .debt-head .d-name { font-size: 16px; font-weight: 700; flex: 1; }
-  .debt-head .d-badge {
-    font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: .3px;
-  }
+  .debt-head .d-badge { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: .3px; }
   .d-badge.b-paid { background: rgba(52,211,153,0.18); color: var(--green); }
   .d-badge.b-ok { background: rgba(79,140,255,0.18); color: #7fa8ff; }
   .d-badge.b-soon { background: rgba(245,197,66,0.18); color: var(--gold-bright); }
   .d-badge.b-over { background: rgba(255,107,107,0.18); color: #ff8a8a; }
-  .debt-head .d-del { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 4px; }
+  .debt-head .d-edit, .debt-head .d-del { background: none; border: none; color: var(--muted); font-size: 15px; cursor: pointer; padding: 2px 4px; }
+  .debt-head .d-del { font-size: 18px; }
+  .debt-head .d-edit:hover { color: var(--gold-bright); }
   .debt-head .d-del:hover { color: var(--danger); }
-  .d-cat { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: .3px;
-    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
   .d-sub { color: var(--muted); font-size: 12px; margin: -4px 0 8px; }
-
-  /* Category group (Option A) */
-  .cat-group { margin-bottom: 20px; }
-  .cat-header { display: flex; align-items: center; justify-content: space-between;
-    padding: 2px 2px 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
-  .cat-title { font-size: 13px; font-weight: 700; color: var(--gold-bright); text-transform: uppercase; letter-spacing: .5px; }
-  .cat-total { font-size: 13px; font-weight: 700; color: var(--red); }
-  select.cat-sel {
-    width: 220px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 14px;
-  }
-  select.cat-sel:focus { outline: none; border-color: var(--gold); }
 
   .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
   .d-amounts .seg { text-align: center; flex: 1; }
@@ -140,23 +140,27 @@
   .d-bar .fill { height: 100%; background: linear-gradient(90deg, var(--green), #4fd1a5); border-radius: 999px; }
   .d-meta { color: var(--muted); font-size: 11.5px; display: flex; justify-content: space-between; margin-top: 4px; }
 
-  .d-pay { display: flex; gap: 8px; margin-top: 10px; }
-  .d-pay input {
-    flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 13px;
-  }
-  .d-pay input:focus { outline: none; border-color: var(--gold); }
-  .d-pay button {
-    background: var(--gold); color: #000; border: none; border-radius: 10px; padding: 8px 14px;
-    font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
-  }
-  .d-payments { margin-top: 8px; }
-  .d-payments .ph {
-    display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted);
-    padding: 3px 0; border-top: 1px solid var(--line);
-  }
-  .d-payments .ph .pdel { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 4px; }
-  .d-payments .ph .pdel:hover { color: var(--danger); }
+  /* This-month term row */
+  .term-row { display: flex; align-items: center; gap: 10px; margin-top: 12px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .term-row.paid { border-color: rgba(52,211,153,0.4); }
+  .term-check { width: 22px; height: 22px; flex: none; cursor: pointer; accent-color: #34d399; }
+  .term-info { flex: 1; font-size: 13px; }
+  .term-info .ti-main { font-weight: 600; }
+  .term-info .ti-sub { color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+  .term-amt { font-weight: 700; font-size: 14px; }
+
+  /* Edit panel */
+  .edit-panel { margin-top: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .edit-panel .efield { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; }
+  .edit-panel label { font-size: 13px; color: var(--text); }
+  .edit-panel input { width: 120px; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 13px; text-align: right; }
+  .edit-panel input:focus { outline: none; border-color: var(--gold); }
+  .edit-panel .ebtns { display: flex; gap: 8px; margin-top: 8px; }
+  .edit-panel .ebtns button { flex: 1; border-radius: 8px; padding: 8px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); }
+  .edit-panel .ebtns .save { background: var(--gold); color: #000; border-color: var(--gold); }
+  .edit-panel .ebtns .cancel { background: var(--panel); color: var(--text); }
 
   /* Add form */
   .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; }
@@ -166,8 +170,14 @@
     width: 150px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
     border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 15px;
   }
+  .field input[readonly] { color: var(--muted); }
   .field input[type="text"].name-in { width: 170px; }
   .field input:focus { outline: none; border-color: var(--gold); }
+  select.cat-sel {
+    width: 220px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 14px;
+  }
+  select.cat-sel:focus { outline: none; border-color: var(--gold); }
   .btn-row { display: flex; gap: 10px; margin-top: 8px; }
   .btn {
     flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
@@ -199,17 +209,24 @@
       <div class="page-title">Debt Tracker</div>
     </div>
 
+    <!-- MONTH SELECTOR -->
+    <div class="month-bar">
+      <button id="prevMonth" title="Previous month">&#8249;</button>
+      <div class="m-label" id="monthLabel">&mdash;</div>
+      <button id="nextMonth" title="Next month">&#8250;</button>
+    </div>
+
     <!-- SUMMARY -->
     <div class="summary">
-      <div class="srow"><div class="lbl">Total remaining balance</div><div class="val owed big" id="sumRemaining">PHP 0.00</div></div>
-      <div class="srow"><div class="lbl">Total original debt</div><div class="val" id="sumOriginal">PHP 0.00</div></div>
-      <div class="srow"><div class="lbl">Total paid</div><div class="val paid" id="sumPaid">PHP 0.00</div></div>
-      <div class="srow"><div class="lbl">Debts fully paid</div><div class="val gold" id="sumCount">0 / 0</div></div>
+      <div class="srow"><div class="lbl">Due this month</div><div class="val owed big" id="sumMonthDue">PHP 0.00</div></div>
+      <div class="srow"><div class="lbl">Paid this month</div><div class="val paid" id="sumMonthPaid">PHP 0.00</div></div>
+      <div class="srow"><div class="lbl">Remaining this month</div><div class="val gold" id="sumMonthRemaining">PHP 0.00</div></div>
+      <div class="srow"><div class="lbl">Total remaining (all debts)</div><div class="val owed" id="sumTotalRemaining">PHP 0.00</div></div>
     </div>
 
     <!-- CHART -->
     <div class="card" id="chartCard" style="display:none">
-      <h2>Remaining balance per category</h2>
+      <h2>Due this month per category</h2>
       <div class="hint">Hover/tap sa slice para makita ang detalye.</div>
       <div style="position:relative;height:220px"><canvas id="debtChart"></canvas></div>
     </div>
@@ -220,7 +237,7 @@
     <!-- ADD DEBT -->
     <div class="card">
       <h2>Add a debt</h2>
-      <div class="hint">Naka-group per category. Kung ulitin mo ang <b>parehong pangalan ng tao</b> o <b>parehong label sa isang category</b>, <b>i-a-add up</b> ito sa dating entry (hindi bagong card).</div>
+      <div class="hint">Idadagdag ito sa <b id="addMonthLabel">kasalukuyang buwan</b>. Kung may terms, ikakalat ito sa mga susunod na buwan (1 term kada buwan). Parehong pangalan/label = <b>add up</b> sa dating entry.</div>
       <div class="field">
         <label>Category</label>
         <select id="newCategory" class="cat-sel">
@@ -235,31 +252,23 @@
       </div>
       <div class="field" id="personField">
         <label>Person name<span class="sub">kanino ka may utang</span></label>
-        <input type="text" class="name-in" id="newPerson" placeholder="e.g. Juan, Tita Maria" />
+        <input type="text" class="name-in" id="newPerson" placeholder="e.g. Angel, Mico" />
       </div>
       <div class="field">
         <label>Name / label<span class="sub">optional, e.g. BPI Visa</span></label>
-        <input type="text" class="name-in" id="newName" placeholder="e.g. Credit Card, Groceries loan" />
+        <input type="text" class="name-in" id="newName" placeholder="e.g. Credit Card, Groceries" />
       </div>
       <div class="field">
         <label>Total amount owed<span class="sub">principal</span></label>
         <input type="text" inputmode="decimal" id="newAmount" placeholder="0.00" />
       </div>
       <div class="field">
-        <label>Already paid<span class="sub">optional</span></label>
-        <input type="text" inputmode="decimal" id="newPaid" placeholder="0.00" />
+        <label>Number of terms<span class="sub">1 = isang bayad lang (walang hulugan)</span></label>
+        <input type="text" inputmode="numeric" id="newTerms" placeholder="1" />
       </div>
       <div class="field">
-        <label>Due date<span class="sub">optional</span></label>
-        <input type="date" id="newDue" />
-      </div>
-      <div class="field">
-        <label>Number of terms<span class="sub">optional, ilang hulog (e.g. 12)</span></label>
-        <input type="text" inputmode="numeric" id="newTerms" placeholder="0" />
-      </div>
-      <div class="field">
-        <label>Payment per term<span class="sub">optional, halaga kada hulog</span></label>
-        <input type="text" inputmode="decimal" id="newPerTerm" placeholder="0.00" />
+        <label>Payment per term<span class="sub">auto: total &divide; terms</span></label>
+        <input type="text" id="newPerTerm" readonly placeholder="0.00" />
       </div>
       <div class="btn-row">
         <button class="btn primary" id="addBtn">Add debt</button>
@@ -273,14 +282,21 @@
 
 <script>
   // =========================================================
-  // Debt Tracker - track loans/balances, log payments, payoff progress
+  // Debt Tracker (month-based)
+  // Each debt with N terms spans N consecutive months from its start month,
+  // one term per month. Each month sheet shows debts active that month, with a
+  // checkbox marking THIS month's term paid. Non-term debts (terms=1) show only
+  // in their start month with a single paid checkbox.
   // =========================================================
-  const LS_KEY = "debtTrackerV1";
+  const LS_KEY = "debtTrackerV2";
 
-  // state.debts: [{ id, name, amount, due, monthly, payments:[{amt,date}], createdAt }]
-  // "paid" is derived from the sum of payments (plus an optional initial paid amount
-  // stored as the first payment labeled "initial").
+  // state.debts: [{
+  //   id, category, person, name, amount, terms (>=1), startMonth "YYYY-MM",
+  //   paidMonths: { "YYYY-MM": true },  // which months' terms are paid
+  //   additions: [{amt,date}], createdAt
+  // }]
   let state = { debts: [] };
+  let viewMonth = ""; // "YYYY-MM" currently shown
 
   function loadState() {
     try {
@@ -290,20 +306,21 @@
         if (s && Array.isArray(s.debts)) state = s;
       }
     } catch (e) {}
+    state.debts.forEach(d => {
+      if (!d.paidMonths) d.paidMonths = {};
+      if (!d.terms || d.terms < 1) d.terms = 1;
+      if (!d.startMonth) d.startMonth = monthKey(new Date());
+      if (!d.additions) d.additions = [];
+    });
   }
   function saveState() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
   }
 
-  // Category labels for display
+  // Category labels
   const CATEGORIES = {
-    person: "Utang sa tao",
-    creditcard: "Credit Card",
-    bankloan: "Bank Loan",
-    onlineloan: "Online Loan",
-    government: "Government",
-    salaryloan: "Salary / Company Loan",
-    other: "Other"
+    person: "Utang sa tao", creditcard: "Credit Card", bankloan: "Bank Loan",
+    onlineloan: "Online Loan", government: "Government", salaryloan: "Salary / Company Loan", other: "Other"
   };
   function catLabel(c) { return CATEGORIES[c] || "Other"; }
 
@@ -317,42 +334,72 @@
   }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
-  function paidOf(d) {
-    return (d.payments || []).reduce((s, p) => s + num(p.amt), 0);
+  // ---------- Month helpers ----------
+  function monthKey(dateOrStr) {
+    const d = (dateOrStr instanceof Date) ? dateOrStr : new Date(dateOrStr + "-01T00:00:00");
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
   }
-  function remainingOf(d) {
-    return Math.max(0, num(d.amount) - paidOf(d));
+  function monthLabel(key) {
+    const d = new Date(key + "-01T00:00:00");
+    return isNaN(d) ? key : d.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+  }
+  // Add n months to a "YYYY-MM" key.
+  function addMonths(key, n) {
+    const d = new Date(key + "-01T00:00:00");
+    d.setMonth(d.getMonth() + n);
+    return monthKey(d);
+  }
+  // How many months is "key" after the debt's start month? (0-based). null if before.
+  function termIndexFor(d, key) {
+    const start = new Date(d.startMonth + "-01T00:00:00");
+    const cur = new Date(key + "-01T00:00:00");
+    const diff = (cur.getFullYear() - start.getFullYear()) * 12 + (cur.getMonth() - start.getMonth());
+    return diff;
+  }
+  // Is the debt active (has a term) in the given month?
+  function isActiveIn(d, key) {
+    const idx = termIndexFor(d, key);
+    return idx >= 0 && idx < d.terms;
   }
 
-  // Status badge based on due date + whether it's paid off.
+  // ---------- Derived amounts ----------
+  function perTermOf(d) { return d.terms > 0 ? num(d.amount) / d.terms : num(d.amount); }
+  function paidTermsCount(d) { return Object.keys(d.paidMonths || {}).filter(k => d.paidMonths[k]).length; }
+  function paidOf(d) { return paidTermsCount(d) * perTermOf(d); }
+  function remainingOf(d) { return Math.max(0, num(d.amount) - paidOf(d)); }
+
   function statusOf(d) {
     if (remainingOf(d) <= 0.009) return { cls: "b-paid", text: "Fully paid" };
-    if (!d.due) return { cls: "b-ok", text: "Ongoing" };
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const due = new Date(d.due + "T00:00:00");
-    const days = Math.round((due - today) / 86400000);
-    if (days < 0) return { cls: "b-over", text: "Overdue " + Math.abs(days) + "d" };
-    if (days <= 7) return { cls: "b-soon", text: "Due in " + days + "d" };
-    return { cls: "b-ok", text: "Due " + due.toLocaleDateString("en-PH", { month: "short", day: "numeric" }) };
+    const paidCount = paidTermsCount(d);
+    if (d.terms > 1) return { cls: "b-ok", text: paidCount + "/" + d.terms + " terms" };
+    return { cls: "b-ok", text: "Unpaid" };
   }
 
   // ---------- Render ----------
-  function renderSummary() {
-    let original = 0, paid = 0, remaining = 0, done = 0;
-    state.debts.forEach(d => {
-      original += num(d.amount);
-      paid += paidOf(d);
-      remaining += remainingOf(d);
-      if (remainingOf(d) <= 0.009) done++;
-    });
-    document.getElementById("sumRemaining").textContent = peso(remaining);
-    document.getElementById("sumOriginal").textContent = peso(original);
-    document.getElementById("sumPaid").textContent = peso(paid);
-    document.getElementById("sumCount").textContent = done + " / " + state.debts.length;
+  function renderMonthBar() {
+    document.getElementById("monthLabel").textContent = monthLabel(viewMonth);
+    document.getElementById("addMonthLabel").textContent = monthLabel(viewMonth);
   }
 
-  // Build the HTML for a single debt card.
+  function renderSummary() {
+    // This-month figures: debts active this month, their per-term amount.
+    let monthDue = 0, monthPaid = 0, totalRemaining = 0;
+    state.debts.forEach(d => {
+      totalRemaining += remainingOf(d);
+      if (isActiveIn(d, viewMonth)) {
+        const per = perTermOf(d);
+        monthDue += per;
+        if (d.paidMonths[viewMonth]) monthPaid += per;
+      }
+    });
+    document.getElementById("sumMonthDue").textContent = peso(monthDue);
+    document.getElementById("sumMonthPaid").textContent = peso(monthPaid);
+    document.getElementById("sumMonthRemaining").textContent = peso(Math.max(0, monthDue - monthPaid));
+    document.getElementById("sumTotalRemaining").textContent = peso(totalRemaining);
+  }
+
   function debtCardHtml(d) {
+    const per = perTermOf(d);
     const amount = num(d.amount);
     const paid = paidOf(d);
     const remaining = remainingOf(d);
@@ -360,43 +407,46 @@
     const st = statusOf(d);
     const paidOff = remaining <= 0.009;
 
-    // payoff estimate from terms + payment-per-term
-    let payoffNote = "";
-    const terms = num(d.terms), perTerm = num(d.perTerm);
-    if (!paidOff && perTerm > 0) {
-      const left = Math.ceil(remaining / perTerm);
-      payoffNote = "~" + left + " term" + (left === 1 ? "" : "s") + " left at " + peso(perTerm) + "/term";
-    } else if (!paidOff && terms > 0) {
-      const perT = amount / terms;
-      const left = Math.ceil(remaining / perT);
-      payoffNote = left + " of " + terms + " terms left (" + peso(perT) + "/term)";
-    } else if (terms > 0) {
-      payoffNote = terms + " term" + (terms === 1 ? "" : "s");
-    }
-
-    let paymentsHtml = "";
-    (d.payments || []).slice().reverse().forEach((p, revIdx) => {
-      const realIdx = (d.payments.length - 1) - revIdx;
-      const dt = p.date ? new Date(p.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
-      paymentsHtml += '<div class="ph"><span>' + (p.label ? p.label + " " : "Payment ") + dt + '</span>' +
-        '<span>' + peso(num(p.amt)) + ' <button class="pdel" data-pdel="' + d.id + '" data-pidx="' + realIdx + '" title="Remove payment">&times;</button></span></div>';
-    });
-
-    // Title: for a person debt, lead with the person's name.
-    let title;
-    if (d.category === "person" && d.person) {
-      title = d.person;
-    } else {
-      title = d.name || catLabel(d.category);
-    }
-    // Note how many separate add-ups make up this entry.
+    const idx = termIndexFor(d, viewMonth);        // which term is due this month (0-based)
+    const paidThisMonth = !!d.paidMonths[viewMonth];
+    const title = (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category));
     const addCount = (d.additions || []).length;
     const mergeNote = addCount > 0 ? '<div class="d-sub">Pinagsama: ' + (addCount + 1) + ' entries</div>' : "";
+
+    // Term row for THIS month
+    let termRow = "";
+    if (d.terms > 1) {
+      termRow =
+        '<div class="term-row' + (paidThisMonth ? " paid" : "") + '">' +
+          '<input type="checkbox" class="term-check" data-chk="' + d.id + '"' + (paidThisMonth ? " checked" : "") + '>' +
+          '<div class="term-info"><div class="ti-main">Term ' + (idx + 1) + ' of ' + d.terms + '</div>' +
+            '<div class="ti-sub">' + (paidThisMonth ? "Paid this month" : "Mark as paid this month") + '</div></div>' +
+          '<div class="term-amt">' + peso(per) + '</div>' +
+        '</div>';
+    } else {
+      termRow =
+        '<div class="term-row' + (paidThisMonth ? " paid" : "") + '">' +
+          '<input type="checkbox" class="term-check" data-chk="' + d.id + '"' + (paidThisMonth ? " checked" : "") + '>' +
+          '<div class="term-info"><div class="ti-main">' + (paidThisMonth ? "Paid" : "Mark as paid") + '</div>' +
+            '<div class="ti-sub">One-time (no installment)</div></div>' +
+          '<div class="term-amt">' + peso(amount) + '</div>' +
+        '</div>';
+    }
+
+    // Edit panel (hidden by default)
+    const editPanel =
+      '<div class="edit-panel" id="edit-' + d.id + '" style="display:none">' +
+        '<div class="efield"><label>Total amount owed</label><input type="text" inputmode="decimal" data-eamt="' + d.id + '" value="' + amount + '"></div>' +
+        '<div class="efield"><label>Number of terms</label><input type="text" inputmode="numeric" data-eterms="' + d.id + '" value="' + d.terms + '"></div>' +
+        '<div class="efield"><label>Payment per term</label><input type="text" readonly data-eper="' + d.id + '" value="' + per.toFixed(2) + '"></div>' +
+        '<div class="ebtns"><button class="save" data-esave="' + d.id + '">Save</button><button class="cancel" data-ecancel="' + d.id + '">Cancel</button></div>' +
+      '</div>';
 
     return '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
       '<div class="debt-head">' +
         '<div class="d-name">' + title + '</div>' +
         '<span class="d-badge ' + st.cls + '">' + st.text + '</span>' +
+        '<button class="d-edit" data-edit="' + d.id + '" title="Edit">\u270E</button>' +
         '<button class="d-del" data-del="' + d.id + '" title="Delete debt">&times;</button>' +
       '</div>' +
       mergeNote +
@@ -406,76 +456,87 @@
         '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(remaining) + '</div></div>' +
       '</div>' +
       '<div class="d-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
-      '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span>' + payoffNote + '</span></div>' +
-      (paidOff ? "" :
-        '<div class="d-pay">' +
-          '<input type="text" inputmode="decimal" placeholder="Payment amount" data-payamt="' + d.id + '">' +
-          '<button data-paybtn="' + d.id + '">Add payment</button>' +
-        '</div>') +
-      (paymentsHtml ? '<div class="d-payments">' + paymentsHtml + '</div>' : "") +
+      '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span>' +
+        (d.terms > 1 ? d.terms + " terms \u00d7 " + peso(per) : "one-time") + '</span></div>' +
+      termRow +
+      editPanel +
     '</div>';
   }
 
   function renderList() {
     const el = document.getElementById("debtList");
-    if (!state.debts.length) {
-      el.innerHTML = '<div class="card"><div class="empty">Wala pang debt. Magdagdag sa ibaba.</div></div>';
+    // Only debts active this month
+    const activeThisMonth = state.debts.filter(d => isActiveIn(d, viewMonth));
+    if (!activeThisMonth.length) {
+      el.innerHTML = '<div class="card"><div class="empty">Walang utang na aktibo sa ' + monthLabel(viewMonth) + '. Magdagdag sa ibaba o lumipat ng buwan.</div></div>';
       return;
     }
-
-    // Group debts by category (Option A). Preserve category display order.
     const order = ["person", "creditcard", "bankloan", "onlineloan", "government", "salaryloan", "other"];
     const groups = {};
-    state.debts.forEach(d => {
-      const c = d.category || "other";
-      if (!groups[c]) groups[c] = [];
-      groups[c].push(d);
-    });
+    activeThisMonth.forEach(d => { const c = d.category || "other"; (groups[c] = groups[c] || []).push(d); });
 
     let html = "";
     order.forEach(cat => {
       const list = groups[cat];
       if (!list || !list.length) return;
-      const catRemaining = list.reduce((s, d) => s + remainingOf(d), 0);
+      // category total = sum of THIS month's per-term dues
+      const catDue = list.reduce((s, d) => s + perTermOf(d), 0);
       html += '<div class="cat-group">' +
         '<div class="cat-header"><span class="cat-title">' + catLabel(cat) + '</span>' +
-        '<span class="cat-total">Total: ' + peso(catRemaining) + '</span></div>';
+        '<span class="cat-total">Due: ' + peso(catDue) + '</span></div>';
       list.forEach(d => { html += debtCardHtml(d); });
       html += '</div>';
     });
     el.innerHTML = html;
 
-    // wire delete debt
+    // wire checkbox (mark this month's term paid)
+    el.querySelectorAll("[data-chk]").forEach(chk => chk.addEventListener("change", () => {
+      const d = state.debts.find(x => x.id === chk.getAttribute("data-chk"));
+      if (!d) return;
+      if (chk.checked) d.paidMonths[viewMonth] = true; else delete d.paidMonths[viewMonth];
+      saveState(); renderAll();
+    }));
+
+    // wire edit toggle
+    el.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-edit");
+      const p = document.getElementById("edit-" + id);
+      if (p) p.style.display = (p.style.display === "none") ? "" : "none";
+    }));
+    // edit: recompute per-term live when amount/terms change
+    el.querySelectorAll("[data-eamt], [data-eterms]").forEach(inp => inp.addEventListener("input", () => {
+      const id = inp.getAttribute("data-eamt") || inp.getAttribute("data-eterms");
+      const amtEl = el.querySelector('[data-eamt="' + id + '"]');
+      const termsEl = el.querySelector('[data-eterms="' + id + '"]');
+      const perEl = el.querySelector('[data-eper="' + id + '"]');
+      const amt = num(amtEl.value), terms = Math.max(1, Math.round(num(termsEl.value)));
+      perEl.value = (amt / terms).toFixed(2);
+    }));
+    el.querySelectorAll("[data-esave]").forEach(btn => btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-esave");
+      const d = state.debts.find(x => x.id === id);
+      if (!d) return;
+      const amt = num(el.querySelector('[data-eamt="' + id + '"]').value);
+      const terms = Math.max(1, Math.round(num(el.querySelector('[data-eterms="' + id + '"]').value)));
+      if (amt <= 0) return;
+      d.amount = amt; d.terms = terms;
+      // drop any paid months that fall outside the new term window
+      Object.keys(d.paidMonths).forEach(k => { if (!isActiveIn(d, k)) delete d.paidMonths[k]; });
+      saveState(); renderAll();
+    }));
+    el.querySelectorAll("[data-ecancel]").forEach(btn => btn.addEventListener("click", () => {
+      const p = document.getElementById("edit-" + btn.getAttribute("data-ecancel"));
+      if (p) p.style.display = "none";
+      renderAll();
+    }));
+
+    // wire delete
     el.querySelectorAll("[data-del]").forEach(btn => btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-del");
       const d = state.debts.find(x => x.id === id);
       const dLabel = d ? ((d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category))) : "this debt";
-      if (!confirm("Delete \"" + dLabel + "\"? Hindi na ito mababawi.")) return;
+      if (!confirm("Delete \"" + dLabel + "\"? Buburahin ito sa lahat ng buwan. Hindi na mababawi.")) return;
       state.debts = state.debts.filter(x => x.id !== id);
-      saveState(); renderAll();
-    }));
-
-    // wire add payment
-    el.querySelectorAll("[data-paybtn]").forEach(btn => btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-paybtn");
-      const inp = el.querySelector('[data-payamt="' + id + '"]');
-      const amt = num(inp.value);
-      if (amt <= 0) { inp.focus(); return; }
-      const d = state.debts.find(x => x.id === id);
-      if (!d) return;
-      if (!d.payments) d.payments = [];
-      const today = new Date();
-      d.payments.push({ amt: amt, date: today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0") });
-      saveState(); renderAll();
-    }));
-
-    // wire delete payment
-    el.querySelectorAll("[data-pdel]").forEach(btn => btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-pdel");
-      const pidx = +btn.getAttribute("data-pidx");
-      const d = state.debts.find(x => x.id === id);
-      if (!d || !d.payments) return;
-      d.payments.splice(pidx, 1);
       saveState(); renderAll();
     }));
   }
@@ -487,17 +548,13 @@
     const canvas = document.getElementById("debtChart");
     if (!canvas || typeof Chart === "undefined") { if (card) card.style.display = "none"; return; }
 
-    const active = state.debts.filter(d => remainingOf(d) > 0.009);
+    const active = state.debts.filter(d => isActiveIn(d, viewMonth));
     if (!active.length) { card.style.display = "none"; return; }
     card.style.display = "";
 
-    // Group remaining balance by category (Option A).
     const order = ["person", "creditcard", "bankloan", "onlineloan", "government", "salaryloan", "other"];
     const totals = {};
-    active.forEach(d => {
-      const c = d.category || "other";
-      totals[c] = (totals[c] || 0) + remainingOf(d);
-    });
+    active.forEach(d => { const c = d.category || "other"; totals[c] = (totals[c] || 0) + perTermOf(d); });
     const cats = order.filter(c => totals[c] > 0);
     const labels = cats.map(c => catLabel(c));
     const data = cats.map(c => totals[c]);
@@ -519,13 +576,13 @@
   }
 
   function renderAll() {
+    renderMonthBar();
     renderSummary();
     renderList();
     renderChart();
   }
 
   // ---------- Add debt ----------
-  // Merge key: same person (any category "person") OR same category+label merges together.
   function mergeKey(category, person, name) {
     if (category === "person") return "person::" + (person || "").trim().toLowerCase();
     return category + "::" + (name || "").trim().toLowerCase();
@@ -536,12 +593,8 @@
     const person = document.getElementById("newPerson").value.trim();
     const name = document.getElementById("newName").value.trim();
     const amount = num(document.getElementById("newAmount").value);
-    const paid = num(document.getElementById("newPaid").value);
-    const due = document.getElementById("newDue").value;
-    const terms = Math.round(num(document.getElementById("newTerms").value));
-    const perTerm = num(document.getElementById("newPerTerm").value);
+    const terms = Math.max(1, Math.round(num(document.getElementById("newTerms").value) || 1));
 
-    // For a person debt, require the person's name. Otherwise require a label/name.
     if (category === "person") {
       if (!person) { document.getElementById("newPerson").focus(); return; }
     } else if (!name) {
@@ -553,35 +606,22 @@
     const existing = state.debts.find(x => mergeKey(x.category, x.person, x.name) === key);
 
     if (existing) {
-      // Add up into the existing entry instead of creating a new card.
       existing.amount = num(existing.amount) + amount;
-      if (!existing.payments) existing.payments = [];
-      if (paid > 0) existing.payments.push({ amt: paid, date: new Date().toISOString().slice(0, 10), label: "Initial" });
-      // keep the earliest due date; adopt the new one only if existing has none
-      if (!existing.due && due) existing.due = due;
-      // accumulate terms; update per-term to the latest provided value
-      if (terms > 0) existing.terms = (num(existing.terms) || 0) + terms;
-      if (perTerm > 0) existing.perTerm = perTerm;
-      // record the add as a note in a sub-items list (for transparency)
+      if (terms > 1 && existing.terms <= 1) existing.terms = terms; // adopt installment if provided
       if (!existing.additions) existing.additions = [];
       existing.additions.push({ amt: amount, date: new Date().toISOString().slice(0, 10) });
     } else {
-      const debt = {
+      state.debts.push({
         id: uid(), category: category, person: category === "person" ? person : "",
-        name: name, amount: amount, due: due || "",
-        terms: terms || 0, perTerm: perTerm || 0, payments: [], additions: [], createdAt: Date.now()
-      };
-      if (paid > 0) debt.payments.push({ amt: paid, date: new Date().toISOString().slice(0, 10), label: "Initial" });
-      state.debts.push(debt);
+        name: name, amount: amount, terms: terms,
+        startMonth: viewMonth, paidMonths: {}, additions: [], createdAt: Date.now()
+      });
     }
     saveState();
 
-    // clear form
     document.getElementById("newPerson").value = "";
     document.getElementById("newName").value = "";
     document.getElementById("newAmount").value = "";
-    document.getElementById("newPaid").value = "";
-    document.getElementById("newDue").value = "";
     document.getElementById("newTerms").value = "";
     document.getElementById("newPerTerm").value = "";
     renderAll();
@@ -593,16 +633,29 @@
     if (appStarted) return;
     appStarted = true;
     loadState();
-    document.getElementById("addBtn").addEventListener("click", addDebt);
+    viewMonth = monthKey(new Date());
 
-    // Show the Person name field only when category = person.
+    document.getElementById("addBtn").addEventListener("click", addDebt);
+    document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
+    document.getElementById("nextMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, 1); renderAll(); });
+
+    // Person field toggle
     const catSel = document.getElementById("newCategory");
     const personField = document.getElementById("personField");
-    function refreshPersonField() {
-      personField.style.display = (catSel.value === "person") ? "" : "none";
-    }
+    function refreshPersonField() { personField.style.display = (catSel.value === "person") ? "" : "none"; }
     catSel.addEventListener("change", refreshPersonField);
     refreshPersonField();
+
+    // Live per-term preview in the add form
+    const amtInp = document.getElementById("newAmount");
+    const termsInp = document.getElementById("newTerms");
+    const perInp = document.getElementById("newPerTerm");
+    function refreshPerTerm() {
+      const amt = num(amtInp.value), terms = Math.max(1, Math.round(num(termsInp.value) || 1));
+      perInp.value = amt > 0 ? (amt / terms).toFixed(2) : "";
+    }
+    amtInp.addEventListener("input", refreshPerTerm);
+    termsInp.addEventListener("input", refreshPerTerm);
 
     renderAll();
   }
@@ -634,7 +687,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 67;
+  const APP_VERSION = 68;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -649,7 +702,6 @@
     } catch (e) {}
   }
 
-  // Wire lock UI
   document.getElementById("lockBtn").onclick = unlock;
   document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
 
