@@ -129,6 +129,13 @@
   .debt-head .d-del:hover { color: var(--danger); }
   .d-sub { color: var(--muted); font-size: 12px; margin: -4px 0 8px; }
 
+  /* Debt breakdown list */
+  .bd-list { margin-top: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .bd-list .bd-title { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+  .bd-list .bd-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; border-top: 1px solid var(--line); }
+  .bd-list .bd-row:first-of-type { border-top: none; }
+  .bd-list .bd-date { color: var(--muted); font-size: 11px; }
+
   .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
   .d-amounts .seg { text-align: center; flex: 1; }
   .d-amounts .seg .k { color: var(--muted); font-size: 11px; }
@@ -278,6 +285,10 @@
         <input type="text" inputmode="decimal" id="newAmount" placeholder="0.00" />
       </div>
       <div class="field">
+        <label>Note<span class="sub">optional, e.g. Jollibee, Netflix</span></label>
+        <input type="text" class="name-in" id="newNote" placeholder="saan / anong binili" />
+      </div>
+      <div class="field">
         <label>Number of terms<span class="sub">1 = isang bayad lang (walang hulugan)</span></label>
         <input type="text" inputmode="numeric" id="newTerms" placeholder="1" />
       </div>
@@ -325,7 +336,13 @@
       if (!d.paidMonths) d.paidMonths = {};
       if (!d.terms || d.terms < 1) d.terms = 1;
       if (!d.startMonth) d.startMonth = monthKey(new Date());
-      if (!d.additions) d.additions = [];
+      // Migrate to an entries[] breakdown.
+      if (!Array.isArray(d.entries)) {
+        d.entries = [];
+        const base = num(d.amount) - (d.additions || []).reduce((s, a) => s + num(a.amt), 0);
+        d.entries.push({ amt: Math.max(0, base), date: (d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : ""), note: "" });
+        (d.additions || []).forEach(a => d.entries.push({ amt: num(a.amt), date: a.date || "", note: "" }));
+      }
     });
   }
   function saveState() {
@@ -434,12 +451,25 @@
     const idx = termIndexFor(d, viewMonth);        // which term is due this month (0-based)
     const paidThisMonth = !!d.paidMonths[viewMonth];
     const title = (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category));
-    const addCount = (d.additions || []).length;
+    const entries = d.entries || [];
     const subTag = (usesSubCat(d.category) && d.subCat) ? subLabel(d.subCat) : "";
     const subBits = [];
     if (subTag) subBits.push(subTag);
-    if (addCount > 0) subBits.push("Pinagsama: " + (addCount + 1) + " entries");
+    if (entries.length > 1) subBits.push(entries.length + " items");
     const mergeNote = subBits.length ? '<div class="d-sub">' + subBits.join(" &middot; ") + '</div>' : "";
+
+    // Breakdown of each individual debt that makes up this entry.
+    let breakdownHtml = "";
+    if (entries.length) {
+      let rows = "";
+      entries.forEach(en => {
+        const dt = en.date ? new Date(en.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
+        const label = (en.note && en.note.trim()) ? en.note : "Utang";
+        rows += '<div class="bd-row"><span>' + label + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
+          '<span>' + peso(num(en.amt)) + '</span></div>';
+      });
+      breakdownHtml = '<div class="bd-list"><div class="bd-title">Breakdown ng utang</div>' + rows + '</div>';
+    }
 
     // Term row for THIS month
     let termRow = "";
@@ -486,6 +516,7 @@
       '<div class="d-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
       '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span>' +
         (d.terms > 1 ? d.terms + " terms \u00d7 " + peso(per) : "one-time") + '</span></div>' +
+      breakdownHtml +
       termRow +
       editPanel +
     '</div>';
@@ -623,6 +654,7 @@
     const name = document.getElementById("newName").value.trim();
     const subCat = usesSubCat(category) ? document.getElementById("newSubCat").value : "";
     const amount = num(document.getElementById("newAmount").value);
+    const note = document.getElementById("newNote").value.trim();
     const terms = Math.max(1, Math.round(num(document.getElementById("newTerms").value) || 1));
 
     if (category === "person") {
@@ -632,19 +664,22 @@
     }
     if (amount <= 0) { document.getElementById("newAmount").focus(); return; }
 
+    const today = new Date().toISOString().slice(0, 10);
     const key = mergeKey(category, person, name, subCat);
     const existing = state.debts.find(x => mergeKey(x.category, x.person, x.name, x.subCat) === key);
 
     if (existing) {
       existing.amount = num(existing.amount) + amount;
       if (terms > 1 && existing.terms <= 1) existing.terms = terms; // adopt installment if provided
-      if (!existing.additions) existing.additions = [];
-      existing.additions.push({ amt: amount, date: new Date().toISOString().slice(0, 10) });
+      if (!existing.entries) existing.entries = [];
+      existing.entries.push({ amt: amount, date: today, note: note });
     } else {
       state.debts.push({
         id: uid(), category: category, person: category === "person" ? person : "",
         name: name, subCat: subCat, amount: amount, terms: terms,
-        startMonth: viewMonth, paidMonths: {}, additions: [], createdAt: Date.now()
+        startMonth: viewMonth, paidMonths: {},
+        entries: [{ amt: amount, date: today, note: note }],
+        createdAt: Date.now()
       });
     }
     saveState();
@@ -652,6 +687,7 @@
     document.getElementById("newPerson").value = "";
     document.getElementById("newName").value = "";
     document.getElementById("newAmount").value = "";
+    document.getElementById("newNote").value = "";
     document.getElementById("newTerms").value = "";
     document.getElementById("newPerTerm").value = "";
     renderAll();
@@ -721,7 +757,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 69;
+  const APP_VERSION = 70;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
