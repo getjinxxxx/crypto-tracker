@@ -240,7 +240,7 @@
     <!-- DEDUCTIONS -->
     <div class="card">
       <h2>Deductions</h2>
-      <div class="hint">Fixed na mga kontribusyon &mdash; naka-lock lahat. Ang PhilHealth ay auto (5% ng monthly basic &divide; 2) at ang tax ay auto gamit ang TRAIN semi-monthly table.</div>
+      <div class="hint">Ang PhilHealth ay auto (5% ng monthly basic &divide; 2) at ang tax ay auto. Ang SSS / Pag-IBIG / MPF ay fixed &mdash; pindutin ang <b>Edit contributions</b> kung iba sa payslip mo (minsan nagbabago kada cutoff).</div>
 
       <div class="field">
         <label>PhilHealth<span class="sub">auto: 5% of monthly basic &divide; 2</span></label>
@@ -261,6 +261,10 @@
         <label>MPF<span class="sub">provident / mandatory provident fund</span></label>
         <span class="suffix">PHP</span>
         <input type="text" inputmode="decimal" id="dMPF" placeholder="0.00" readonly />
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="editContribBtn">Edit contributions</button>
+        <button class="btn primary" id="saveContribBtn" style="display:none">Save contributions</button>
       </div>
 
       <div class="divider"></div>
@@ -722,11 +726,16 @@
     const dmField = document.getElementById("deMinimis");
     if (dmField) dmField.value = r.deMinimis > 0 ? r.deMinimis.toFixed(2) : "0.00";
 
-    // deduction fields reflect the (read-only, auto) values
+    // deduction fields reflect the (read-only, auto) values.
+    // PhilHealth is always auto. SSS/HDMF/MPF are only refreshed while locked (readonly),
+    // so we don't stomp what the user is typing during an edit.
     document.getElementById("dPhilhealth").value = r.philhealth > 0 ? r.philhealth.toFixed(2) : "";
-    document.getElementById("dSSS").value = r.sss > 0 ? r.sss.toFixed(2) : "";
-    document.getElementById("dHDMF").value = r.hdmf > 0 ? r.hdmf.toFixed(2) : "";
-    document.getElementById("dMPF").value = r.mpf > 0 ? r.mpf.toFixed(2) : "";
+    const sssEl = document.getElementById("dSSS");
+    const hdmfEl = document.getElementById("dHDMF");
+    const mpfEl = document.getElementById("dMPF");
+    if (sssEl.readOnly) sssEl.value = r.sss > 0 ? r.sss.toFixed(2) : "";
+    if (hdmfEl.readOnly) hdmfEl.value = r.hdmf > 0 ? r.hdmf.toFixed(2) : "";
+    if (mpfEl.readOnly) mpfEl.value = r.mpf > 0 ? r.mpf.toFixed(2) : "";
 
     // update OT amounts live
     const hourly = r.hourly;
@@ -907,10 +916,35 @@
     // De Minimis is a fixed, read-only non-taxable allowance (seeded from state).
     document.getElementById("deMinimis").value = state.deMinimis || "";
 
-    // Deductions SSS / Pag-IBIG / MPF are read-only but seeded from saved state.
-    document.getElementById("dSSS").value = state.deduct.sss || "";
-    document.getElementById("dHDMF").value = state.deduct.hdmf || "";
-    document.getElementById("dMPF").value = state.deduct.mpf || "";
+    // Deductions SSS / Pag-IBIG / MPF: read-only by default, editable via override button.
+    const sssInp = document.getElementById("dSSS");
+    const hdmfInp = document.getElementById("dHDMF");
+    const mpfInp = document.getElementById("dMPF");
+    sssInp.value = state.deduct.sss || "";
+    hdmfInp.value = state.deduct.hdmf || "";
+    mpfInp.value = state.deduct.mpf || "";
+    sssInp.addEventListener("input", () => { if (!sssInp.readOnly) { state.deduct.sss = sssInp.value; saveState(); recompute(); } });
+    hdmfInp.addEventListener("input", () => { if (!hdmfInp.readOnly) { state.deduct.hdmf = hdmfInp.value; saveState(); recompute(); } });
+    mpfInp.addEventListener("input", () => { if (!mpfInp.readOnly) { state.deduct.mpf = mpfInp.value; saveState(); recompute(); } });
+
+    const editContribBtn = document.getElementById("editContribBtn");
+    const saveContribBtn = document.getElementById("saveContribBtn");
+    editContribBtn.addEventListener("click", () => {
+      sssInp.readOnly = false; hdmfInp.readOnly = false; mpfInp.readOnly = false;
+      sssInp.focus(); sssInp.select();
+      editContribBtn.style.display = "none";
+      saveContribBtn.style.display = "";
+    });
+    saveContribBtn.addEventListener("click", () => {
+      sssInp.readOnly = true; hdmfInp.readOnly = true; mpfInp.readOnly = true;
+      state.deduct.sss = sssInp.value;
+      state.deduct.hdmf = hdmfInp.value;
+      state.deduct.mpf = mpfInp.value;
+      saveState();
+      recompute();
+      saveContribBtn.style.display = "none";
+      editContribBtn.style.display = "";
+    });
 
     // Tax override buttons: Edit tax -> type exact value; Save tax -> lock; Use auto -> clear override.
     const taxInp = document.getElementById("dTax");
@@ -1102,7 +1136,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 62;
+  const APP_VERSION = 63;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
