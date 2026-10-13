@@ -119,6 +119,13 @@
   .line.total { font-size: 15px; font-weight: 700; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
   .line.total .amt { color: var(--gold-bright); }
   .line.deduct .amt { color: var(--red); }
+  .line.credit .amt { color: var(--green); }
+
+  /* Breakdown sub-section header */
+  .bd-head { color: var(--gold-bright); font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .5px; margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .bd-head:first-child { margin-top: 0; }
+  .bd-note { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 4px 0 2px; }
 
   .netpay {
     background: linear-gradient(135deg, rgba(52,211,153,0.14), rgba(22,22,26,0.4));
@@ -777,32 +784,58 @@
     let h = "";
     const row = (lbl, amt, cls, sub) =>
       '<div class="line ' + (cls || "") + '"><div class="lbl">' + lbl + (sub ? '<span class="sub">' + sub + '</span>' : '') + '</div><div class="amt">' + amt + '</div></div>';
+    const head = (t) => '<div class="bd-head">' + t + '</div>';
+    const note = (t) => '<div class="bd-note">' + t + '</div>';
 
-    // Earnings
-    h += row("Base salary", peso(r.base));
+    // ===== 1) EARNINGS =====
+    h += head("Earnings");
+    h += row("Base salary", peso(r.base), "", "taxable");
     if (r.otTotal > 0) {
-      h += row("Overtime", peso(r.otTotal));
+      h += row("Overtime (total)", peso(r.otTotal));
       r.otBreakdown.forEach(o => {
         h += row(o.name + " (" + o.hrs + " hr" + (o.hrs === 1 ? "" : "s") + ")", peso(o.amt), "sub-line");
       });
     }
+    if (r.extraTaxable > 0) h += row("Other taxable earnings", peso(r.extraTaxable), "", "taxable");
     if (r.deMinimis > 0) h += row("De Minimis", peso(r.deMinimis), "", "non-taxable");
-    if (r.extraTaxable > 0) h += row("Other taxable earnings", peso(r.extraTaxable));
-    if ((r.extraNonTax - r.deMinimis) > 0) h += row("Other non-taxable earnings", peso(r.extraNonTax - r.deMinimis));
+    if ((r.extraNonTax - r.deMinimis) > 0) h += row("Other non-taxable earnings", peso(r.extraNonTax - r.deMinimis), "", "non-taxable");
     h += row("Total earnings", peso(r.grossEarnings), "total");
 
-    // Deductions
-    h += '<div style="height:14px"></div>';
+    // ===== 2) DEDUCTIONS =====
+    h += head("Deductions");
     if (r.philhealth > 0) h += row("PhilHealth", "-" + peso(r.philhealth), "deduct");
     if (r.sss > 0) h += row("SSS", "-" + peso(r.sss), "deduct");
     if (r.hdmf > 0) h += row("Pag-IBIG (HDMF)", "-" + peso(r.hdmf), "deduct");
     if (r.mpf > 0) h += row("MPF", "-" + peso(r.mpf), "deduct");
-    h += row("Withholding tax", "-" + peso(r.tax), "deduct", "on net taxable " + peso(r.netTaxable));
+    const mandatoryTotal = r.philhealth + r.sss + r.hdmf + r.mpf;
+    h += row("Subtotal: gov't contributions", "-" + peso(mandatoryTotal), "sub-line");
+    let otherDedShown = 0;
     state.otherDeduct.forEach(d => {
       const a = num(d.amount);
-      if (a > 0) h += row(d.name || "Other deduction", "-" + peso(a), "deduct");
+      if (a > 0) { h += row(d.name || "Other deduction", "-" + peso(a), "deduct"); otherDedShown += a; }
     });
+    h += row("Withholding tax", "-" + peso(r.tax), "deduct");
     h += row("Total deductions", "-" + peso(r.totalDeductions), "total deduct");
+
+    // ===== 3) TAX BREAKDOWN (attribution by source) =====
+    h += head("Tax breakdown (by source)");
+    // Taxable base = base + taxable OT + other taxable earnings (De Minimis & non-tax excluded)
+    const taxableTotal = r.base + r.otTotal + r.extraTaxable;
+    if (r.tax > 0 && taxableTotal > 0) {
+      h += note("Ang withholding tax ay kinakalkula sa kabuuang taxable income. Narito ang <b>proporsyonal</b> na hati batay sa bawat pinagmulan ng taxable earnings:");
+      const share = (amt) => (amt / taxableTotal) * r.tax;
+      h += row("From Base salary", "-" + peso(share(r.base)), "deduct", (100 * r.base / taxableTotal).toFixed(1) + "% of taxable");
+      // Per-OT-type attribution
+      r.otBreakdown.forEach(o => {
+        h += row("From " + o.name, "-" + peso(share(o.amt)), "deduct sub-line", (100 * o.amt / taxableTotal).toFixed(1) + "%");
+      });
+      if (r.extraTaxable > 0) h += row("From other taxable", "-" + peso(share(r.extraTaxable)), "deduct", (100 * r.extraTaxable / taxableTotal).toFixed(1) + "%");
+      h += row("Total withholding tax", "-" + peso(r.tax), "total deduct");
+      const effRate = (r.tax / taxableTotal) * 100;
+      h += note("Net taxable income: <b>" + peso(r.netTaxable) + "</b> &middot; Effective tax rate: <b>" + effRate.toFixed(2) + "%</b> ng taxable earnings. (De Minimis at iba pang non-taxable ay hindi binubuwisan.)");
+    } else {
+      h += note("Walang withholding tax sa cutoff na ito.");
+    }
 
     el.innerHTML = h;
   }
@@ -1136,7 +1169,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 63;
+  const APP_VERSION = 64;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
