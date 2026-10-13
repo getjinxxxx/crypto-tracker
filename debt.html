@@ -116,6 +116,13 @@
   .d-cat { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: .3px;
     background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
   .d-sub { color: var(--muted); font-size: 12px; margin: -4px 0 8px; }
+
+  /* Category group (Option A) */
+  .cat-group { margin-bottom: 20px; }
+  .cat-header { display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 2px 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .cat-title { font-size: 13px; font-weight: 700; color: var(--gold-bright); text-transform: uppercase; letter-spacing: .5px; }
+  .cat-total { font-size: 13px; font-weight: 700; color: var(--red); }
   select.cat-sel {
     width: 220px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
     border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 14px;
@@ -202,7 +209,7 @@
 
     <!-- CHART -->
     <div class="card" id="chartCard" style="display:none">
-      <h2>Remaining balance per debt</h2>
+      <h2>Remaining balance per category</h2>
       <div class="hint">Hover/tap sa slice para makita ang detalye.</div>
       <div style="position:relative;height:220px"><canvas id="debtChart"></canvas></div>
     </div>
@@ -213,7 +220,7 @@
     <!-- ADD DEBT -->
     <div class="card">
       <h2>Add a debt</h2>
-      <div class="hint">Ilagay ang pangalan at kabuuang utang. Pwede kang maglagay ng due date at interest kung meron.</div>
+      <div class="hint">Naka-group per category. Kung ulitin mo ang <b>parehong pangalan ng tao</b> o <b>parehong label sa isang category</b>, <b>i-a-add up</b> ito sa dating entry (hindi bagong card).</div>
       <div class="field">
         <label>Category</label>
         <select id="newCategory" class="cat-sel">
@@ -247,8 +254,12 @@
         <input type="date" id="newDue" />
       </div>
       <div class="field">
-        <label>Monthly payment<span class="sub">optional, for payoff estimate</span></label>
-        <input type="text" inputmode="decimal" id="newMonthly" placeholder="0.00" />
+        <label>Number of terms<span class="sub">optional, ilang hulog (e.g. 12)</span></label>
+        <input type="text" inputmode="numeric" id="newTerms" placeholder="0" />
+      </div>
+      <div class="field">
+        <label>Payment per term<span class="sub">optional, halaga kada hulog</span></label>
+        <input type="text" inputmode="decimal" id="newPerTerm" placeholder="0.00" />
       </div>
       <div class="btn-row">
         <button class="btn primary" id="addBtn">Add debt</button>
@@ -340,81 +351,106 @@
     document.getElementById("sumCount").textContent = done + " / " + state.debts.length;
   }
 
+  // Build the HTML for a single debt card.
+  function debtCardHtml(d) {
+    const amount = num(d.amount);
+    const paid = paidOf(d);
+    const remaining = remainingOf(d);
+    const pct = amount > 0 ? Math.min(100, (paid / amount) * 100) : 0;
+    const st = statusOf(d);
+    const paidOff = remaining <= 0.009;
+
+    // payoff estimate from terms + payment-per-term
+    let payoffNote = "";
+    const terms = num(d.terms), perTerm = num(d.perTerm);
+    if (!paidOff && perTerm > 0) {
+      const left = Math.ceil(remaining / perTerm);
+      payoffNote = "~" + left + " term" + (left === 1 ? "" : "s") + " left at " + peso(perTerm) + "/term";
+    } else if (!paidOff && terms > 0) {
+      const perT = amount / terms;
+      const left = Math.ceil(remaining / perT);
+      payoffNote = left + " of " + terms + " terms left (" + peso(perT) + "/term)";
+    } else if (terms > 0) {
+      payoffNote = terms + " term" + (terms === 1 ? "" : "s");
+    }
+
+    let paymentsHtml = "";
+    (d.payments || []).slice().reverse().forEach((p, revIdx) => {
+      const realIdx = (d.payments.length - 1) - revIdx;
+      const dt = p.date ? new Date(p.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
+      paymentsHtml += '<div class="ph"><span>' + (p.label ? p.label + " " : "Payment ") + dt + '</span>' +
+        '<span>' + peso(num(p.amt)) + ' <button class="pdel" data-pdel="' + d.id + '" data-pidx="' + realIdx + '" title="Remove payment">&times;</button></span></div>';
+    });
+
+    // Title: for a person debt, lead with the person's name.
+    let title;
+    if (d.category === "person" && d.person) {
+      title = d.person;
+    } else {
+      title = d.name || catLabel(d.category);
+    }
+    // Note how many separate add-ups make up this entry.
+    const addCount = (d.additions || []).length;
+    const mergeNote = addCount > 0 ? '<div class="d-sub">Pinagsama: ' + (addCount + 1) + ' entries</div>' : "";
+
+    return '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
+      '<div class="debt-head">' +
+        '<div class="d-name">' + title + '</div>' +
+        '<span class="d-badge ' + st.cls + '">' + st.text + '</span>' +
+        '<button class="d-del" data-del="' + d.id + '" title="Delete debt">&times;</button>' +
+      '</div>' +
+      mergeNote +
+      '<div class="d-amounts">' +
+        '<div class="seg"><div class="k">Owed</div><div class="v">' + peso(amount) + '</div></div>' +
+        '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(paid) + '</div></div>' +
+        '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(remaining) + '</div></div>' +
+      '</div>' +
+      '<div class="d-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+      '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span>' + payoffNote + '</span></div>' +
+      (paidOff ? "" :
+        '<div class="d-pay">' +
+          '<input type="text" inputmode="decimal" placeholder="Payment amount" data-payamt="' + d.id + '">' +
+          '<button data-paybtn="' + d.id + '">Add payment</button>' +
+        '</div>') +
+      (paymentsHtml ? '<div class="d-payments">' + paymentsHtml + '</div>' : "") +
+    '</div>';
+  }
+
   function renderList() {
     const el = document.getElementById("debtList");
     if (!state.debts.length) {
       el.innerHTML = '<div class="card"><div class="empty">Wala pang debt. Magdagdag sa ibaba.</div></div>';
       return;
     }
-    el.innerHTML = "";
+
+    // Group debts by category (Option A). Preserve category display order.
+    const order = ["person", "creditcard", "bankloan", "onlineloan", "government", "salaryloan", "other"];
+    const groups = {};
     state.debts.forEach(d => {
-      const amount = num(d.amount);
-      const paid = paidOf(d);
-      const remaining = remainingOf(d);
-      const pct = amount > 0 ? Math.min(100, (paid / amount) * 100) : 0;
-      const st = statusOf(d);
-      const paidOff = remaining <= 0.009;
-
-      // payoff estimate
-      let payoffNote = "";
-      const monthly = num(d.monthly);
-      if (!paidOff && monthly > 0) {
-        const months = Math.ceil(remaining / monthly);
-        payoffNote = "~" + months + " month" + (months === 1 ? "" : "s") + " left at " + peso(monthly) + "/mo";
-      }
-
-      const item = document.createElement("div");
-      item.className = "debt-item" + (paidOff ? " paid-off" : "");
-
-      let paymentsHtml = "";
-      (d.payments || []).slice().reverse().forEach((p, revIdx) => {
-        const realIdx = (d.payments.length - 1) - revIdx;
-        const dt = p.date ? new Date(p.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
-        paymentsHtml += '<div class="ph"><span>' + (p.label ? p.label + " " : "Payment ") + dt + '</span>' +
-          '<span>' + peso(num(p.amt)) + ' <button class="pdel" data-pdel="' + d.id + '" data-pidx="' + realIdx + '" title="Remove payment">&times;</button></span></div>';
-      });
-
-      // Title: for a person debt, lead with the person's name ("Utang kay X").
-      let title;
-      if (d.category === "person" && d.person) {
-        title = "Utang kay " + d.person + (d.name ? " \u2014 " + d.name : "");
-      } else {
-        title = d.name || catLabel(d.category);
-      }
-      // Secondary line
-      let subLine = catLabel(d.category);
-      if (d.category === "person" && d.person && d.name) subLine = "Utang sa tao &middot; " + d.name;
-
-      item.innerHTML =
-        '<div class="debt-head">' +
-          '<div class="d-name">' + title + '</div>' +
-          '<span class="d-cat">' + catLabel(d.category) + '</span>' +
-          '<span class="d-badge ' + st.cls + '">' + st.text + '</span>' +
-          '<button class="d-del" data-del="' + d.id + '" title="Delete debt">&times;</button>' +
-        '</div>' +
-        '<div class="d-sub">' + subLine + '</div>' +
-        '<div class="d-amounts">' +
-          '<div class="seg"><div class="k">Owed</div><div class="v">' + peso(amount) + '</div></div>' +
-          '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(paid) + '</div></div>' +
-          '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(remaining) + '</div></div>' +
-        '</div>' +
-        '<div class="d-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
-        '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span>' + payoffNote + '</span></div>' +
-        (paidOff ? "" :
-          '<div class="d-pay">' +
-            '<input type="text" inputmode="decimal" placeholder="Payment amount" data-payamt="' + d.id + '">' +
-            '<button data-paybtn="' + d.id + '">Add payment</button>' +
-          '</div>') +
-        (paymentsHtml ? '<div class="d-payments">' + paymentsHtml + '</div>' : "");
-
-      el.appendChild(item);
+      const c = d.category || "other";
+      if (!groups[c]) groups[c] = [];
+      groups[c].push(d);
     });
+
+    let html = "";
+    order.forEach(cat => {
+      const list = groups[cat];
+      if (!list || !list.length) return;
+      const catRemaining = list.reduce((s, d) => s + remainingOf(d), 0);
+      html += '<div class="cat-group">' +
+        '<div class="cat-header"><span class="cat-title">' + catLabel(cat) + '</span>' +
+        '<span class="cat-total">Total: ' + peso(catRemaining) + '</span></div>';
+      list.forEach(d => { html += debtCardHtml(d); });
+      html += '</div>';
+    });
+    el.innerHTML = html;
 
     // wire delete debt
     el.querySelectorAll("[data-del]").forEach(btn => btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-del");
       const d = state.debts.find(x => x.id === id);
-      if (!confirm("Delete \"" + (d ? d.name : "this debt") + "\"? Hindi na ito mababawi.")) return;
+      const dLabel = d ? ((d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category))) : "this debt";
+      if (!confirm("Delete \"" + dLabel + "\"? Hindi na ito mababawi.")) return;
       state.debts = state.debts.filter(x => x.id !== id);
       saveState(); renderAll();
     }));
@@ -455,10 +491,18 @@
     if (!active.length) { card.style.display = "none"; return; }
     card.style.display = "";
 
-    const labels = active.map(d => (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category)));
-    const data = active.map(d => remainingOf(d));
+    // Group remaining balance by category (Option A).
+    const order = ["person", "creditcard", "bankloan", "onlineloan", "government", "salaryloan", "other"];
+    const totals = {};
+    active.forEach(d => {
+      const c = d.category || "other";
+      totals[c] = (totals[c] || 0) + remainingOf(d);
+    });
+    const cats = order.filter(c => totals[c] > 0);
+    const labels = cats.map(c => catLabel(c));
+    const data = cats.map(c => totals[c]);
     const palette = ["#ff6b6b", "#f5c542", "#4f8cff", "#34d399", "#b07cff", "#ff9f6b", "#6bd3ff", "#ff6bd3"];
-    const colors = active.map((d, i) => palette[i % palette.length]);
+    const colors = cats.map((c, i) => palette[i % palette.length]);
 
     if (debtChart) debtChart.destroy();
     debtChart = new Chart(canvas.getContext("2d"), {
@@ -481,6 +525,12 @@
   }
 
   // ---------- Add debt ----------
+  // Merge key: same person (any category "person") OR same category+label merges together.
+  function mergeKey(category, person, name) {
+    if (category === "person") return "person::" + (person || "").trim().toLowerCase();
+    return category + "::" + (name || "").trim().toLowerCase();
+  }
+
   function addDebt() {
     const category = document.getElementById("newCategory").value;
     const person = document.getElementById("newPerson").value.trim();
@@ -488,7 +538,8 @@
     const amount = num(document.getElementById("newAmount").value);
     const paid = num(document.getElementById("newPaid").value);
     const due = document.getElementById("newDue").value;
-    const monthly = num(document.getElementById("newMonthly").value);
+    const terms = Math.round(num(document.getElementById("newTerms").value));
+    const perTerm = num(document.getElementById("newPerTerm").value);
 
     // For a person debt, require the person's name. Otherwise require a label/name.
     if (category === "person") {
@@ -498,13 +549,31 @@
     }
     if (amount <= 0) { document.getElementById("newAmount").focus(); return; }
 
-    const debt = {
-      id: uid(), category: category, person: category === "person" ? person : "",
-      name: name, amount: amount, due: due || "",
-      monthly: monthly || 0, payments: [], createdAt: Date.now()
-    };
-    if (paid > 0) debt.payments.push({ amt: paid, date: new Date().toISOString().slice(0, 10), label: "Initial" });
-    state.debts.push(debt);
+    const key = mergeKey(category, person, name);
+    const existing = state.debts.find(x => mergeKey(x.category, x.person, x.name) === key);
+
+    if (existing) {
+      // Add up into the existing entry instead of creating a new card.
+      existing.amount = num(existing.amount) + amount;
+      if (!existing.payments) existing.payments = [];
+      if (paid > 0) existing.payments.push({ amt: paid, date: new Date().toISOString().slice(0, 10), label: "Initial" });
+      // keep the earliest due date; adopt the new one only if existing has none
+      if (!existing.due && due) existing.due = due;
+      // accumulate terms; update per-term to the latest provided value
+      if (terms > 0) existing.terms = (num(existing.terms) || 0) + terms;
+      if (perTerm > 0) existing.perTerm = perTerm;
+      // record the add as a note in a sub-items list (for transparency)
+      if (!existing.additions) existing.additions = [];
+      existing.additions.push({ amt: amount, date: new Date().toISOString().slice(0, 10) });
+    } else {
+      const debt = {
+        id: uid(), category: category, person: category === "person" ? person : "",
+        name: name, amount: amount, due: due || "",
+        terms: terms || 0, perTerm: perTerm || 0, payments: [], additions: [], createdAt: Date.now()
+      };
+      if (paid > 0) debt.payments.push({ amt: paid, date: new Date().toISOString().slice(0, 10), label: "Initial" });
+      state.debts.push(debt);
+    }
     saveState();
 
     // clear form
@@ -513,7 +582,8 @@
     document.getElementById("newAmount").value = "";
     document.getElementById("newPaid").value = "";
     document.getElementById("newDue").value = "";
-    document.getElementById("newMonthly").value = "";
+    document.getElementById("newTerms").value = "";
+    document.getElementById("newPerTerm").value = "";
     renderAll();
   }
 
@@ -564,7 +634,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 66;
+  const APP_VERSION = 67;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
