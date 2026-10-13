@@ -270,9 +270,43 @@
 
       <div class="divider"></div>
       <div class="field">
-        <label>Withholding tax<span class="sub">auto (TRAIN semi-monthly table)</span></label>
+        <label>Withholding tax<span class="sub" id="taxMode">auto (TRAIN semi-monthly table &mdash; estimate)</span></label>
         <span class="suffix">PHP</span>
         <input type="text" inputmode="decimal" id="dTax" placeholder="0.00" readonly />
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="editTaxBtn">Edit tax</button>
+        <button class="btn primary" id="saveTaxBtn" style="display:none">Save tax</button>
+        <button class="btn" id="autoTaxBtn" style="display:none">Use auto</button>
+      </div>
+      <div class="note">Ang auto-tax ay estimate lang. Kung may hawak kang payslip, pindutin ang <b>Edit tax</b> at ilagay ang eksaktong halaga para 100% tama ang net.</div>
+
+      <div class="divider"></div>
+      <div class="hint" style="margin-bottom:8px"><b>Tax method</b> (para sa auto-estimate):</div>
+      <div class="field">
+        <label>Method</label>
+        <select id="taxMethodSel" class="period-sel">
+          <option value="cumulative">Cumulative / annualized (BIR, mas tumpak)</option>
+          <option value="table">Per-cutoff table (simple estimate)</option>
+        </select>
+      </div>
+      <div id="ytdFields">
+        <div class="field">
+          <label>YTD taxable before history<span class="sub">taxable income this year na hindi pa naka-save</span></label>
+          <span class="suffix">PHP</span>
+          <input type="text" inputmode="decimal" id="ytdTaxable" placeholder="0.00" />
+        </div>
+        <div class="field">
+          <label>YTD tax paid before history<span class="sub">tax na nabayad na this year</span></label>
+          <span class="suffix">PHP</span>
+          <input type="text" inputmode="decimal" id="ytdTaxPaid" placeholder="0.00" />
+        </div>
+        <div class="field">
+          <label>Pay periods / year<span class="sub">semi-monthly = 24</span></label>
+          <span class="suffix"></span>
+          <input type="text" inputmode="numeric" id="periodsPerYear" placeholder="24" />
+        </div>
+        <div class="note">Ang cumulative method ay gumagamit ng naka-save mong history + YTD seed sa itaas. Para tumpak, i-save mo lahat ng cutoff ng taon, o ilagay ang starting YTD mula sa payslip (hal. Tax YTD).</div>
       </div>
     </div>
 
@@ -365,6 +399,11 @@
   let state = {
     base: DEFAULT_BASE,
     deMinimis: DEFAULT_DEMINIMIS,   // non-taxable allowance (fixed)
+    taxOverride: "",        // if set (non-empty), use this exact tax instead of auto
+    taxMethod: "cumulative",// "cumulative" (BIR annualized) or "table" (per-cutoff estimate)
+    ytdTaxable: "",         // taxable income already earned this year BEFORE the saved history
+    ytdTaxPaid: "",         // tax already withheld this year BEFORE the saved history
+    periodsPerYear: "24",   // semi-monthly = 24 pay periods
     ot: {},                 // key -> hours (string)
     extraEarn: [],          // { name, amount, taxable }
     // PhilHealth + tax are auto-computed. SSS / Pag-IBIG(HDMF) / MPF are fixed values
@@ -384,6 +423,11 @@
         if (!Array.isArray(state.extraEarn)) state.extraEarn = [];
         if (!Array.isArray(state.otherDeduct)) state.otherDeduct = [];
         if (!state.deMinimis) state.deMinimis = DEFAULT_DEMINIMIS;
+        if (state.taxOverride == null) state.taxOverride = "";
+        if (!state.taxMethod) state.taxMethod = "cumulative";
+        if (state.ytdTaxable == null) state.ytdTaxable = "";
+        if (state.ytdTaxPaid == null) state.ytdTaxPaid = "";
+        if (!state.periodsPerYear) state.periodsPerYear = "24";
         // Back-fill fixed values if an older saved state left them blank.
         if (state.base === "" || state.base == null) state.base = DEFAULT_BASE;
         if (!state.deduct.sss) state.deduct.sss = DEFAULT_SSS;
@@ -425,7 +469,7 @@
     return dailyFromBase(baseSemi) / 8;
   }
 
-  // ---------- TRAIN semi-monthly withholding tax ----------
+  // ---------- TRAIN semi-monthly withholding tax (per-cutoff estimate) ----------
   // Brackets for compensation per semi-monthly pay period (BIR, 2023 onwards).
   function computeTax(taxable) {
     if (taxable <= 10417) return 0;
@@ -435,6 +479,53 @@
     if (taxable <= 166667) return 10833.33 + (taxable - 66667) * 0.30;
     if (taxable <= 666667) return 40833.33 + (taxable - 166667) * 0.32;
     return 200833.33 + (taxable - 666667) * 0.35;
+  }
+
+  // ---------- Annual TRAIN income tax (BIR, 2023 onwards) ----------
+  // Used by the cumulative/annualized method to match how payroll actually withholds.
+  function computeAnnualTax(annual) {
+    if (annual <= 250000) return 0;
+    if (annual <= 400000) return (annual - 250000) * 0.15;
+    if (annual <= 800000) return 22500 + (annual - 400000) * 0.20;
+    if (annual <= 2000000) return 102500 + (annual - 800000) * 0.25;
+    if (annual <= 8000000) return 402500 + (annual - 2000000) * 0.30;
+    return 2202500 + (annual - 8000000) * 0.35;
+  }
+
+  // Cumulative/annualized withholding for THIS cutoff.
+  // priorTaxable = taxable income already earned this year (before this cutoff)
+  // priorTaxPaid = tax already withheld this year (before this cutoff)
+  // thisTaxable  = this cutoff's net taxable income
+  // periods      = total pay periods per year (semi-monthly = 24)
+  // periodsElapsed = how many periods (incl. this one) have occurred so far this year
+  function computeCumulativeTax(priorTaxable, priorTaxPaid, thisTaxable, periods, periodsElapsed) {
+    const cumTaxable = priorTaxable + thisTaxable;
+    // Annualize what has been earned so far, get full-year tax, then prorate to date.
+    const projectedAnnual = periodsElapsed > 0 ? cumTaxable * (periods / periodsElapsed) : cumTaxable * periods;
+    const annualTax = computeAnnualTax(projectedAnnual);
+    const taxDueToDate = periodsElapsed > 0 ? annualTax * (periodsElapsed / periods) : 0;
+    const taxThisCutoff = taxDueToDate - priorTaxPaid;
+    return Math.max(0, taxThisCutoff);
+  }
+
+  // Count how many saved cutoffs come at/before a given period+cutoff (chronologically),
+  // and the sum of their taxable income + tax, to seed the cumulative method.
+  function priorYtd(period, cutoff) {
+    const yr = (period || "").slice(0, 4);
+    let priorTaxable = num(state.ytdTaxable);
+    let priorTaxPaid = num(state.ytdTaxPaid);
+    let countBefore = 0;
+    loadHistory().forEach(h => {
+      if ((h.period || "").slice(0, 4) !== yr) return;
+      const key = h.period + (h.cutoff === "1st" ? "0" : "1");
+      const thisKey = (period || "") + (cutoff === "1st" ? "0" : "1");
+      if (key < thisKey) {
+        priorTaxable += num(h.taxable);
+        priorTaxPaid += num(h.tax);
+        countBefore++;
+      }
+    });
+    return { priorTaxable, priorTaxPaid, countBefore };
   }
 
   // ---------- Core computation ----------
@@ -475,8 +566,28 @@
     const taxableEarnings = base + otTotal + extraTaxable;
     const netTaxable = Math.max(0, taxableEarnings - mandatory);
 
-    // Tax (always auto via TRAIN semi-monthly table)
-    const tax = computeTax(netTaxable);
+    // ----- Tax: 3 modes -----
+    // 1) Manual override (exact value from a payslip)
+    // 2) Cumulative/annualized BIR method (default) - matches payroll withholding
+    // 3) Per-cutoff TRAIN table (simple estimate)
+    const taxTable = computeTax(netTaxable);
+    let taxCumulative = taxTable;
+    try {
+      const spEl = document.getElementById("savePeriod");
+      const scEl = document.getElementById("saveCutoff");
+      const period = spEl ? spEl.value : "";
+      const cutoff = scEl ? scEl.value : "1st";
+      if (period) {
+        const periods = Math.max(1, num(state.periodsPerYear) || 24);
+        const { priorTaxable, priorTaxPaid, countBefore } = priorYtd(period, cutoff);
+        const periodsElapsed = countBefore + 1;
+        taxCumulative = computeCumulativeTax(priorTaxable, priorTaxPaid, netTaxable, periods, periodsElapsed);
+      }
+    } catch (e) {}
+
+    const taxAuto = state.taxMethod === "table" ? taxTable : taxCumulative;
+    const hasOverride = state.taxOverride !== "" && state.taxOverride != null;
+    const tax = hasOverride ? num(state.taxOverride) : taxAuto;
 
     // Other (non-tax) deductions
     let otherDed = 0;
@@ -489,7 +600,7 @@
       base, monthly: monthlyFromBase(base), daily: dailyFromBase(base), hourly,
       otTotal, otBreakdown, deMinimis, extraTaxable, extraNonTax,
       grossEarnings, philhealth, sss, hdmf, mpf, mandatory,
-      netTaxable, tax, otherDed, totalDeductions, netPay
+      netTaxable, tax, taxTable, taxCumulative, hasOverride, otherDed, totalDeductions, netPay
     };
   }
 
@@ -620,8 +731,19 @@
       cell.classList.toggle("pos", amt > 0);
     });
 
-    // tax field (always auto)
-    document.getElementById("dTax").value = r.tax.toFixed(2);
+    // tax field + mode label
+    const taxInput = document.getElementById("dTax");
+    taxInput.value = r.tax.toFixed(2);
+    const taxModeEl = document.getElementById("taxMode");
+    if (taxModeEl) {
+      if (r.hasOverride) {
+        taxModeEl.textContent = "manual override (exact from payslip)";
+      } else if (state.taxMethod === "table") {
+        taxModeEl.textContent = "auto: per-cutoff TRAIN table (estimate)";
+      } else {
+        taxModeEl.textContent = "auto: cumulative / annualized (BIR method)";
+      }
+    }
 
     // net pay
     document.getElementById("netPay").textContent = peso(r.netPay);
@@ -731,6 +853,8 @@
       gross: r.grossEarnings,
       deductions: r.totalDeductions,
       net: r.netPay,
+      taxable: r.netTaxable,   // needed by the cumulative tax method
+      tax: r.tax,              // tax actually applied this cutoff
       savedAt: Date.now()
     };
     if (existingIdx >= 0) hist[existingIdx] = entry; else hist.push(entry);
@@ -781,6 +905,71 @@
     document.getElementById("dHDMF").value = state.deduct.hdmf || "";
     document.getElementById("dMPF").value = state.deduct.mpf || "";
 
+    // Tax override buttons: Edit tax -> type exact value; Save tax -> lock; Use auto -> clear override.
+    const taxInp = document.getElementById("dTax");
+    const editTaxBtn = document.getElementById("editTaxBtn");
+    const saveTaxBtn = document.getElementById("saveTaxBtn");
+    const autoTaxBtn = document.getElementById("autoTaxBtn");
+    function refreshTaxButtons() {
+      const overridden = state.taxOverride !== "" && state.taxOverride != null;
+      autoTaxBtn.style.display = overridden ? "" : "none";
+      editTaxBtn.style.display = "";
+      saveTaxBtn.style.display = "none";
+    }
+    refreshTaxButtons();
+    editTaxBtn.addEventListener("click", () => {
+      taxInp.readOnly = false;
+      taxInp.focus();
+      taxInp.select();
+      editTaxBtn.style.display = "none";
+      saveTaxBtn.style.display = "";
+      autoTaxBtn.style.display = "";
+    });
+    taxInp.addEventListener("input", () => {
+      if (!taxInp.readOnly) { state.taxOverride = taxInp.value; saveState(); recompute(); }
+    });
+    saveTaxBtn.addEventListener("click", () => {
+      taxInp.readOnly = true;
+      state.taxOverride = taxInp.value;
+      saveState();
+      recompute();
+      refreshTaxButtons();
+    });
+    autoTaxBtn.addEventListener("click", () => {
+      state.taxOverride = "";
+      taxInp.readOnly = true;
+      saveState();
+      recompute();
+      refreshTaxButtons();
+    });
+
+    // Tax method selector + YTD seed inputs
+    const methodSel = document.getElementById("taxMethodSel");
+    const ytdFields = document.getElementById("ytdFields");
+    function refreshYtdVisibility() {
+      ytdFields.style.display = (state.taxMethod === "cumulative") ? "" : "none";
+    }
+    methodSel.value = state.taxMethod || "cumulative";
+    refreshYtdVisibility();
+    methodSel.addEventListener("change", () => {
+      state.taxMethod = methodSel.value;
+      saveState();
+      refreshYtdVisibility();
+      recompute();
+    });
+    const ytdTaxableInp = document.getElementById("ytdTaxable");
+    const ytdTaxPaidInp = document.getElementById("ytdTaxPaid");
+    const periodsInp = document.getElementById("periodsPerYear");
+    ytdTaxableInp.value = state.ytdTaxable || "";
+    ytdTaxPaidInp.value = state.ytdTaxPaid || "";
+    periodsInp.value = state.periodsPerYear || "24";
+    ytdTaxableInp.addEventListener("input", () => { state.ytdTaxable = ytdTaxableInp.value; saveState(); recompute(); });
+    ytdTaxPaidInp.addEventListener("input", () => { state.ytdTaxPaid = ytdTaxPaidInp.value; saveState(); recompute(); });
+    periodsInp.addEventListener("input", () => { state.periodsPerYear = periodsInp.value; saveState(); recompute(); });
+
+    // Recompute when the period/cutoff changes (affects cumulative tax)
+    document.getElementById("saveCutoff").addEventListener("change", recompute);
+
     document.getElementById("addEarnBtn").addEventListener("click", () => {
       state.extraEarn.push({ name: "", amount: "", taxable: true });
       saveState(); renderExtraEarn(); recompute();
@@ -810,7 +999,7 @@
       const now = new Date();
       sp.value = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
     }
-    sp.addEventListener("change", renderHistory);
+    sp.addEventListener("change", () => { renderHistory(); recompute(); });
   }
 
   // ---------- Chart (take-home pay per saved cutoff) ----------
@@ -906,7 +1095,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 60;
+  const APP_VERSION = 61;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
