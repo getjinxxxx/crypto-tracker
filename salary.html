@@ -228,7 +228,7 @@
       <h2>Other earnings (optional)</h2>
       <div class="hint">Ang <b>De Minimis</b> ay non-taxable benefit (hal. rice/meal/allowance) &mdash; hindi binabawasan ng tax. Pwede ka ring mag-add ng bonus/adjustment sa ibaba.</div>
       <div class="field">
-        <label>De Minimis<span class="sub">non-taxable allowance (fixed)</span></label>
+        <label>De Minimis<span class="sub">non-taxable, 2nd cutoff (katapusan) lang</span></label>
         <span class="suffix">PHP</span>
         <input type="text" inputmode="decimal" id="deMinimis" placeholder="0.00" readonly />
       </div>
@@ -543,8 +543,11 @@
       otTotal += amt;
     });
 
-    // Extra earnings. De Minimis is a non-taxable benefit (added to gross, not to taxable).
-    const deMinimis = num(state.deMinimis);
+    // Extra earnings. De Minimis is a non-taxable benefit given only on the 2nd cutoff
+    // (katapusan / 28th). It is added to gross, not to taxable income.
+    const scEl2 = document.getElementById("saveCutoff");
+    const curCutoff = scEl2 ? scEl2.value : "2nd";
+    const deMinimis = (curCutoff === "2nd") ? num(state.deMinimis) : 0;
     let extraTaxable = 0, extraNonTax = deMinimis;
     state.extraEarn.forEach(e => {
       const a = num(e.amount);
@@ -714,6 +717,10 @@
     document.getElementById("monthlyRate").value = r.base > 0 ? peso(r.monthly) : "";
     document.getElementById("dailyRate").value = r.base > 0 ? peso(r.daily) : "";
     document.getElementById("hourlyRate").value = r.base > 0 ? peso(r.hourly) : "";
+
+    // De Minimis field: show applied amount (0 on 1st cutoff / kinsenas)
+    const dmField = document.getElementById("deMinimis");
+    if (dmField) dmField.value = r.deMinimis > 0 ? r.deMinimis.toFixed(2) : "0.00";
 
     // deduction fields reflect the (read-only, auto) values
     document.getElementById("dPhilhealth").value = r.philhealth > 0 ? r.philhealth.toFixed(2) : "";
@@ -1095,7 +1102,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 61;
+  const APP_VERSION = 62;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
