@@ -521,6 +521,11 @@
     const total = y * 12 + m + n;
     return Math.floor(total / 12) + "-" + String((total % 12) + 1).padStart(2, "0");
   }
+  // Difference in months between two keys (a - b).
+  function monthDiff(a, b) {
+    const [ay, am] = parseKey(a), [by, bm] = parseKey(b);
+    return (ay * 12 + am) - (by * 12 + bm);
+  }
   // How many months is "key" after the debt's start month? (0-based).
   function termIndexFor(d, key) {
     const [sy, sm] = parseKey(d.startMonth);
@@ -700,7 +705,32 @@
     const el = document.getElementById("debtList");
     const activeThisMonth = state.debts.filter(d => isActiveIn(d, viewMonth));
     if (!activeThisMonth.length) {
-      el.innerHTML = '<div class="card"><div class="empty">Walang utang na aktibo sa ' + monthLabel(viewMonth) + '. Magdagdag sa ibaba o lumipat ng buwan.</div></div>';
+      // Find the nearest month that DOES have active debts, so the user can jump there.
+      let jumpMonth = "";
+      if (state.debts.length) {
+        const monthsWithData = {};
+        state.debts.forEach(d => {
+          const terms = d.recurring ? 1 : (d.terms || 1);
+          for (let i = 0; i < (d.recurring ? 1 : terms); i++) monthsWithData[addMonths(d.startMonth, i)] = true;
+          if (d.recurring) monthsWithData[d.startMonth] = true;
+        });
+        const keys = Object.keys(monthsWithData).sort();
+        // prefer the closest month to viewMonth
+        if (keys.length) {
+          jumpMonth = keys.reduce((best, k) =>
+            Math.abs(monthDiff(k, viewMonth)) < Math.abs(monthDiff(best, viewMonth)) ? k : best, keys[0]);
+        }
+      }
+      let msg = '<div class="empty">Walang utang na aktibo sa ' + monthLabel(viewMonth) + '. ';
+      if (jumpMonth && jumpMonth !== viewMonth) {
+        msg += 'May utang ka sa <b>' + monthLabel(jumpMonth) + '</b>.<br><button class="btn primary" id="jumpBtn" style="margin-top:10px;max-width:260px">Pumunta sa ' + monthLabel(jumpMonth) + '</button>';
+      } else {
+        msg += 'Magdagdag sa ibaba.';
+      }
+      msg += '</div>';
+      el.innerHTML = '<div class="card">' + msg + '</div>';
+      const jb = document.getElementById("jumpBtn");
+      if (jb) jb.addEventListener("click", () => { viewMonth = jumpMonth; renderAll(); });
       return;
     }
     const order = ["person", "creditcard", "bankloan", "onlineloan", "government", "salaryloan", "other"];
@@ -1078,7 +1108,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 84;
+  const APP_VERSION = 85;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
