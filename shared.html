@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>Shared Debt</title>
+<style>
+  :root {
+    --bg: #000000; --panel: #16161a; --panel-2: #232329; --line: #2a2a30;
+    --text: #f2f2f7; --muted: #8e8e93; --gold: #d4a017; --gold-bright: #f5c542;
+    --danger: #ff6b6b; --green: #34d399; --red: #ff6b6b; --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); max-width: 820px; margin: 0 auto; padding: 14px 14px 60px; line-height: 1.4;
+  }
+  .hero { text-align: center; margin: 20px 0 18px; }
+  .hero .cap { color: var(--muted); font-size: 13px; }
+  .hero .who { font-size: 26px; font-weight: 800; margin-top: 4px;
+    background: linear-gradient(90deg, var(--gold-bright), var(--gold));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .made { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+  .month-bar { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+  .month-bar button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; width: 38px; height: 38px; font-size: 18px; cursor: pointer; }
+  .month-bar .m-label { font-size: 16px; font-weight: 700; min-width: 150px; text-align: center; }
+
+  .summary { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 16px; }
+  .summary .srow { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 14px; }
+  .summary .srow .lbl { color: var(--muted); }
+  .summary .srow .val { font-weight: 700; }
+  .summary .srow .val.owed { color: var(--red); }
+  .summary .srow .val.paid { color: var(--green); }
+  .summary .big { font-size: 24px; font-weight: 800; }
+
+  .debt-item { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; }
+  .debt-item.paid-off { border-color: rgba(52,211,153,0.4); }
+  .d-amounts { display: flex; justify-content: space-between; font-size: 13px; margin: 8px 0; }
+  .d-amounts .seg { text-align: center; flex: 1; }
+  .d-amounts .seg .k { color: var(--muted); font-size: 11px; }
+  .d-amounts .seg .v { font-weight: 700; font-size: 14px; margin-top: 1px; }
+  .d-amounts .seg .v.owed { color: var(--red); } .d-amounts .seg .v.paid { color: var(--green); }
+  .d-bar { height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin: 6px 0 4px; }
+  .d-bar .fill { height: 100%; background: linear-gradient(90deg, var(--green), #4fd1a5); border-radius: 999px; }
+
+  .sub-box { margin-top: 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .sub-box-head { display: flex; justify-content: space-between; font-size: 11px; color: var(--gold-bright);
+    text-transform: uppercase; letter-spacing: .4px; font-weight: 700; margin-bottom: 4px; }
+  .bd-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .bd-row:first-of-type { border-top: none; }
+  .bd-row.bd-paid .bd-label, .bd-row.bd-paid .bd-amt { color: var(--muted); text-decoration: line-through; }
+  .bd-dot { width: 16px; height: 16px; flex: none; border-radius: 4px; border: 1px solid var(--line); display: inline-block; }
+  .bd-dot.on { background: var(--green); border-color: var(--green); }
+  .bd-label { flex: 1; } .bd-amt { font-weight: 600; }
+  .bd-date { color: var(--muted); font-size: 11px; text-decoration: none; }
+  .bd-term { display: inline-block; background: rgba(79,140,255,0.18); color: #7fa8ff; font-size: 10px;
+    font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 13px; color: var(--gold-bright); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .5px; }
+  .note-box { width: 100%; min-height: 90px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical; }
+  .note-box:focus { outline: none; border-color: var(--gold); }
+  .note-hint { color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 6px; }
+  .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 24px; }
+  .err { color: var(--danger); text-align: center; padding: 40px 20px; font-size: 14px; }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+
+<script>
+  function num(v) { if (v == null) return 0; const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? 0 : n; }
+  function peso(n) { return "PHP " + (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  const SUBCATS = { food:"Food", groceries:"Groceries", entertainment:"Entertainment", shopping:"Shopping",
+    bills:"Bills / Utilities", transport:"Transportation", health:"Health / Medical", travel:"Travel", emergency:"Emergency", other:"Other" };
+  function subLabel(s){ return SUBCATS[s] || "Other"; }
+
+  function monthKey(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
+  function monthLabel(k){ const d=new Date(k+"-01T00:00:00"); return isNaN(d)?k:d.toLocaleDateString("en-PH",{month:"long",year:"numeric"}); }
+  function addMonths(k,n){ const d=new Date(k+"-01T00:00:00"); d.setMonth(d.getMonth()+n); return monthKey(d); }
+  function termIndexFor(it,k){ const s=new Date(it.startMonth+"-01T00:00:00"), c=new Date(k+"-01T00:00:00");
+    return (c.getFullYear()-s.getFullYear())*12 + (c.getMonth()-s.getMonth()); }
+  function isActiveIn(it,k){ const i=termIndexFor(it,k); return i>=0 && i<(it.terms||1); }
+  function perTermOf(it){ return (it.terms>1) ? num(it.amount)/it.terms : num(it.amount); }
+  function paidOf(it){
+    if (it.terms>1) return Object.keys(it.paidTerms||{}).filter(x=>it.paidTerms[x]).length * perTermOf(it);
+    return it.paid ? num(it.amount) : 0;
+  }
+  function remainingOf(it){ return Math.max(0, num(it.amount)-paidOf(it)); }
+  function isPaidThisMonth(it,k){ return it.terms>1 ? !!(it.paidTerms||{})[k] : !!it.paid; }
+
+  let data = null;
+  let viewMonth = monthKey(new Date());
+
+  function decode() {
+    const h = location.hash.replace(/^#/, "");
+    if (!h) return null;
+    try {
+      const json = decodeURIComponent(escape(atob(h)));
+      const p = JSON.parse(json);
+      if (p && Array.isArray(p.items)) return p;
+    } catch (e) {}
+    return null;
+  }
+
+  function render() {
+    const app = document.getElementById("app");
+    if (!data) {
+      app.innerHTML = '<div class="err">Invalid or empty share link. Hingi ulit ng bagong link.</div>';
+      return;
+    }
+    const items = data.items;
+
+    // summary (this month + overall)
+    let monthDue=0, monthPaid=0, totalRemaining=0, owed=0, paid=0;
+    items.forEach(it => {
+      owed += num(it.amount); paid += paidOf(it); totalRemaining += remainingOf(it);
+      if (isActiveIn(it, viewMonth)) {
+        const due = it.terms>1 ? perTermOf(it) : num(it.amount);
+        monthDue += due;
+        if (isPaidThisMonth(it, viewMonth)) monthPaid += due;
+      }
+    });
+
+    // group active-this-month items by sub-category
+    const active = items.filter(it => isActiveIn(it, viewMonth));
+    let boxes = "";
+    if (active.length) {
+      const bySub = {};
+      active.forEach(it => { const s = it.subCat || "other"; (bySub[s]=bySub[s]||[]).push(it); });
+      Object.keys(bySub).forEach(sub => {
+        const list = bySub[sub];
+        const due = list.reduce((s,it)=> s + (it.terms>1?perTermOf(it):remainingOf(it)), 0);
+        let rows = "";
+        list.forEach(it => {
+          const paidNow = isPaidThisMonth(it, viewMonth);
+          const dt = it.date ? new Date(it.date+"T00:00:00").toLocaleDateString("en-PH",{year:"2-digit",month:"short",day:"numeric"}) : "";
+          const label = (it.name && it.name.trim()) ? it.name : "Utang";
+          const amt = it.terms>1 ? perTermOf(it) : num(it.amount);
+          let termTag = "";
+          if (it.terms>1){ const i=termIndexFor(it,viewMonth); termTag=' <span class="bd-term">'+(i+1)+'/'+it.terms+'</span>'; }
+          rows += '<div class="bd-row'+(paidNow?' bd-paid':'')+'">' +
+            '<span class="bd-dot'+(paidNow?' on':'')+'"></span>' +
+            '<span class="bd-label">'+label+termTag+(dt?' <span class="bd-date">'+dt+'</span>':'')+'</span>' +
+            '<span class="bd-amt">'+peso(amt)+'</span></div>';
+        });
+        boxes += '<div class="sub-box"><div class="sub-box-head"><span>'+subLabel(sub)+'</span><span>'+peso(due)+'</span></div>'+rows+'</div>';
+      });
+    } else {
+      boxes = '<div class="sub-box"><div class="bd-row">Walang utang sa buwang ito.</div></div>';
+    }
+
+    const paidOff = totalRemaining <= 0.009;
+    app.innerHTML =
+      '<div class="hero"><div class="cap">Utang summary para kay</div>' +
+        '<div class="who">' + (data.person || "You") + '</div>' +
+        '<div class="made">Shared ' + (data.madeAt || "") + ' &bull; read-only snapshot</div></div>' +
+      '<div class="month-bar"><button id="pm">&#8249;</button><div class="m-label">' + monthLabel(viewMonth) + '</div><button id="nm">&#8250;</button></div>' +
+      '<div class="summary">' +
+        '<div class="srow"><div class="lbl">Due this month</div><div class="val owed big">' + peso(monthDue) + '</div></div>' +
+        '<div class="srow"><div class="lbl">Paid this month</div><div class="val paid">' + peso(monthPaid) + '</div></div>' +
+        '<div class="srow"><div class="lbl">Total remaining (all)</div><div class="val owed">' + peso(totalRemaining) + '</div></div>' +
+      '</div>' +
+      '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
+        '<div class="d-amounts">' +
+          '<div class="seg"><div class="k">Total owed</div><div class="v">' + peso(owed) + '</div></div>' +
+          '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(paid) + '</div></div>' +
+          '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(totalRemaining) + '</div></div>' +
+        '</div>' + boxes +
+      '</div>' +
+      '<div class="card"><h2>Note (optional)</h2>' +
+        '<textarea class="note-box" id="noteBox" placeholder="Maglagay ng note dito (e.g. bayad na ako nitong buwan, o paalala)..."></textarea>' +
+        '<div class="note-hint">Ang note na ito ay naka-save sa device mo lang (hindi awtomatikong napupunta sa may-ari). I-screenshot o kopyahin kung gusto mong ipadala pabalik.</div>' +
+      '</div>' +
+      '<div class="foot">Personal use only &bull; read-only &bull; walang ibang utang ang ipinapakita dito</div>';
+
+    document.getElementById("pm").onclick = () => { viewMonth = addMonths(viewMonth, -1); render(); };
+    document.getElementById("nm").onclick = () => { viewMonth = addMonths(viewMonth, 1); render(); };
+
+    // local note (keyed by person so different links keep separate notes)
+    const noteKey = "sharedNote::" + (data.person || "x");
+    const nb = document.getElementById("noteBox");
+    try { nb.value = localStorage.getItem(noteKey) || ""; } catch (e) {}
+    nb.addEventListener("input", () => { try { localStorage.setItem(noteKey, nb.value); } catch (e) {} });
+  }
+
+  data = decode();
+  // default to the earliest start month so the recipient lands on a month with data
+  if (data && data.items.length) {
+    const starts = data.items.map(i => i.startMonth).filter(Boolean).sort();
+    if (starts.length && starts[0] > viewMonth) viewMonth = starts[0];
+  }
+  render();
+  window.addEventListener("hashchange", () => { data = decode(); render(); });
+</script>
+</body>
+</html>

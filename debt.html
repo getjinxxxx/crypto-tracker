@@ -127,6 +127,8 @@
   .debt-head .d-del { font-size: 18px; }
   .debt-head .d-edit:hover { color: var(--gold-bright); }
   .debt-head .d-del:hover { color: var(--danger); }
+  .debt-head .d-share { background: none; border: none; color: var(--accent); font-size: 15px; cursor: pointer; padding: 2px 4px; }
+  .debt-head .d-share:hover { color: var(--gold-bright); }
   .d-sub { color: var(--muted); font-size: 12px; margin: -4px 0 8px; }
 
   /* Sub-category box inside a card */
@@ -484,7 +486,7 @@
   }
 
   // One card = all items for a person/label, with sub-category boxes inside.
-  function cardHtml(title, category, items) {
+  function cardHtml(title, category, items, cardKey) {
     const owed = items.reduce((s, d) => s + num(d.amount), 0);
     const paid = items.reduce((s, d) => s + paidOf(d), 0);
     const remaining = Math.max(0, owed - paid);
@@ -508,10 +510,16 @@
       boxesHtml = '<div class="sub-box">' + items.map(itemRowHtml).join("") + '</div>';
     }
 
+    // Share button only for person cards (share just this person's debts).
+    const shareBtn = (category === "person")
+      ? '<button class="d-share" data-share="' + encodeURIComponent(cardKey) + '" title="Share kay ' + title + '">\uD83D\uDD17</button>'
+      : "";
+
     return '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
       '<div class="debt-head">' +
         '<div class="d-name">' + title + '</div>' +
         '<span class="d-badge ' + (paidOff ? "b-paid" : "b-ok") + '">' + (paidOff ? "Fully paid" : (items.length + " item" + (items.length === 1 ? "" : "s"))) + '</span>' +
+        shareBtn +
       '</div>' +
       '<div class="d-amounts">' +
         '<div class="seg"><div class="k">Owed</div><div class="v">' + peso(owed) + '</div></div>' +
@@ -548,7 +556,7 @@
       const cards = {};
       const cardOrder = [];
       list.forEach(d => { const k = cardKeyOf(d); if (!cards[k]) { cards[k] = []; cardOrder.push(k); } cards[k].push(d); });
-      cardOrder.forEach(k => { html += cardHtml(cardTitleOf(cards[k][0]), cat, cards[k]); });
+      cardOrder.forEach(k => { html += cardHtml(cardTitleOf(cards[k][0]), cat, cards[k], k); });
       html += '</div>';
     });
     el.innerHTML = html;
@@ -601,6 +609,53 @@
       state.debts = state.debts.filter(x => x.id !== id);
       saveState(); renderAll();
     }));
+
+    // wire share (person cards only)
+    el.querySelectorAll("[data-share]").forEach(btn => btn.addEventListener("click", () => {
+      const key = decodeURIComponent(btn.getAttribute("data-share"));
+      openShareFor(key);
+    }));
+  }
+
+  // ---------- Share link (URL-encoded, read-only snapshot of ONE person) ----------
+  // Builds a link to shared.html#<base64 payload> containing only this person's debts.
+  function buildShareLink(cardKey) {
+    const items = state.debts.filter(d => cardKeyOf(d) === cardKey);
+    if (!items.length) return null;
+    const person = (items[0].category === "person") ? (items[0].person || "") : (items[0].name || "");
+    const payload = {
+      v: 1,
+      person: person,
+      madeAt: new Date().toISOString().slice(0, 10),
+      items: items.map(d => ({
+        name: d.name || "", subCat: d.subCat || "", amount: num(d.amount),
+        terms: d.terms || 1, startMonth: d.startMonth || "",
+        paidTerms: d.paidTerms || {}, paid: !!d.paid, date: d.date || ""
+      }))
+    };
+    // UTF-8 safe base64
+    const json = JSON.stringify(payload);
+    const b64 = btoa(unescape(encodeURIComponent(json)));
+    const base = location.href.replace(/[^\/]*$/, ""); // directory of current page
+    return base + "shared.html#" + b64;
+  }
+
+  function openShareFor(cardKey) {
+    const link = buildShareLink(cardKey);
+    if (!link) { alert("Walang maibabahagi."); return; }
+    const person = cardKey.replace(/^person::/, "");
+    // Try to copy to clipboard; always show the link too.
+    const show = () => {
+      window.prompt("Share link para kay " + person + " (kopyahin at ipadala):", link);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => {
+        alert("Nakopya na ang link! Makikita lang ni " + person + " ang utang niya sa'yo.\n\nKung hindi awtomatikong na-paste, nasa susunod na prompt ang link.");
+        show();
+      }).catch(show);
+    } else {
+      show();
+    }
   }
 
   // ---------- Chart ----------
@@ -741,7 +796,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 72;
+  const APP_VERSION = 73;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
