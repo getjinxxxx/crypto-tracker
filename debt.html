@@ -730,7 +730,7 @@
       msg += '</div>';
       el.innerHTML = '<div class="card">' + msg + '</div>';
       const jb = document.getElementById("jumpBtn");
-      if (jb) jb.addEventListener("click", () => { viewMonth = jumpMonth; renderAll(); });
+      if (jb) jb.addEventListener("click", () => { userPickedMonth = true; viewMonth = jumpMonth; renderAll(); });
       return;
     }
     const order = ["person", "creditcard", "bankloan", "onlineloan", "government", "salaryloan", "other"];
@@ -981,7 +981,31 @@
     }).join("");
   }
 
+  // All months (keys) that have at least one active debt.
+  function monthsWithData() {
+    const set = {};
+    state.debts.forEach(d => {
+      const n = d.recurring ? 1 : (d.terms || 1);
+      for (let i = 0; i < n; i++) set[addMonths(d.startMonth, i)] = true;
+      if (d.recurring) set[d.startMonth] = true;
+    });
+    return Object.keys(set).sort();
+  }
+  // If the user hasn't manually navigated and the current month is empty,
+  // jump to the nearest month that actually has data (prevents "blank" confusion).
+  let userPickedMonth = false;
+  function maybeAutoJump() {
+    if (userPickedMonth) return;
+    const hasHere = state.debts.some(d => isActiveIn(d, viewMonth));
+    if (hasHere) return;
+    const keys = monthsWithData();
+    if (!keys.length) return;
+    viewMonth = keys.reduce((best, k) =>
+      Math.abs(monthDiff(k, viewMonth)) < Math.abs(monthDiff(best, viewMonth)) ? k : best, keys[0]);
+  }
+
   function renderAll() {
+    maybeAutoJump();
     renderMonthBar();
     renderSummary();
     renderList();
@@ -1041,8 +1065,8 @@
     Object.keys(state.shareIds || {}).forEach(k => fbWatchNote(state.shareIds[k]));
 
     document.getElementById("addBtn").addEventListener("click", addDebt);
-    document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
-    document.getElementById("nextMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, 1); renderAll(); });
+    document.getElementById("prevMonth").addEventListener("click", () => { userPickedMonth = true; viewMonth = addMonths(viewMonth, -1); renderAll(); });
+    document.getElementById("nextMonth").addEventListener("click", () => { userPickedMonth = true; viewMonth = addMonths(viewMonth, 1); renderAll(); });
 
     // Person + sub-category field toggles
     const catSel = document.getElementById("newCategory");
@@ -1108,7 +1132,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 85;
+  const APP_VERSION = 86;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
