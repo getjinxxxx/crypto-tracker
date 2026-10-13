@@ -384,12 +384,40 @@
   const shareNotes = {}; // shareId -> { note, updatedAt }
   const noteOpen = {};   // shareId -> bool (is the recipient note expanded?)
   const catOpen = {};    // category -> bool (false = collapsed; default expanded)
+  let fbStateRef = null, applyingRemote = false, saveTimer = null;
+  const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
+
   function fbInit() {
     try {
       if (typeof firebase === "undefined") return;
       if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
       fbDb = firebase.database();
+      // Cloud sync of the whole debt state (two-way, like the crypto tracker).
+      fbStateRef = fbDb.ref("debt/state");
+      fbStateRef.on("value", (snap) => {
+        const remote = snap.val();
+        if (remote && remote.state) {
+          if (remote.client === CLIENT_ID) return; // ignore our own echo
+          applyingRemote = true;
+          try {
+            state = remote.state;
+            if (!state.shareIds) state.shareIds = {};
+            if (!Array.isArray(state.debts)) state.debts = [];
+            localStorage.setItem(LS_KEY, JSON.stringify(state));
+          } catch (e) {}
+          applyingRemote = false;
+          renderAll();
+        } else {
+          cloudSaveState(true); // seed cloud from local the first time
+        }
+      }, () => {});
     } catch (e) { fbDb = null; }
+  }
+  function cloudSaveState(immediate) {
+    if (!fbStateRef || applyingRemote) return;
+    clearTimeout(saveTimer);
+    const doSave = () => { fbStateRef.set({ state: state, updatedAt: Date.now(), client: CLIENT_ID }).catch(() => {}); };
+    if (immediate) doSave(); else saveTimer = setTimeout(doSave, 800);
   }
   // Listen for the recipient's note on a given shareId.
   function fbWatchNote(shareId) {
@@ -424,6 +452,7 @@
   }
   function saveState() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+    cloudSaveState();
   }
 
   // Category labels
@@ -995,7 +1024,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 79;
+  const APP_VERSION = 80;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
