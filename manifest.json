@@ -1,8 +1,8 @@
 {
-  "name": "Crypto Tracker",
-  "short_name": "Crypto Tracker",
-  "description": "Personal BTC/ETH holdings tracker with live prices and charts",
-  "start_url": "./index.html",
+  "name": "My Dashboard",
+  "short_name": "Dashboard",
+  "description": "Personal dashboard: crypto holdings tracker and semi-monthly salary calculator",
+  "start_url": "./home.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#000000",

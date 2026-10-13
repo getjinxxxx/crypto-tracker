@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<link rel="manifest" href="manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="Salary" />
+<title>Salary</title>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #16161a;
+    --panel-2: #232329;
+    --line: #2a2a30;
+    --text: #f2f2f7;
+    --muted: #8e8e93;
+    --gold: #d4a017;
+    --gold-bright: #f5c542;
+    --danger: #ff6b6b;
+    --green: #34d399;
+    --red: #ff6b6b;
+    --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 14px 14px 60px;
+    line-height: 1.4;
+  }
+
+  /* Lock screen */
+  #lock {
+    position: fixed; inset: 0; background: var(--bg); z-index: 500;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
+  }
+  #lock .lock-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 24px; width: 100%; max-width: 340px; text-align: center;
+  }
+  #lock .lk-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  #lock .lk-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  #lock input {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px;
+  }
+  #lock input:focus { outline: none; border-color: var(--gold); }
+  #lock button {
+    width: 100%; background: var(--gold); color: #000; border: none; border-radius: 12px;
+    padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px;
+  }
+  #lock .lk-err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 16px; }
+  body.locked { overflow: hidden; }
+  #app.hidden { display: none; }
+
+  /* Top bar */
+  .topbar { display: flex; align-items: center; gap: 10px; margin: 6px 0 18px; }
+  .topbar .home-link {
+    color: var(--muted); text-decoration: none; font-size: 13px; border: 1px solid var(--line);
+    border-radius: 999px; padding: 5px 12px; background: var(--panel);
+  }
+  .topbar .home-link:hover { color: var(--text); border-color: var(--gold); }
+  .topbar .page-title { font-size: 18px; font-weight: 700; letter-spacing: .2px; margin-left: 2px; }
+
+  /* Cards */
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 13px; color: var(--gold-bright); margin: 0 0 12px; text-transform: uppercase;
+    letter-spacing: .5px; font-weight: 700;
+  }
+  .card .hint { color: var(--muted); font-size: 12px; margin: -6px 0 12px; line-height: 1.5; }
+
+  /* Input rows */
+  .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; }
+  .field label { font-size: 14px; color: var(--text); flex: 1; }
+  .field label .sub { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
+  .field input[type="text"], .field input[type="number"] {
+    width: 120px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 15px; text-align: right;
+  }
+  .field input:focus { outline: none; border-color: var(--gold); }
+  .field .suffix { color: var(--muted); font-size: 12px; width: 34px; text-align: left; }
+
+  .divider { height: 1px; background: var(--line); margin: 10px 0; }
+
+  /* OT grid */
+  .ot-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .ot-row .ot-name { flex: 1; font-size: 13.5px; }
+  .ot-row .ot-name .mult { color: var(--muted); font-size: 11px; }
+  .ot-row input {
+    width: 72px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px; text-align: right;
+  }
+  .ot-row input:focus { outline: none; border-color: var(--gold); }
+  .ot-row .ot-amt { width: 96px; text-align: right; color: var(--muted); font-size: 12.5px; }
+  .ot-row .ot-amt.pos { color: var(--green); }
+
+  /* Result breakdown */
+  .line { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 14px; }
+  .line .lbl { color: var(--text); }
+  .line .lbl .sub { color: var(--muted); font-size: 11px; display: block; }
+  .line .amt { font-weight: 600; }
+  .line.sub-line { font-size: 13px; }
+  .line.sub-line .lbl { color: var(--muted); padding-left: 12px; }
+  .line.sub-line .amt { color: var(--muted); font-weight: 500; }
+  .line.total { font-size: 15px; font-weight: 700; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+  .line.total .amt { color: var(--gold-bright); }
+  .line.deduct .amt { color: var(--red); }
+
+  .netpay {
+    background: linear-gradient(135deg, rgba(52,211,153,0.14), rgba(22,22,26,0.4));
+    border: 1px solid rgba(52,211,153,0.4); border-radius: 16px; padding: 18px 16px; text-align: center;
+    margin-bottom: 16px;
+  }
+  .netpay .np-cap { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .netpay .np-val { font-size: 32px; font-weight: 800; color: var(--green); margin: 6px 0 2px; }
+  .netpay .np-words { color: var(--muted); font-size: 12px; }
+  .netpay .np-monthly { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .netpay .np-monthly b { color: var(--gold-bright); }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 10px; margin-top: 4px; }
+  .btn {
+    flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn.primary { background: var(--gold); color: #000; border-color: var(--gold); }
+  .btn.danger { color: var(--danger); }
+  .btn:hover { border-color: var(--gold); }
+
+  /* History */
+  .hist-item {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 11px 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px;
+  }
+  .hist-item .hi-main { flex: 1; }
+  .hist-item .hi-period { font-size: 14px; font-weight: 600; }
+  .hist-item .hi-sub { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .hist-item .hi-net { text-align: right; }
+  .hist-item .hi-net .v { color: var(--green); font-weight: 700; font-size: 15px; }
+  .hist-item .hi-del {
+    background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 4px;
+  }
+  .hist-item .hi-del:hover { color: var(--danger); }
+  .hist-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 0; }
+
+  select.period-sel {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 14px;
+  }
+  select.period-sel:focus { outline: none; border-color: var(--gold); }
+
+  .note { color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 2px; }
+</style>
+</head>
+<body class="locked">
+
+  <!-- LOCK SCREEN -->
+  <div id="lock">
+    <div class="lock-card">
+      <div class="lk-title">Salary</div>
+      <div class="lk-sub">Enter passcode to view</div>
+      <input id="lockInput" type="password" inputmode="numeric" maxlength="12" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="off" />
+      <button id="lockBtn">Unlock</button>
+      <div class="lk-err" id="lockErr"></div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="topbar">
+      <a class="home-link" href="home.html">&larr; Home</a>
+      <div class="page-title">Salary Calculator</div>
+    </div>
+
+    <!-- BASE SALARY -->
+    <div class="card">
+      <h2>Base pay</h2>
+      <div class="hint">Ilagay ang <b>Salary</b> na nasa payslip mo (per cutoff / semi-monthly). Dito nakabase ang hourly rate para sa OT.</div>
+      <div class="field">
+        <label>Semi-monthly salary<span class="sub">per cutoff (kinsenas or katapusan)</span></label>
+        <span class="suffix">PHP</span>
+        <input type="text" inputmode="decimal" id="baseSalary" placeholder="0.00" />
+      </div>
+      <div class="field">
+        <label>Hourly rate<span class="sub">auto: monthly &times; 12 &divide; 313 days &divide; 8 hrs</span></label>
+        <span class="suffix"></span>
+        <input type="text" id="hourlyRate" readonly />
+      </div>
+    </div>
+
+    <!-- OVERTIME -->
+    <div class="card">
+      <h2>Overtime hours</h2>
+      <div class="hint">Ilagay ang bilang ng <b>oras</b> kada klase ng OT. Awtomatikong kakalkulahin ang halaga gamit ang multiplier mula sa payslip mo.</div>
+      <div id="otList"></div>
+    </div>
+
+    <!-- OTHER EARNINGS -->
+    <div class="card">
+      <h2>Other earnings (optional)</h2>
+      <div class="hint">Mga dagdag tulad ng bonus, allowance, o adjustment. Markahan kung <b>taxable</b> o hindi.</div>
+      <div id="extraEarnList"></div>
+      <div class="btn-row"><button class="btn" id="addEarnBtn">+ Add earning</button></div>
+    </div>
+
+    <!-- DEDUCTIONS -->
+    <div class="card">
+      <h2>Deductions</h2>
+      <div class="hint">Auto-computed ang PhilHealth. I-adjust lang kung iba ang nasa payslip mo. Ang SSS, Pag-IBIG, MPF at iba pa ay pwede mong palitan.</div>
+
+      <div class="field">
+        <label>PhilHealth<span class="sub">auto: 5% of monthly basic &divide; 2</span></label>
+        <span class="suffix">PHP</span>
+        <input type="text" inputmode="decimal" id="dPhilhealth" placeholder="0.00" />
+      </div>
+      <div class="field">
+        <label>SSS contribution</label>
+        <span class="suffix">PHP</span>
+        <input type="text" inputmode="decimal" id="dSSS" placeholder="0.00" />
+      </div>
+      <div class="field">
+        <label>Pag-IBIG (HDMF)</label>
+        <span class="suffix">PHP</span>
+        <input type="text" inputmode="decimal" id="dHDMF" placeholder="0.00" />
+      </div>
+      <div class="field">
+        <label>MPF<span class="sub">provident / mandatory provident fund</span></label>
+        <span class="suffix">PHP</span>
+        <input type="text" inputmode="decimal" id="dMPF" placeholder="0.00" />
+      </div>
+
+      <div class="divider"></div>
+      <div class="hint" style="margin-bottom:8px">Non-tax deductions (loans, etc.) &mdash; hindi binabawas sa taxable income.</div>
+      <div id="otherDeductList"></div>
+      <div class="btn-row"><button class="btn" id="addDeductBtn">+ Add deduction</button></div>
+
+      <div class="divider"></div>
+      <div class="field">
+        <label>Withholding tax<span class="sub" id="taxMode">auto (TRAIN semi-monthly table)</span></label>
+        <span class="suffix">PHP</span>
+        <input type="text" inputmode="decimal" id="dTax" placeholder="0.00" />
+      </div>
+      <label class="note"><input type="checkbox" id="taxAuto" checked style="vertical-align:middle"> Auto-compute tax. Alisin ang check kung gusto mong manu-manong ilagay ang tax (eksaktong tugma sa payslip).</label>
+    </div>
+
+    <!-- NET PAY -->
+    <div class="netpay">
+      <div class="np-cap">Net Pay (take-home)</div>
+      <div class="np-val" id="netPay">PHP 0.00</div>
+      <div class="np-words" id="netWords"></div>
+      <div class="np-monthly" id="netMonthly"></div>
+    </div>
+
+    <!-- BREAKDOWN -->
+    <div class="card">
+      <h2>Breakdown</h2>
+      <div id="breakdown"></div>
+    </div>
+
+    <!-- SAVE -->
+    <div class="card">
+      <h2>Save this cutoff</h2>
+      <div class="hint">I-save ang kasalukuyang kalkulasyon para may record ka kada cutoff.</div>
+      <div class="field">
+        <label>Period</label>
+        <input type="month" id="savePeriod" class="period-sel" />
+      </div>
+      <div class="field">
+        <label>Cutoff</label>
+        <select id="saveCutoff" class="period-sel">
+          <option value="1st">1st cutoff (kinsenas)</option>
+          <option value="2nd">2nd cutoff (katapusan)</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="saveBtn">Save to history</button>
+        <button class="btn" id="clearBtn">Clear inputs</button>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="card">
+      <h2>Payslip history</h2>
+      <div id="histList"></div>
+      <div id="monthTotal" class="note" style="margin-top:6px"></div>
+    </div>
+
+    <div class="note" style="text-align:center">
+      Estimates only. Rounding may differ slightly from your official payslip. Nothing is sent anywhere &mdash; all data stays on this device.
+    </div>
+  </div>
+
+<script>
+  // =========================================================
+  // Salary (semi-monthly PH payslip) calculator
+  // Formulas reverse-engineered from the user's actual payslips.
+  // =========================================================
+
+  // ---------- OT definitions (multiplier is x base hourly rate) ----------
+  // Confirmed against payslip to the centavo.
+  const OT_TYPES = [
+    { key: "regDay",        name: "OT on Regular Day",            mult: 1.25,  info: "125%" },
+    { key: "regDayAdj",     name: "OT on Reg Day (Adjustment)",   mult: 1.25,  info: "125%" },
+    { key: "restDay",       name: "OT on Rest Day",               mult: 1.30,  info: "130%" },
+    { key: "restDayX",      name: "OT on Rest Day (beyond 8 hrs)", mult: 1.69, info: "169%" },
+    { key: "spclHol",       name: "OT on Special Holiday",        mult: 0.30,  info: "30% premium" },
+    { key: "spclHolX",      name: "OT on Special Hol (beyond 8)", mult: 1.69,  info: "169%" },
+    { key: "ndot",          name: "Night Differential (NDOT)",    mult: 0.125, info: "12.5%" },
+    { key: "ndotRestX",     name: "NDOT on Rest Day (beyond 8)",  mult: 0.169, info: "16.9%" },
+    { key: "ndotSpclX",     name: "NDOT Special Work Day (>8)",   mult: 0.169, info: "16.9%" },
+    { key: "ndotAdj",       name: "NDOT (Adjustment)",            mult: 0.125, info: "12.5%" }
+  ];
+
+  // ---------- State ----------
+  const LS_KEY = "salaryCalcV1";
+  const HIST_KEY = "salaryHistoryV1";
+  let state = {
+    base: "",
+    ot: {},                 // key -> hours (string)
+    extraEarn: [],          // { name, amount, taxable }
+    deduct: { philhealth: "", sss: "", hdmf: "", mpf: "", tax: "" },
+    otherDeduct: [],        // { name, amount }
+    taxAuto: true
+  };
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        state = Object.assign(state, s);
+        if (!state.ot) state.ot = {};
+        if (!state.deduct) state.deduct = { philhealth: "", sss: "", hdmf: "", mpf: "", tax: "" };
+        if (!Array.isArray(state.extraEarn)) state.extraEarn = [];
+        if (!Array.isArray(state.otherDeduct)) state.otherDeduct = [];
+      }
+    } catch (e) {}
+  }
+  function saveState() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch (e) { return []; }
+  }
+  function saveHistory(h) {
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(h)); } catch (e) {}
+  }
+
+  // ---------- Helpers ----------
+  function num(v) {
+    if (v == null) return 0;
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+    return isNaN(n) ? 0 : n;
+  }
+  function peso(n) {
+    return "PHP " + (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function hourlyFromBase(baseSemi) {
+    // monthly = semi * 2 ; hourly = monthly * 12 / 313 / 8
+    return baseSemi * 2 * 12 / 313 / 8;
+  }
+
+  // ---------- TRAIN semi-monthly withholding tax ----------
+  // Brackets for compensation per semi-monthly pay period (BIR, 2023 onwards).
+  function computeTax(taxable) {
+    if (taxable <= 10417) return 0;
+    if (taxable <= 16667) return (taxable - 10417) * 0.15;
+    if (taxable <= 33333) return 1875 + (taxable - 16667) * 0.20;
+    if (taxable <= 66667) return 4270.70 + (taxable - 33333) * 0.25;
+    if (taxable <= 166667) return 10833.33 + (taxable - 66667) * 0.30;
+    if (taxable <= 666667) return 40833.33 + (taxable - 166667) * 0.32;
+    return 200833.33 + (taxable - 666667) * 0.35;
+  }
+
+  // ---------- Core computation ----------
+  function compute() {
+    const base = num(state.base);
+    const hourly = hourlyFromBase(base);
+
+    // OT earnings
+    let otTotal = 0;
+    const otBreakdown = [];
+    OT_TYPES.forEach(t => {
+      const hrs = num(state.ot[t.key]);
+      const amt = hourly * t.mult * hrs;
+      if (hrs > 0) otBreakdown.push({ name: t.name, hrs, amt });
+      otTotal += amt;
+    });
+
+    // Extra earnings
+    let extraTaxable = 0, extraNonTax = 0;
+    state.extraEarn.forEach(e => {
+      const a = num(e.amount);
+      if (e.taxable) extraTaxable += a; else extraNonTax += a;
+    });
+
+    const grossEarnings = base + otTotal + extraTaxable + extraNonTax;
+
+    // Mandatory contributions (reduce taxable income)
+    const philhealth = num(state.deduct.philhealth);
+    const sss = num(state.deduct.sss);
+    const hdmf = num(state.deduct.hdmf);
+    const mpf = num(state.deduct.mpf);
+    const mandatory = philhealth + sss + hdmf + mpf;
+
+    // Taxable income = taxable earnings - mandatory contributions
+    const taxableEarnings = base + otTotal + extraTaxable;
+    const netTaxable = Math.max(0, taxableEarnings - mandatory);
+
+    // Tax (auto or manual)
+    let tax;
+    if (state.taxAuto) {
+      tax = computeTax(netTaxable);
+      state.deduct.tax = tax.toFixed(2);
+    } else {
+      tax = num(state.deduct.tax);
+    }
+
+    // Other (non-tax) deductions
+    let otherDed = 0;
+    state.otherDeduct.forEach(d => { otherDed += num(d.amount); });
+
+    const totalDeductions = mandatory + tax + otherDed;
+    const netPay = grossEarnings - totalDeductions;
+
+    return {
+      base, hourly, otTotal, otBreakdown, extraTaxable, extraNonTax,
+      grossEarnings, philhealth, sss, hdmf, mpf, mandatory,
+      netTaxable, tax, otherDed, totalDeductions, netPay
+    };
+  }
+
+  // ---------- Number to words (for net pay) ----------
+  function pesoToWords(amount) {
+    const n = Math.floor(Math.abs(amount));
+    const cents = Math.round((Math.abs(amount) - n) * 100);
+    const ones = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+      "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+    const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+    function three(x) {
+      let s = "";
+      if (x >= 100) { s += ones[Math.floor(x / 100)] + " hundred"; x %= 100; if (x) s += " "; }
+      if (x >= 20) { s += tens[Math.floor(x / 10)]; x %= 10; if (x) s += "-" + ones[x]; }
+      else if (x > 0) { s += ones[x]; }
+      return s;
+    }
+    if (n === 0) return "Zero pesos" + (cents ? " and " + cents + "/100" : "");
+    const parts = [];
+    const scales = [["million", 1000000], ["thousand", 1000]];
+    let rest = n;
+    scales.forEach(([label, val]) => {
+      if (rest >= val) { parts.push(three(Math.floor(rest / val)) + " " + label); rest %= val; }
+    });
+    if (rest > 0) parts.push(three(rest));
+    let words = parts.join(" ").trim();
+    words = words.charAt(0).toUpperCase() + words.slice(1);
+    return words + " peso" + (n === 1 ? "" : "s") + (cents ? " and " + cents + "/100" : "");
+  }
+
+  // ---------- Render ----------
+  function renderOTList() {
+    const el = document.getElementById("otList");
+    el.innerHTML = "";
+    const base = num(state.base);
+    const hourly = hourlyFromBase(base);
+    OT_TYPES.forEach(t => {
+      const hrs = num(state.ot[t.key]);
+      const amt = hourly * t.mult * hrs;
+      const row = document.createElement("div");
+      row.className = "ot-row";
+      row.innerHTML =
+        '<div class="ot-name">' + t.name + ' <span class="mult">(&times;' + t.mult + ' &middot; ' + t.info + ')</span></div>' +
+        '<input type="text" inputmode="decimal" placeholder="0" data-ot="' + t.key + '" value="' + (state.ot[t.key] || "") + '">' +
+        '<div class="ot-amt' + (amt > 0 ? ' pos' : '') + '" data-amt="' + t.key + '">' + (amt > 0 ? peso(amt) : "\u2014") + '</div>';
+      el.appendChild(row);
+    });
+    el.querySelectorAll("input[data-ot]").forEach(inp => {
+      inp.addEventListener("input", () => {
+        state.ot[inp.getAttribute("data-ot")] = inp.value;
+        saveState();
+        recompute();
+      });
+    });
+  }
+
+  function renderExtraEarn() {
+    const el = document.getElementById("extraEarnList");
+    el.innerHTML = "";
+    state.extraEarn.forEach((e, i) => {
+      const row = document.createElement("div");
+      row.className = "field";
+      row.innerHTML =
+        '<input type="text" placeholder="Name (e.g. Bonus)" data-earn-name="' + i + '" value="' + (e.name || "").replace(/"/g, "&quot;") + '" style="flex:1;text-align:left;width:auto">' +
+        '<label style="flex:none;font-size:12px;color:var(--muted)"><input type="checkbox" data-earn-tax="' + i + '"' + (e.taxable ? " checked" : "") + ' style="vertical-align:middle"> taxable</label>' +
+        '<input type="text" inputmode="decimal" placeholder="0.00" data-earn-amt="' + i + '" value="' + (e.amount || "") + '">' +
+        '<button class="hi-del" data-earn-del="' + i + '" title="Remove">&times;</button>';
+      el.appendChild(row);
+    });
+    el.querySelectorAll("[data-earn-name]").forEach(inp => inp.addEventListener("input", () => {
+      state.extraEarn[+inp.getAttribute("data-earn-name")].name = inp.value; saveState();
+    }));
+    el.querySelectorAll("[data-earn-amt]").forEach(inp => inp.addEventListener("input", () => {
+      state.extraEarn[+inp.getAttribute("data-earn-amt")].amount = inp.value; saveState(); recompute();
+    }));
+    el.querySelectorAll("[data-earn-tax]").forEach(inp => inp.addEventListener("change", () => {
+      state.extraEarn[+inp.getAttribute("data-earn-tax")].taxable = inp.checked; saveState(); recompute();
+    }));
+    el.querySelectorAll("[data-earn-del]").forEach(btn => btn.addEventListener("click", () => {
+      state.extraEarn.splice(+btn.getAttribute("data-earn-del"), 1); saveState(); renderExtraEarn(); recompute();
+    }));
+  }
+
+  function renderOtherDeduct() {
+    const el = document.getElementById("otherDeductList");
+    el.innerHTML = "";
+    state.otherDeduct.forEach((d, i) => {
+      const row = document.createElement("div");
+      row.className = "field";
+      row.innerHTML =
+        '<input type="text" placeholder="Name (e.g. Loan)" data-ded-name="' + i + '" value="' + (d.name || "").replace(/"/g, "&quot;") + '" style="flex:1;text-align:left;width:auto">' +
+        '<input type="text" inputmode="decimal" placeholder="0.00" data-ded-amt="' + i + '" value="' + (d.amount || "") + '">' +
+        '<button class="hi-del" data-ded-del="' + i + '" title="Remove">&times;</button>';
+      el.appendChild(row);
+    });
+    el.querySelectorAll("[data-ded-name]").forEach(inp => inp.addEventListener("input", () => {
+      state.otherDeduct[+inp.getAttribute("data-ded-name")].name = inp.value; saveState();
+    }));
+    el.querySelectorAll("[data-ded-amt]").forEach(inp => inp.addEventListener("input", () => {
+      state.otherDeduct[+inp.getAttribute("data-ded-amt")].amount = inp.value; saveState(); recompute();
+    }));
+    el.querySelectorAll("[data-ded-del]").forEach(btn => btn.addEventListener("click", () => {
+      state.otherDeduct.splice(+btn.getAttribute("data-ded-del"), 1); saveState(); renderOtherDeduct(); recompute();
+    }));
+  }
+
+  function recompute() {
+    const r = compute();
+
+    // hourly rate field
+    document.getElementById("hourlyRate").value = r.base > 0 ? peso(r.hourly) : "";
+
+    // auto PhilHealth suggestion if empty
+    const phInput = document.getElementById("dPhilhealth");
+    if (document.activeElement !== phInput && (state.deduct.philhealth === "" || state.deduct.philhealth == null) && r.base > 0) {
+      const autoPh = r.base * 0.05; // = 5% of monthly basic / 2
+      state.deduct.philhealth = autoPh.toFixed(2);
+      phInput.value = state.deduct.philhealth;
+    }
+
+    // update OT amounts live
+    const hourly = r.hourly;
+    OT_TYPES.forEach(t => {
+      const cell = document.querySelector('[data-amt="' + t.key + '"]');
+      if (!cell) return;
+      const amt = hourly * t.mult * num(state.ot[t.key]);
+      cell.textContent = amt > 0 ? peso(amt) : "\u2014";
+      cell.classList.toggle("pos", amt > 0);
+    });
+
+    // tax field (reflect auto value)
+    const taxInput = document.getElementById("dTax");
+    if (state.taxAuto && document.activeElement !== taxInput) taxInput.value = r.tax.toFixed(2);
+
+    // net pay
+    document.getElementById("netPay").textContent = peso(r.netPay);
+    document.getElementById("netWords").textContent = r.netPay > 0 ? pesoToWords(r.netPay) : "";
+    document.getElementById("netMonthly").innerHTML = r.netPay > 0
+      ? "If both cutoffs are similar: about <b>" + peso(r.netPay * 2) + "</b> per month"
+      : "";
+
+    // breakdown
+    renderBreakdown(r);
+  }
+
+  function renderBreakdown(r) {
+    const el = document.getElementById("breakdown");
+    let h = "";
+    const row = (lbl, amt, cls, sub) =>
+      '<div class="line ' + (cls || "") + '"><div class="lbl">' + lbl + (sub ? '<span class="sub">' + sub + '</span>' : '') + '</div><div class="amt">' + amt + '</div></div>';
+
+    // Earnings
+    h += row("Base salary", peso(r.base));
+    if (r.otTotal > 0) {
+      h += row("Overtime", peso(r.otTotal));
+      r.otBreakdown.forEach(o => {
+        h += row(o.name + " (" + o.hrs + " hr" + (o.hrs === 1 ? "" : "s") + ")", peso(o.amt), "sub-line");
+      });
+    }
+    if (r.extraTaxable > 0) h += row("Other taxable earnings", peso(r.extraTaxable));
+    if (r.extraNonTax > 0) h += row("Non-taxable earnings", peso(r.extraNonTax));
+    h += row("Total earnings", peso(r.grossEarnings), "total");
+
+    // Deductions
+    h += '<div style="height:14px"></div>';
+    if (r.philhealth > 0) h += row("PhilHealth", "-" + peso(r.philhealth), "deduct");
+    if (r.sss > 0) h += row("SSS", "-" + peso(r.sss), "deduct");
+    if (r.hdmf > 0) h += row("Pag-IBIG (HDMF)", "-" + peso(r.hdmf), "deduct");
+    if (r.mpf > 0) h += row("MPF", "-" + peso(r.mpf), "deduct");
+    h += row("Withholding tax", "-" + peso(r.tax), "deduct", "on net taxable " + peso(r.netTaxable));
+    state.otherDeduct.forEach(d => {
+      const a = num(d.amount);
+      if (a > 0) h += row(d.name || "Other deduction", "-" + peso(a), "deduct");
+    });
+    h += row("Total deductions", "-" + peso(r.totalDeductions), "total deduct");
+
+    el.innerHTML = h;
+  }
+
+  // ---------- History ----------
+  function renderHistory() {
+    const el = document.getElementById("histList");
+    const hist = loadHistory();
+    if (!hist.length) {
+      el.innerHTML = '<div class="hist-empty">Wala pang naka-save. I-save ang isang cutoff sa itaas.</div>';
+      document.getElementById("monthTotal").textContent = "";
+      return;
+    }
+    // newest first
+    const sorted = hist.slice().sort((a, b) => (b.period + b.cutoff).localeCompare(a.period + a.cutoff));
+    el.innerHTML = sorted.map((item) => {
+      const idx = hist.indexOf(item);
+      const d = new Date(item.period + "-01");
+      const monthName = isNaN(d) ? item.period : d.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+      const cut = item.cutoff === "1st" ? "1st cutoff (kinsenas)" : "2nd cutoff (katapusan)";
+      return '<div class="hist-item">' +
+        '<div class="hi-main"><div class="hi-period">' + monthName + '</div>' +
+        '<div class="hi-sub">' + cut + ' &middot; gross ' + peso(item.gross) + ' &middot; deductions ' + peso(item.deductions) + '</div></div>' +
+        '<div class="hi-net"><div class="v">' + peso(item.net) + '</div></div>' +
+        '<button class="hi-del" data-hist-del="' + idx + '" title="Delete">&times;</button>' +
+        '</div>';
+    }).join("");
+
+    el.querySelectorAll("[data-hist-del]").forEach(btn => btn.addEventListener("click", () => {
+      const h = loadHistory();
+      h.splice(+btn.getAttribute("data-hist-del"), 1);
+      saveHistory(h);
+      renderHistory();
+    }));
+
+    // current-month total
+    const nowPeriod = document.getElementById("savePeriod").value;
+    if (nowPeriod) {
+      const monthItems = hist.filter(x => x.period === nowPeriod);
+      if (monthItems.length) {
+        const tot = monthItems.reduce((s, x) => s + x.net, 0);
+        const d = new Date(nowPeriod + "-01");
+        const mName = isNaN(d) ? nowPeriod : d.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+        document.getElementById("monthTotal").innerHTML =
+          "Total take-home for <b style='color:var(--gold-bright)'>" + mName + "</b>: " + peso(tot) +
+          " (" + monthItems.length + " cutoff" + (monthItems.length === 1 ? "" : "s") + ")";
+      } else {
+        document.getElementById("monthTotal").textContent = "";
+      }
+    }
+  }
+
+  function saveCurrentToHistory() {
+    const r = compute();
+    const period = document.getElementById("savePeriod").value;
+    const cutoff = document.getElementById("saveCutoff").value;
+    if (!period) { alert("Pumili muna ng Period (buwan)."); return; }
+    const hist = loadHistory();
+    // replace same period+cutoff if it exists
+    const existingIdx = hist.findIndex(x => x.period === period && x.cutoff === cutoff);
+    const entry = {
+      period, cutoff,
+      gross: r.grossEarnings,
+      deductions: r.totalDeductions,
+      net: r.netPay,
+      savedAt: Date.now()
+    };
+    if (existingIdx >= 0) hist[existingIdx] = entry; else hist.push(entry);
+    saveHistory(hist);
+    renderHistory();
+    const btn = document.getElementById("saveBtn");
+    const old = btn.textContent;
+    btn.textContent = existingIdx >= 0 ? "Updated!" : "Saved!";
+    setTimeout(() => { btn.textContent = old; }, 1200);
+  }
+
+  // ---------- Wire inputs ----------
+  function wireInputs() {
+    const baseInp = document.getElementById("baseSalary");
+    baseInp.value = state.base || "";
+    baseInp.addEventListener("input", () => {
+      state.base = baseInp.value;
+      // reset auto PhilHealth so it recomputes from the new base
+      saveState();
+      renderOTList();
+      recompute();
+    });
+
+    const deductMap = { dPhilhealth: "philhealth", dSSS: "sss", dHDMF: "hdmf", dMPF: "mpf", dTax: "tax" };
+    Object.keys(deductMap).forEach(id => {
+      const inp = document.getElementById(id);
+      inp.value = state.deduct[deductMap[id]] || "";
+      inp.addEventListener("input", () => {
+        state.deduct[deductMap[id]] = inp.value;
+        if (id === "dTax") state.taxAuto = false, document.getElementById("taxAuto").checked = false;
+        saveState();
+        recompute();
+      });
+    });
+
+    const taxAuto = document.getElementById("taxAuto");
+    taxAuto.checked = state.taxAuto;
+    document.getElementById("dTax").readOnly = state.taxAuto;
+    document.getElementById("taxMode").textContent = state.taxAuto ? "auto (TRAIN semi-monthly table)" : "manual entry";
+    taxAuto.addEventListener("change", () => {
+      state.taxAuto = taxAuto.checked;
+      document.getElementById("dTax").readOnly = state.taxAuto;
+      document.getElementById("taxMode").textContent = state.taxAuto ? "auto (TRAIN semi-monthly table)" : "manual entry";
+      saveState();
+      recompute();
+    });
+
+    document.getElementById("addEarnBtn").addEventListener("click", () => {
+      state.extraEarn.push({ name: "", amount: "", taxable: true });
+      saveState(); renderExtraEarn(); recompute();
+    });
+    document.getElementById("addDeductBtn").addEventListener("click", () => {
+      state.otherDeduct.push({ name: "", amount: "" });
+      saveState(); renderOtherDeduct(); recompute();
+    });
+
+    document.getElementById("saveBtn").addEventListener("click", saveCurrentToHistory);
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      if (!confirm("I-clear ang lahat ng input? (Hindi mabubura ang naka-save na history.)")) return;
+      state = { base: "", ot: {}, extraEarn: [], deduct: { philhealth: "", sss: "", hdmf: "", mpf: "", tax: "" }, otherDeduct: [], taxAuto: true };
+      saveState();
+      startApp(true);
+    });
+
+    // default period = this month
+    const sp = document.getElementById("savePeriod");
+    if (!sp.value) {
+      const now = new Date();
+      sp.value = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+    }
+    sp.addEventListener("change", renderHistory);
+  }
+
+  // ---------- App start ----------
+  let appStarted = false;
+  function startApp(force) {
+    if (appStarted && !force) return;
+    appStarted = true;
+    loadState();
+    wireInputs();
+    renderOTList();
+    renderExtraEarn();
+    renderOtherDeduct();
+    recompute();
+    renderHistory();
+  }
+
+  // ---------- Passcode lock (shared scheme) ----------
+  function simpleHash(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; }
+    return h;
+  }
+  const PASS_HASH = simpleHash("110299");
+  function unlock() {
+    const input = document.getElementById("lockInput");
+    const err = document.getElementById("lockErr");
+    if (simpleHash(input.value) === PASS_HASH) {
+      sessionStorage.setItem("ctUnlocked", "1");
+      revealApp();
+    } else {
+      err.textContent = "Wrong passcode. Try again.";
+      input.value = "";
+      input.focus();
+    }
+  }
+  function revealApp() {
+    document.getElementById("lock").style.display = "none";
+    document.body.classList.remove("locked");
+    document.getElementById("app").classList.remove("hidden");
+    startApp();
+  }
+
+  // ---------- Auto-update ----------
+  const APP_VERSION = 56;
+  async function checkForUpdate() {
+    try {
+      const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      const j = await res.json();
+      if (j && typeof j.version === "number" && j.version > APP_VERSION) {
+        if (window.caches && caches.keys) {
+          try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
+        }
+        location.reload(true);
+      }
+    } catch (e) {}
+  }
+
+  // Wire lock UI
+  document.getElementById("lockBtn").onclick = unlock;
+  document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+
+  if (sessionStorage.getItem("ctUnlocked") === "1") {
+    revealApp();
+  } else {
+    document.getElementById("lockInput").focus();
+  }
+
+  checkForUpdate();
+  setInterval(checkForUpdate, 60000);
+</script>
+</body>
+</html>

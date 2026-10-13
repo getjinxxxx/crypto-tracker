@@ -511,6 +511,7 @@
   </div>
 
   <div id="app" class="hidden">
+  <div style="margin:6px 0 2px"><a href="home.html" style="color:var(--muted);text-decoration:none;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--panel)">&larr; Home</a></div>
   <div class="top-title">Crypto Tracker</div>
 
   <!-- VIEW TOGGLE -->
@@ -3379,7 +3380,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 55;
+  const APP_VERSION = 56;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
