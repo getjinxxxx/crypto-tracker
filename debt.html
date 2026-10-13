@@ -407,8 +407,7 @@
           applyingRemote = true;
           try {
             state = remote.state;
-            if (!state.shareIds) state.shareIds = {};
-            if (!Array.isArray(state.debts)) state.debts = [];
+            sanitizeState(); // fill in missing fields (paidTerms, etc.) so render won't crash
             localStorage.setItem(LS_KEY, JSON.stringify(state));
           } catch (e) {}
           applyingRemote = false;
@@ -454,16 +453,26 @@
         if (s && Array.isArray(s.debts)) state = s;
       }
     } catch (e) {}
+    sanitizeState();
+  }
+
+  // Ensure every debt has the fields the UI relies on. MUST run after loading from
+  // localStorage AND after receiving data from Firebase (cloud data may lack new fields
+  // like paidTerms, which would otherwise crash isPaidThisMonth and freeze the view).
+  function sanitizeState() {
     if (!state.shareIds) state.shareIds = {};
+    if (!Array.isArray(state.debts)) state.debts = [];
     state.debts.forEach(d => {
       if (!d.terms || d.terms < 1) d.terms = 1;
       if (!d.startMonth) d.startMonth = monthKey(new Date());
-      if (!d.paidTerms) d.paidTerms = {};
+      if (!d.paidTerms || typeof d.paidTerms !== "object") d.paidTerms = {};
       if (typeof d.paid !== "boolean") d.paid = false;
       if (!d.date) d.date = d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : "";
       if (typeof d.recurring !== "boolean") d.recurring = false;
-      if (d.endMonth == null) d.endMonth = ""; // set when a recurring bill is stopped
-      if (d.dueDay == null) d.dueDay = 0;       // 0 = no deadline; 1-15 kinsenas, 16-31 katapusan
+      if (d.endMonth == null) d.endMonth = "";
+      if (d.dueDay == null) d.dueDay = 0;
+      d.terms = Number(d.terms) || 1;             // guard against string terms
+      d.amount = Number(d.amount) || 0;
     });
   }
   function saveState() {
@@ -556,7 +565,7 @@
     return Math.max(0, num(d.amount) - paidOf(d));
   }
   function isPaidThisMonth(d) {
-    if (d.recurring || d.terms > 1) return !!d.paidTerms[viewMonth];
+    if (d.recurring || d.terms > 1) return !!(d.paidTerms && d.paidTerms[viewMonth]);
     return !!d.paid;
   }
 
@@ -772,6 +781,7 @@
       const d = state.debts.find(x => x.id === chk.getAttribute("data-item"));
       if (!d) return;
       if (d.recurring || d.terms > 1) {
+        if (!d.paidTerms) d.paidTerms = {};
         if (chk.checked) d.paidTerms[viewMonth] = true; else delete d.paidTerms[viewMonth];
       } else {
         d.paid = chk.checked;
@@ -1134,7 +1144,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 87;
+  const APP_VERSION = 88;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
