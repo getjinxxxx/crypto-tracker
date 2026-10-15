@@ -88,7 +88,7 @@
   const SUBCATS = { food:"Food", groceries:"Groceries", entertainment:"Entertainment", shopping:"Shopping",
     bills:"Bills / Utilities", transport:"Transportation", health:"Health / Medical", travel:"Travel", emergency:"Emergency", other:"Other" };
   function subLabel(s){ return SUBCATS[s] || "Other"; }
-  function cutoffForDueDay(day){ return (day>=1 && day<=15) ? "kinsenas" : "katapusan"; }
+  function cutoffForDueDay(day){ return (day>=1 && day<=15) ? "1st cutoff" : "2nd cutoff"; }
 
   // Timezone-safe month math (pure strings, no Date parsing drift).
   const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -123,7 +123,7 @@
   function render() {
     const app = document.getElementById("app");
     if (!data) {
-      app.innerHTML = '<div class="err">Invalid or empty share link. Hingi ulit ng bagong link.</div>';
+      app.innerHTML = '<div class="err">Invalid or empty share link. Please ask for a new link.</div>';
       return;
     }
     const items = data.items;
@@ -152,7 +152,7 @@
         list.forEach(it => {
           const paidNow = isPaidThisMonth(it, viewMonth);
           const dt = it.date ? new Date(it.date+"T00:00:00").toLocaleDateString("en-PH",{year:"2-digit",month:"short",day:"numeric"}) : "";
-          const label = (it.name && it.name.trim()) ? it.name : "Utang";
+          const label = (it.name && it.name.trim()) ? it.name : "Debt";
           const amt = it.terms>1 ? perTermOf(it) : num(it.amount);
           let termTag = "";
           if (it.terms>1){ const i=termIndexFor(it,viewMonth); termTag=' <span class="bd-term">'+(i+1)+'/'+it.terms+'</span>'; }
@@ -168,12 +168,12 @@
         boxes += '<div class="sub-box"><div class="sub-box-head"><span>'+subLabel(sub)+'</span><span>'+peso(due)+'</span></div>'+rows+'</div>';
       });
     } else {
-      boxes = '<div class="sub-box"><div class="bd-row">Walang utang sa buwang ito.</div></div>';
+      boxes = '<div class="sub-box"><div class="bd-row">No debts for this month.</div></div>';
     }
 
     const paidOff = totalRemaining <= 0.009;
     app.innerHTML =
-      '<div class="hero"><div class="cap">Utang summary para kay</div>' +
+      '<div class="hero"><div class="cap">Debt summary for</div>' +
         '<div class="who">' + (data.person || "You") + '</div>' +
         '<div class="made">Shared ' + (data.madeAt || "") + ' &bull; read-only snapshot</div></div>' +
       '<div class="month-bar"><button id="pm">&#8249;</button><div class="m-label">' + monthLabel(viewMonth) + '</div><button id="nm">&#8250;</button></div>' +
@@ -189,12 +189,12 @@
           '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(totalRemaining) + '</div></div>' +
         '</div>' + boxes +
       '</div>' +
-      '<div class="card"><h2>Note sa may-ari</h2>' +
-        '<textarea class="note-box" id="noteBox" placeholder="Maglagay ng note dito (e.g. bayad na ako nitong buwan, o paalala)..."></textarea>' +
+      '<div class="card"><h2>Note to owner</h2>' +
+        '<textarea class="note-box" id="noteBox" placeholder="Write a note here (e.g. I already paid this month, or a reminder)..."></textarea>' +
         '<button class="send-btn" id="sendNote">Submit note</button>' +
-        '<div class="note-hint" id="noteStatus">' + (data.shareId ? "Ang note mo ay direktang mapupunta sa may-ari (cloud sync)." : "Note mode: saved on this device only (walang reply channel sa link na ito).") + '</div>' +
+        '<div class="note-hint" id="noteStatus">' + (data.shareId ? "Your note goes directly to the owner (cloud sync)." : "Note mode: saved on this device only (no reply channel on this link).") + '</div>' +
       '</div>' +
-      '<div class="foot">Personal use only &bull; read-only &bull; walang ibang utang ang ipinapakita dito</div>';
+      '<div class="foot">Personal use only &bull; read-only &bull; no other debts are shown here</div>';
 
     document.getElementById("pm").onclick = () => { viewMonth = addMonths(viewMonth, -1); render(); };
     document.getElementById("nm").onclick = () => { viewMonth = addMonths(viewMonth, 1); render(); };
@@ -216,15 +216,15 @@
         const note = nb.value.trim();
         status.textContent = "Sending\u2026";
         ref.set({ note: note, updatedAt: Date.now() })
-          .then(() => { status.textContent = "\u2705 Naipadala sa may-ari! (" + new Date().toLocaleTimeString() + ")"; })
-          .catch(() => { status.textContent = "\u26A0\uFE0F Hindi naipadala (walang internet?). Subukan ulit."; });
+          .then(() => { status.textContent = "\u2705 Sent to the owner! (" + new Date().toLocaleTimeString() + ")"; })
+          .catch(() => { status.textContent = "\u26A0\uFE0F Not sent (no internet?). Please try again."; });
       };
     } else {
       // fallback: local only
       try { nb.value = localStorage.getItem(localKey) || ""; } catch (e) {}
       sendBtn.onclick = () => {
         try { localStorage.setItem(localKey, nb.value); } catch (e) {}
-        status.textContent = "Saved on this device (walang cloud channel sa link na ito).";
+        status.textContent = "Saved on this device (no cloud channel on this link).";
       };
     }
   }

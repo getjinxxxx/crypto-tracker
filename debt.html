@@ -271,17 +271,17 @@
       <div class="srow"><div class="lbl">Total remaining (all debts)</div><div class="val owed" id="sumTotalRemaining">PHP 0.00</div></div>
     </div>
 
-    <!-- SALARY VS UTANG -->
+    <!-- SALARY VS DEBT -->
     <div class="card" id="salaryCard" style="display:none">
-      <h2>Sweldo vs Utang (per cutoff)</h2>
-      <div class="hint">Mula sa take-home pay na naka-save mo sa Salary Calculator. Ang utang ng buwan ay hinahati sa 1st (kinsenas) at 2nd (katapusan) cutoff.</div>
+      <h2>Salary vs Debt (per cutoff)</h2>
+      <div class="hint">From the take-home pay you saved in the Salary Calculator. The month's debt is split across the 1st and 2nd cutoff.</div>
       <div id="salaryCutoffs"></div>
     </div>
 
     <!-- CHART -->
     <div class="card" id="chartCard" style="display:none">
       <h2>Due this month per category</h2>
-      <div class="hint">Hover/tap sa slice para makita ang detalye.</div>
+      <div class="hint">Hover/tap a slice to see the details.</div>
       <div style="position:relative;height:220px"><canvas id="debtChart"></canvas></div>
     </div>
 
@@ -291,11 +291,11 @@
     <!-- ADD DEBT -->
     <div class="card">
       <h2>Add a debt</h2>
-      <div class="hint">Idadagdag ito sa <b id="addMonthLabel">kasalukuyang buwan</b>. Kung may terms, ikakalat ito sa mga susunod na buwan (1 term kada buwan). Parehong pangalan/label = <b>add up</b> sa dating entry.</div>
+      <div class="hint">This will be added to the <b id="addMonthLabel">current month</b>. If it has terms, it is spread across the following months (1 term per month). Same name/label = <b>add up</b> with the existing entry.</div>
       <div class="field">
         <label>Category</label>
         <select id="newCategory" class="cat-sel">
-          <option value="person">Person (Utang sa tao)</option>
+          <option value="person">Person (debt to someone)</option>
           <option value="creditcard">Credit Card</option>
           <option value="bankloan">Bank Loan</option>
           <option value="onlineloan">Online Loan / App</option>
@@ -305,11 +305,11 @@
         </select>
       </div>
       <div class="field" id="personField">
-        <label>Person name<span class="sub">kanino ka may utang</span></label>
+        <label>Person name<span class="sub">who you owe</span></label>
         <input type="text" class="name-in" id="newPerson" placeholder="e.g. Angel, Mico" />
       </div>
       <div class="field" id="subCatField">
-        <label>Sub-category<span class="sub">saan napunta ang utang</span></label>
+        <label>Sub-category<span class="sub">what the debt was for</span></label>
         <select id="newSubCat" class="cat-sel">
           <option value="food">Food</option>
           <option value="groceries">Groceries</option>
@@ -324,23 +324,23 @@
         </select>
       </div>
       <div class="field">
-        <label>Name / label<span class="sub">pangalan ng utang, e.g. Jollibee, BPI Visa</span></label>
+        <label>Name / label<span class="sub">name of the debt, e.g. Jollibee, BPI Visa</span></label>
         <input type="text" class="name-in" id="newName" placeholder="e.g. Jollibee, Grab, BPI Visa" />
       </div>
       <div class="field">
-        <label>Total amount owed<span class="sub">principal (o halaga kada buwan kung recurring)</span></label>
+        <label>Total amount owed<span class="sub">principal (or amount per month if recurring)</span></label>
         <input type="text" inputmode="decimal" id="newAmount" placeholder="0.00" />
       </div>
       <div class="field">
-        <label>Due date / deadline<span class="sub">araw ng buwan (1-15 = kinsenas, 16-31 = katapusan)</span></label>
+        <label>Due date / deadline<span class="sub">day of the month (1-15 = 1st cutoff, 16-31 = 2nd cutoff)</span></label>
         <input type="number" inputmode="numeric" id="newDueDay" min="1" max="31" placeholder="e.g. 15" />
       </div>
       <div class="field" id="recurringField">
-        <label>Recurring bill<span class="sub">monthly, until further notice (hal. Netflix, Meralco)</span></label>
+        <label>Recurring bill<span class="sub">monthly, until further notice (e.g. Netflix, Meralco)</span></label>
         <input type="checkbox" id="newRecurring" style="width:22px;height:22px;accent-color:#34d399" />
       </div>
       <div class="field" id="termsField">
-        <label>Number of terms<span class="sub">1 = isang bayad lang (walang hulugan)</span></label>
+        <label>Number of terms<span class="sub">1 = single payment (no installment)</span></label>
         <input type="text" inputmode="numeric" id="newTerms" placeholder="1" />
       </div>
       <div class="field" id="perTermField">
@@ -485,7 +485,7 @@
 
   // Category labels
   const CATEGORIES = {
-    person: "Utang sa tao", creditcard: "Credit Card", bankloan: "Bank Loan",
+    person: "Debt to a person", creditcard: "Credit Card", bankloan: "Bank Loan",
     onlineloan: "Online Loan", government: "Government", salaryloan: "Salary / Company Loan", other: "Other"
   };
   function catLabel(c) { return CATEGORIES[c] || "Other"; }
@@ -620,12 +620,12 @@
       termTag = ' <span class="bd-term">' + (idx + 1) + '/' + d.terms + '</span>';
     }
     const stopBtn = d.recurring
-      ? '<button class="bd-edit" data-stop="' + d.id + '" title="Itigil ang recurring bill">\u23F9</button>'
+      ? '<button class="bd-edit" data-stop="' + d.id + '" title="Stop recurring bill">\u23F9</button>'
       : "";
     // Deadline tag: urgency icon + due day + which cutoff it falls under.
     let dueTag = "";
     if (d.dueDay && d.dueDay >= 1 && d.dueDay <= 31) {
-      const cut = cutoffForDueDay(d.dueDay) === "1st" ? "kinsenas" : "katapusan";
+      const cut = cutoffForDueDay(d.dueDay) === "1st" ? "1st cutoff" : "2nd cutoff";
       const u = dueUrgency(d);
       dueTag = ' <span class="due-tag ' + u.cls + '" title="Deadline">' + (u.icon ? u.icon + " " : "") + d.dueDay + ' (' + cut + ')</span>';
     }
@@ -676,7 +676,7 @@
 
     // Share button only for person cards (share just this person's debts).
     const shareBtn = (category === "person")
-      ? '<button class="d-share" data-share="' + encodeURIComponent(cardKey) + '" title="Share kay ' + title + '">\uD83D\uDD17</button>'
+      ? '<button class="d-share" data-share="' + encodeURIComponent(cardKey) + '" title="Share with ' + title + '">\uD83D\uDD17</button>'
       : "";
 
     // Recipient's note (from Firebase), if this person has a share with a reply.
@@ -689,7 +689,7 @@
       const open = !!noteOpen[shareId];
       noteHtml = '<div class="reply-note">' +
         '<div class="rn-head" data-notetoggle="' + shareId + '">' +
-          '<span>\uD83D\uDCAC Note mula kay ' + title + (when ? ' &middot; ' + when : '') + '</span>' +
+          '<span>\uD83D\uDCAC Note from ' + title + (when ? ' &middot; ' + when : '') + '</span>' +
           '<span class="rn-chev">' + (open ? "\u25BC" : "\u25B6") + '</span>' +
         '</div>' +
         '<div class="rn-body"' + (open ? "" : ' style="display:none"') + '>' + String(r.note).replace(/</g, "&lt;") + '</div>' +
@@ -734,11 +734,11 @@
             Math.abs(monthDiff(k, viewMonth)) < Math.abs(monthDiff(best, viewMonth)) ? k : best, keys[0]);
         }
       }
-      let msg = '<div class="empty">Walang utang na aktibo sa ' + monthLabel(viewMonth) + '. ';
+      let msg = '<div class="empty">No active debts for ' + monthLabel(viewMonth) + '. ';
       if (jumpMonth && jumpMonth !== viewMonth) {
-        msg += 'May utang ka sa <b>' + monthLabel(jumpMonth) + '</b>.<br><button class="btn primary" id="jumpBtn" style="margin-top:10px;max-width:260px">Pumunta sa ' + monthLabel(jumpMonth) + '</button>';
+        msg += 'You have debts in <b>' + monthLabel(jumpMonth) + '</b>.<br><button class="btn primary" id="jumpBtn" style="margin-top:10px;max-width:260px">Go to ' + monthLabel(jumpMonth) + '</button>';
       } else {
-        msg += 'Magdagdag sa ibaba.';
+        msg += 'Add one below.';
       }
       msg += '</div>';
       el.innerHTML = '<div class="card">' + msg + '</div>';
@@ -797,7 +797,7 @@
     el.querySelectorAll("[data-stop]").forEach(btn => btn.addEventListener("click", () => {
       const d = state.debts.find(x => x.id === btn.getAttribute("data-stop"));
       if (!d) return;
-      if (!confirm("Itigil ang recurring bill na ito? Hindi na lalabas ito sa susunod na buwan.")) return;
+      if (!confirm("Stop this recurring bill? It will no longer appear in the following months.")) return;
       d.endMonth = viewMonth;
       saveState(); renderAll();
     }));
@@ -842,7 +842,7 @@
       const id = btn.getAttribute("data-del");
       const d = state.debts.find(x => x.id === id);
       const dLabel = d ? ((d.name && d.name.trim()) ? d.name : (d.person || catLabel(d.category))) : "this item";
-      if (!confirm("Delete \"" + dLabel + "\"? Hindi na mababawi.")) return;
+      if (!confirm("Delete \"" + dLabel + "\"? This cannot be undone.")) return;
       state.debts = state.debts.filter(x => x.id !== id);
       saveState(); renderAll();
     }));
@@ -890,16 +890,16 @@
     if (!shareId) { shareId = newShareId(); state.shareIds[cardKey] = shareId; saveState(); fbWatchNote(shareId); }
 
     const payload = sharePayload(cardKey, shareId);
-    if (!payload) { alert("Walang maibabahagi."); return; }
+    if (!payload) { alert("Nothing to share."); return; }
 
     const base = location.href.replace(/[^\/]*$/, "");
     const link = base + "shared.html#" + shareId;
 
     const finish = () => {
-      const show = () => window.prompt("Short share link para kay " + person + " (kopyahin at ipadala):", link);
+      const show = () => window.prompt("Short share link for " + person + " (copy and send):", link);
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(link).then(() => {
-          alert("Nakopya na ang maikling link! Nasa cloud na ang data \u2014 walang nakikitang utang sa mismong URL.\n\nKapag nag-submit si " + person + " ng note, lalabas ito sa card dito.");
+          alert("Short link copied! The data is in the cloud \u2014 no debts are visible in the URL itself.\n\nWhen " + person + " submits a note, it will appear on the card here.");
           show();
         }).catch(show);
       } else { show(); }
@@ -909,9 +909,9 @@
       // write/refresh the shared snapshot, then give the short link
       fbDb.ref("shares/" + shareId + "/data").set(payload)
         .then(finish)
-        .catch(() => { alert("Hindi ma-save sa cloud (walang internet o naka-restrict ang Firebase rules sa 'shares'). Subukan ulit."); });
+        .catch(() => { alert("Could not save to the cloud (no internet, or Firebase rules restrict 'shares'). Please try again."); });
     } else {
-      alert("Walang koneksyon sa cloud. Kailangan ng internet para gumawa ng short link.");
+      alert("No cloud connection. You need internet to create a short link.");
     }
   }
 
@@ -1004,7 +1004,7 @@
     const splitShare = noDeadlineTotal / Math.max(1, cutoffs.length);
 
     el.innerHTML = cutoffs.map(h => {
-      const cutLabel = h.cutoff === "1st" ? "1st cutoff (kinsenas)" : "2nd cutoff (katapusan)";
+      const cutLabel = h.cutoff === "1st" ? "1st cutoff" : "2nd cutoff";
       const takeHome = num(h.net);
       const withDeadline = dueByCutoff[h.cutoff] || 0;
       const totalDue = withDeadline + splitShare;
@@ -1013,9 +1013,9 @@
       return '<div class="cutoff-box">' +
         '<div class="cb-head"><span>' + cutLabel + '</span><span>' + peso(takeHome) + '</span></div>' +
         '<div class="cb-row"><span>Take-home pay</span><b>' + peso(takeHome) + '</b></div>' +
-        '<div class="cb-row"><span>Utang na due dito (deadline)</span><b>-' + peso(withDeadline) + '</b></div>' +
-        (splitShare > 0 ? '<div class="cb-row"><span>Utang na walang deadline (hati)</span><b>-' + peso(splitShare) + '</b></div>' : '') +
-        '<div class="cb-left ' + okCls + '"><span>Natitira</span><span class="cb-amt">' + peso(left) + '</span></div>' +
+        '<div class="cb-row"><span>Debt due here (deadline)</span><b>-' + peso(withDeadline) + '</b></div>' +
+        (splitShare > 0 ? '<div class="cb-row"><span>Debt with no deadline (split)</span><b>-' + peso(splitShare) + '</b></div>' : '') +
+        '<div class="cb-left ' + okCls + '"><span>Remaining</span><span class="cb-amt">' + peso(left) + '</span></div>' +
       '</div>';
     }).join("");
   }
@@ -1173,7 +1173,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 93;
+  const APP_VERSION = 94;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });

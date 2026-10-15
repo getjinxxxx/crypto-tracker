@@ -213,9 +213,9 @@
     <!-- BASE SALARY -->
     <div class="card">
       <h2>Base pay</h2>
-      <div class="hint">Fixed ang <b>Salary</b> mo per cutoff (kinsenas at katapusan). Naka-lock ito &mdash; pindutin ang <b>Edit</b> kung may salary increase para ma-update.</div>
+      <div class="hint">Your <b>Salary</b> is fixed per cutoff (1st and 2nd). It's locked &mdash; tap <b>Edit</b> to update it when you get a salary increase.</div>
       <div class="field">
-        <label>Semi-monthly salary<span class="sub">per cutoff (kinsenas or katapusan)</span></label>
+        <label>Semi-monthly salary<span class="sub">per cutoff (1st or 2nd)</span></label>
         <span class="suffix">PHP</span>
         <input type="text" inputmode="decimal" id="baseSalary" placeholder="0.00" readonly />
       </div>
@@ -244,16 +244,16 @@
     <!-- OVERTIME -->
     <div class="card">
       <h2>Overtime hours</h2>
-      <div class="hint">Ilagay ang bilang ng <b>oras</b> kada klase ng OT. Awtomatikong kakalkulahin ang halaga gamit ang multiplier mula sa payslip mo.</div>
+      <div class="hint">Enter the number of <b>hours</b> per OT type. The amount is computed automatically using the multiplier from your payslip.</div>
       <div id="otList"></div>
     </div>
 
     <!-- OTHER EARNINGS -->
     <div class="card">
       <h2>Other earnings (optional)</h2>
-      <div class="hint">Ang <b>De Minimis</b> ay non-taxable benefit (hal. rice/meal/allowance) &mdash; hindi binabawasan ng tax. Pwede ka ring mag-add ng bonus/adjustment sa ibaba.</div>
+      <div class="hint"><b>De Minimis</b> is a non-taxable benefit (e.g. rice/meal/allowance) &mdash; not reduced by tax. You can also add a bonus/adjustment below.</div>
       <div class="field">
-        <label>De Minimis<span class="sub">non-taxable, 2nd cutoff (katapusan) lang</span></label>
+        <label>De Minimis<span class="sub">non-taxable, 2nd cutoff only</span></label>
         <span class="suffix">PHP</span>
         <input type="text" inputmode="decimal" id="deMinimis" placeholder="0.00" readonly />
       </div>
@@ -265,7 +265,7 @@
     <!-- DEDUCTIONS -->
     <div class="card">
       <h2>Deductions</h2>
-      <div class="hint">Ang PhilHealth ay auto (5% ng monthly basic &divide; 2) at ang tax ay auto. Ang SSS / Pag-IBIG / MPF ay fixed &mdash; pindutin ang <b>Edit contributions</b> kung iba sa payslip mo (minsan nagbabago kada cutoff).</div>
+      <div class="hint">PhilHealth is auto (5% of monthly basic &divide; 2) and tax is auto. SSS / Pag-IBIG / MPF are fixed &mdash; tap <b>Edit contributions</b> if they differ on your payslip (they sometimes change per cutoff).</div>
 
       <div class="field">
         <label>PhilHealth<span class="sub">auto: 5% of monthly basic &divide; 2</span></label>
@@ -293,7 +293,7 @@
       </div>
 
       <div class="divider"></div>
-      <div class="hint" style="margin-bottom:8px">Non-tax deductions (loans, etc.) &mdash; hindi binabawas sa taxable income.</div>
+      <div class="hint" style="margin-bottom:8px">Non-tax deductions (loans, etc.) &mdash; not subtracted from taxable income.</div>
       <div id="otherDeductList"></div>
       <div class="btn-row"><button class="btn" id="addDeductBtn">+ Add deduction</button></div>
 
@@ -308,25 +308,25 @@
         <button class="btn primary" id="saveTaxBtn" style="display:none">Save tax</button>
         <button class="btn" id="autoTaxBtn" style="display:none">Use auto</button>
       </div>
-      <div class="note">Ang auto-tax ay estimate lang. Kung may hawak kang payslip, pindutin ang <b>Edit tax</b> at ilagay ang eksaktong halaga para 100% tama ang net.</div>
+      <div class="note">The auto-tax is only an estimate. If you have your payslip, tap <b>Edit tax</b> and enter the exact amount so the net is 100% correct.</div>
 
       <div class="divider"></div>
-      <div class="hint" style="margin-bottom:8px"><b>Tax method</b> (para sa auto-estimate):</div>
+      <div class="hint" style="margin-bottom:8px"><b>Tax method</b> (for the auto-estimate):</div>
       <div class="field">
         <label>Method</label>
         <select id="taxMethodSel" class="period-sel">
-          <option value="cumulative">Cumulative / annualized (BIR, mas tumpak)</option>
+          <option value="cumulative">Cumulative / annualized (BIR, more accurate)</option>
           <option value="table">Per-cutoff table (simple estimate)</option>
         </select>
       </div>
       <div id="ytdFields">
         <div class="field">
-          <label>YTD taxable before history<span class="sub">taxable income this year na hindi pa naka-save</span></label>
+          <label>YTD taxable before history<span class="sub">taxable income this year not yet saved</span></label>
           <span class="suffix">PHP</span>
           <input type="text" inputmode="decimal" id="ytdTaxable" placeholder="0.00" />
         </div>
         <div class="field">
-          <label>YTD tax paid before history<span class="sub">tax na nabayad na this year</span></label>
+          <label>YTD tax paid before history<span class="sub">tax already paid this year</span></label>
           <span class="suffix">PHP</span>
           <input type="text" inputmode="decimal" id="ytdTaxPaid" placeholder="0.00" />
         </div>
@@ -335,7 +335,7 @@
           <span class="suffix"></span>
           <input type="text" inputmode="numeric" id="periodsPerYear" placeholder="24" />
         </div>
-        <div class="note">Ang cumulative method ay gumagamit ng naka-save mong history + YTD seed sa itaas. Para tumpak, i-save mo lahat ng cutoff ng taon, o ilagay ang starting YTD mula sa payslip (hal. Tax YTD).</div>
+        <div class="note">The cumulative method uses your saved history + the YTD seed above. For accuracy, save every cutoff of the year, or enter the starting YTD from your payslip (e.g. Tax YTD).</div>
       </div>
     </div>
 
@@ -356,7 +356,7 @@
     <!-- SAVE -->
     <div class="card">
       <h2>Save this cutoff</h2>
-      <div class="hint">I-save ang kasalukuyang kalkulasyon para may record ka kada cutoff.</div>
+      <div class="hint">Save the current calculation so you have a record for each cutoff.</div>
       <div class="field">
         <label>Period</label>
         <input type="month" id="savePeriod" class="period-sel" />
@@ -364,8 +364,8 @@
       <div class="field">
         <label>Cutoff</label>
         <select id="saveCutoff" class="period-sel">
-          <option value="1st">1st cutoff (kinsenas)</option>
-          <option value="2nd">2nd cutoff (katapusan)</option>
+          <option value="1st">1st cutoff</option>
+          <option value="2nd">2nd cutoff</option>
         </select>
       </div>
       <div class="btn-row">
@@ -377,7 +377,7 @@
     <!-- CHART -->
     <div class="card" id="chartCard" style="display:none">
       <h2>Take-home pay (last cutoffs)</h2>
-      <div class="hint">Mula sa naka-save mong history. Hover/tap sa bar para makita ang detalye.</div>
+      <div class="hint">From your saved history. Hover/tap a bar to see the details.</div>
       <div style="position:relative;height:240px"><canvas id="payChart"></canvas></div>
     </div>
 
@@ -898,7 +898,7 @@
     // Taxable base = base + taxable OT + other taxable earnings (De Minimis & non-tax excluded)
     const taxableTotal = r.base + r.otTotal + r.extraTaxable;
     if (r.tax > 0 && taxableTotal > 0) {
-      h += note("Ang withholding tax ay kinakalkula sa kabuuang taxable income. Narito ang <b>proporsyonal</b> na hati batay sa bawat pinagmulan ng taxable earnings:");
+      h += note("Withholding tax is calculated on total taxable income. Here is the <b>proportional</b> split based on each source of taxable earnings:");
       const share = (amt) => (amt / taxableTotal) * r.tax;
       h += row("From Base salary", "-" + peso(share(r.base)), "deduct", (100 * r.base / taxableTotal).toFixed(1) + "% of taxable");
       // Per-OT-type attribution
@@ -908,9 +908,9 @@
       if (r.extraTaxable > 0) h += row("From other taxable", "-" + peso(share(r.extraTaxable)), "deduct", (100 * r.extraTaxable / taxableTotal).toFixed(1) + "%");
       h += row("Total withholding tax", "-" + peso(r.tax), "total deduct");
       const effRate = (r.tax / taxableTotal) * 100;
-      h += note("Net taxable income: <b>" + peso(r.netTaxable) + "</b> &middot; Effective tax rate: <b>" + effRate.toFixed(2) + "%</b> ng taxable earnings. (De Minimis at iba pang non-taxable ay hindi binubuwisan.)");
+      h += note("Net taxable income: <b>" + peso(r.netTaxable) + "</b> &middot; Effective tax rate: <b>" + effRate.toFixed(2) + "%</b> of taxable earnings. (De Minimis and other non-taxable items are not taxed.)");
     } else {
-      h += note("Walang withholding tax sa cutoff na ito.");
+      h += note("No withholding tax for this cutoff.");
     }
 
     el.innerHTML = h;
@@ -921,7 +921,7 @@
     const el = document.getElementById("histList");
     const hist = loadHistory();
     if (!hist.length) {
-      el.innerHTML = '<div class="hist-empty">Wala pang naka-save. I-save ang isang cutoff sa itaas.</div>';
+      el.innerHTML = '<div class="hist-empty">Nothing saved yet. Save a cutoff above.</div>';
       document.getElementById("monthTotal").textContent = "";
       return;
     }
@@ -931,7 +931,7 @@
       const idx = hist.indexOf(item);
       const d = new Date(item.period + "-01");
       const monthName = isNaN(d) ? item.period : d.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
-      const cut = item.cutoff === "1st" ? "1st cutoff (kinsenas)" : "2nd cutoff (katapusan)";
+      const cut = item.cutoff === "1st" ? "1st cutoff" : "2nd cutoff";
       return '<div class="hist-item">' +
         '<div class="hi-main"><div class="hi-period">' + monthName + '</div>' +
         '<div class="hi-sub">' + cut + ' &middot; gross ' + peso(item.gross) + ' &middot; deductions ' + peso(item.deductions) + '</div></div>' +
@@ -943,13 +943,13 @@
       '<div class="hist-edit-panel" id="hedit-' + idx + '" style="display:none">' +
         '<div class="he-row"><label>Period</label><input type="month" data-he-period="' + idx + '" value="' + item.period + '"></div>' +
         '<div class="he-row"><label>Cutoff</label><select data-he-cutoff="' + idx + '">' +
-          '<option value="1st"' + (item.cutoff === "1st" ? " selected" : "") + '>1st (kinsenas)</option>' +
-          '<option value="2nd"' + (item.cutoff === "2nd" ? " selected" : "") + '>2nd (katapusan)</option>' +
+          '<option value="1st"' + (item.cutoff === "1st" ? " selected" : "") + '>1st cutoff</option>' +
+          '<option value="2nd"' + (item.cutoff === "2nd" ? " selected" : "") + '>2nd cutoff</option>' +
         '</select></div>' +
         '<div class="he-row"><label>Gross</label><input type="text" inputmode="decimal" data-he-gross="' + idx + '" value="' + num(item.gross).toFixed(2) + '"></div>' +
         '<div class="he-row"><label>Deductions</label><input type="text" inputmode="decimal" data-he-ded="' + idx + '" value="' + num(item.deductions).toFixed(2) + '"></div>' +
         '<div class="he-row"><label>Net (take-home)</label><input type="text" inputmode="decimal" data-he-net="' + idx + '" value="' + num(item.net).toFixed(2) + '"></div>' +
-        '<div class="note" style="margin:2px 0 6px">Iwan ang Net na blangko para auto = gross &minus; deductions.</div>' +
+        '<div class="note" style="margin:2px 0 6px">Leave Net blank for auto = gross &minus; deductions.</div>' +
         '<div class="he-btns"><button class="save" data-he-save="' + idx + '">Save</button><button class="cancel" data-he-cancel="' + idx + '">Cancel</button></div>' +
       '</div>';
     }).join("");
@@ -1015,7 +1015,7 @@
     const r = compute();
     const period = document.getElementById("savePeriod").value;
     const cutoff = document.getElementById("saveCutoff").value;
-    if (!period) { alert("Pumili muna ng Period (buwan)."); return; }
+    if (!period) { alert("Please select a Period (month) first."); return; }
     const hist = loadHistory();
     // replace same period+cutoff if it exists
     const existingIdx = hist.findIndex(x => x.period === period && x.cutoff === cutoff);
@@ -1177,7 +1177,7 @@
 
     document.getElementById("saveBtn").addEventListener("click", saveCurrentToHistory);
     document.getElementById("clearBtn").addEventListener("click", () => {
-      if (!confirm("I-clear ang OT at other earnings? (Hindi mabubura ang salary, fixed deductions, at history.)")) return;
+      if (!confirm("Clear OT and other earnings? (Salary, fixed deductions, and history will not be deleted.)")) return;
       // Keep base salary, fixed deductions, and fixed De Minimis; only clear per-cutoff inputs.
       state.ot = {};
       state.extraEarn = [];
@@ -1293,7 +1293,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 93;
+  const APP_VERSION = 94;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
