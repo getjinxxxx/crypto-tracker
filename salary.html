@@ -627,12 +627,13 @@
     const grossEarnings = base + otTotal + extraTaxable + extraNonTax;
 
     // Mandatory contributions (reduce taxable income).
-    // PhilHealth is auto (5% of monthly basic / 2 = base * 0.05). SSS/Pag-IBIG/MPF are
-    // fixed values kept in state (read-only in the UI).
-    const philhealth = base > 0 ? base * 0.05 : 0;
-    const sss = num(state.deduct.sss);
-    const hdmf = num(state.deduct.hdmf);
-    const mpf = num(state.deduct.mpf);
+    // PhilHealth, SSS, Pag-IBIG are deducted on the 1st cutoff (kinsenas) ONLY.
+    // MPF is deducted on both cutoffs. PhilHealth is auto (5% of monthly basic / 2 = base * 0.05).
+    const govtOnThisCutoff = (curCutoff === "1st"); // kinsenas only (reuses curCutoff from above)
+    const philhealth = (govtOnThisCutoff && base > 0) ? base * 0.05 : 0;
+    const sss = govtOnThisCutoff ? num(state.deduct.sss) : 0;
+    const hdmf = govtOnThisCutoff ? num(state.deduct.hdmf) : 0;
+    const mpf = num(state.deduct.mpf); // MPF applies to both cutoffs
     const mandatory = philhealth + sss + hdmf + mpf;
 
     // Taxable income = taxable earnings - mandatory contributions
@@ -1230,7 +1231,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 89;
+  const APP_VERSION = 90;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
