@@ -164,6 +164,22 @@
     background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 4px;
   }
   .hist-item .hi-del:hover { color: var(--danger); }
+  .hist-item .hi-edit { background: none; border: none; color: var(--muted); font-size: 14px; cursor: pointer; padding: 2px 4px; }
+  .hist-item .hi-edit:hover { color: var(--gold-bright); }
+
+  .hist-edit-panel { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 13px; margin: -4px 0 10px; }
+  .hist-edit-panel .he-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; }
+  .hist-edit-panel label { font-size: 13px; color: var(--text); }
+  .hist-edit-panel input, .hist-edit-panel select { width: 150px; background: var(--panel); border: 1px solid var(--line);
+    color: var(--text); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 13px; text-align: right; }
+  .hist-edit-panel select { text-align: left; }
+  .hist-edit-panel input:focus, .hist-edit-panel select:focus { outline: none; border-color: var(--gold); }
+  .hist-edit-panel .he-btns { display: flex; gap: 8px; margin-top: 6px; }
+  .hist-edit-panel .he-btns button { flex: 1; border-radius: 8px; padding: 8px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); }
+  .hist-edit-panel .he-btns .save { background: var(--gold); color: #000; border-color: var(--gold); }
+  .hist-edit-panel .he-btns .cancel { background: var(--panel); color: var(--text); }
+
   .hist-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 0; }
 
   select.period-sel {
@@ -920,8 +936,22 @@
         '<div class="hi-main"><div class="hi-period">' + monthName + '</div>' +
         '<div class="hi-sub">' + cut + ' &middot; gross ' + peso(item.gross) + ' &middot; deductions ' + peso(item.deductions) + '</div></div>' +
         '<div class="hi-net"><div class="v">' + peso(item.net) + '</div></div>' +
+        '<button class="hi-edit" data-hist-edit="' + idx + '" title="Edit">\u270E</button>' +
         '<button class="hi-del" data-hist-del="' + idx + '" title="Delete">&times;</button>' +
-        '</div>';
+      '</div>' +
+      // inline edit panel (hidden)
+      '<div class="hist-edit-panel" id="hedit-' + idx + '" style="display:none">' +
+        '<div class="he-row"><label>Period</label><input type="month" data-he-period="' + idx + '" value="' + item.period + '"></div>' +
+        '<div class="he-row"><label>Cutoff</label><select data-he-cutoff="' + idx + '">' +
+          '<option value="1st"' + (item.cutoff === "1st" ? " selected" : "") + '>1st (kinsenas)</option>' +
+          '<option value="2nd"' + (item.cutoff === "2nd" ? " selected" : "") + '>2nd (katapusan)</option>' +
+        '</select></div>' +
+        '<div class="he-row"><label>Gross</label><input type="text" inputmode="decimal" data-he-gross="' + idx + '" value="' + num(item.gross).toFixed(2) + '"></div>' +
+        '<div class="he-row"><label>Deductions</label><input type="text" inputmode="decimal" data-he-ded="' + idx + '" value="' + num(item.deductions).toFixed(2) + '"></div>' +
+        '<div class="he-row"><label>Net (take-home)</label><input type="text" inputmode="decimal" data-he-net="' + idx + '" value="' + num(item.net).toFixed(2) + '"></div>' +
+        '<div class="note" style="margin:2px 0 6px">Iwan ang Net na blangko para auto = gross &minus; deductions.</div>' +
+        '<div class="he-btns"><button class="save" data-he-save="' + idx + '">Save</button><button class="cancel" data-he-cancel="' + idx + '">Cancel</button></div>' +
+      '</div>';
     }).join("");
 
     el.querySelectorAll("[data-hist-del]").forEach(btn => btn.addEventListener("click", () => {
@@ -930,6 +960,38 @@
       saveHistory(h);
       renderHistory();
       renderChart();
+    }));
+
+    // edit toggle
+    el.querySelectorAll("[data-hist-edit]").forEach(btn => btn.addEventListener("click", () => {
+      const p = document.getElementById("hedit-" + btn.getAttribute("data-hist-edit"));
+      if (p) p.style.display = (p.style.display === "none") ? "" : "none";
+    }));
+    // auto-net when gross/deductions change (only if net field left blank)
+    el.querySelectorAll("[data-he-gross], [data-he-ded]").forEach(inp => inp.addEventListener("input", () => {
+      const id = inp.getAttribute("data-he-gross") || inp.getAttribute("data-he-ded");
+      const netEl = el.querySelector('[data-he-net="' + id + '"]');
+      if (netEl && netEl.value.trim() === "") { /* leave blank; will auto on save */ }
+    }));
+    // save edit
+    el.querySelectorAll("[data-he-save]").forEach(btn => btn.addEventListener("click", () => {
+      const id = +btn.getAttribute("data-he-save");
+      const h = loadHistory();
+      if (!h[id]) return;
+      const period = el.querySelector('[data-he-period="' + id + '"]').value || h[id].period;
+      const cutoff = el.querySelector('[data-he-cutoff="' + id + '"]').value;
+      const gross = num(el.querySelector('[data-he-gross="' + id + '"]').value);
+      const ded = num(el.querySelector('[data-he-ded="' + id + '"]').value);
+      const netRaw = el.querySelector('[data-he-net="' + id + '"]').value.trim();
+      const net = netRaw === "" ? (gross - ded) : num(netRaw);
+      h[id] = Object.assign({}, h[id], { period, cutoff, gross, deductions: ded, net });
+      saveHistory(h);
+      renderHistory();
+      renderChart();
+    }));
+    el.querySelectorAll("[data-he-cancel]").forEach(btn => btn.addEventListener("click", () => {
+      const p = document.getElementById("hedit-" + btn.getAttribute("data-he-cancel"));
+      if (p) p.style.display = "none";
     }));
 
     // current-month total
@@ -1231,7 +1293,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 90;
+  const APP_VERSION = 91;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
