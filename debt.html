@@ -877,7 +877,8 @@
       items: items.map(d => ({
         name: d.name || "", subCat: d.subCat || "", amount: num(d.amount),
         terms: d.terms || 1, startMonth: d.startMonth || "",
-        paidTerms: d.paidTerms || {}, paid: !!d.paid, date: d.date || ""
+        paidTerms: d.paidTerms || {}, paid: !!d.paid, date: d.date || "",
+        dueDay: d.dueDay || 0, recurring: !!d.recurring, endMonth: d.endMonth || ""
       }))
     };
   }
@@ -1172,7 +1173,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 92;
+  const APP_VERSION = 93;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
