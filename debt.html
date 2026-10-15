@@ -232,6 +232,9 @@
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
   .due-tag { display: inline-block; background: rgba(245,197,66,0.15); color: var(--gold-bright); font-size: 10px;
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
+  .due-tag.u-over { background: rgba(255,107,107,0.18); color: #ff8a8a; }
+  .due-tag.u-soon { background: rgba(255,159,107,0.18); color: #ffb48a; }
+  .due-tag.u-up   { background: rgba(52,211,153,0.15); color: #4fd1a5; }
 </style>
 </head>
 <body class="locked">
@@ -619,11 +622,12 @@
     const stopBtn = d.recurring
       ? '<button class="bd-edit" data-stop="' + d.id + '" title="Itigil ang recurring bill">\u23F9</button>'
       : "";
-    // Deadline tag: shows the due day + which cutoff it falls under.
+    // Deadline tag: urgency icon + due day + which cutoff it falls under.
     let dueTag = "";
     if (d.dueDay && d.dueDay >= 1 && d.dueDay <= 31) {
       const cut = cutoffForDueDay(d.dueDay) === "1st" ? "kinsenas" : "katapusan";
-      dueTag = ' <span class="due-tag" title="Deadline">\uD83D\uDCC5 ' + d.dueDay + ' (' + cut + ')</span>';
+      const u = dueUrgency(d);
+      dueTag = ' <span class="due-tag ' + u.cls + '" title="Deadline">' + (u.icon ? u.icon + " " : "") + d.dueDay + ' (' + cut + ')</span>';
     }
     return '<div class="bd-row' + (paidNow ? " bd-paid" : "") + '">' +
       '<input type="checkbox" class="bd-check" data-item="' + d.id + '"' + (paidNow ? " checked" : "") + '>' +
@@ -659,7 +663,7 @@
       const bySub = {};
       items.forEach(d => { const s = d.subCat || "other"; (bySub[s] = bySub[s] || []).push(d); });
       Object.keys(bySub).forEach(sub => {
-        const list = bySub[sub];
+        const list = bySub[sub].slice().sort(byUrgency);
         const boxDue = list.reduce((s, d) => s + perTermOf(d), 0);
         boxesHtml += '<div class="sub-box">' +
           '<div class="sub-box-head"><span>' + subLabel(sub) + '</span><span>' + peso(boxDue) + '</span></div>' +
@@ -667,7 +671,7 @@
         '</div>';
       });
     } else {
-      boxesHtml = '<div class="sub-box">' + items.map(itemRowHtml).join("") + '</div>';
+      boxesHtml = '<div class="sub-box">' + items.slice().sort(byUrgency).map(itemRowHtml).join("") + '</div>';
     }
 
     // Share button only for person cards (share just this person's debts).
@@ -951,6 +955,30 @@
   // Which cutoff does a due day fall under? 1-15 = 1st (kinsenas), 16-31 = 2nd (katapusan).
   function cutoffForDueDay(day) { return (day >= 1 && day <= 15) ? "1st" : "2nd"; }
 
+  // Urgency of a debt's deadline for the month being viewed, vs today's real date.
+  // Returns { rank, icon, cls } where lower rank = more urgent (sorts first).
+  function dueUrgency(d) {
+    if (!d.dueDay || d.dueDay < 1 || d.dueDay > 31) return { rank: 5, icon: "", cls: "" };
+    const now = new Date();
+    const todayKey = monthKey(now);
+    const cmp = monthDiff(viewMonth, todayKey); // <0 past month, 0 this month, >0 future
+    if (cmp < 0) return { rank: 0, icon: "\uD83D\uDD34", cls: "u-over" };   // past month = overdue
+    if (cmp > 0) return { rank: 4, icon: "\uD83D\uDFE2", cls: "u-up" };     // future month = upcoming
+    // same month: compare due day vs today's day
+    const diff = d.dueDay - now.getDate();
+    if (diff < 0) return { rank: 0, icon: "\uD83D\uDD34", cls: "u-over" };  // past due this month
+    if (diff <= 5) return { rank: 1, icon: "\uD83D\uDFE0", cls: "u-soon" }; // due within 5 days
+    return { rank: 3, icon: "\uD83D\uDFE2", cls: "u-up" };                   // later this month
+  }
+  // Sort most-urgent first, then by due day, then items with no deadline last.
+  function byUrgency(a, b) {
+    const ra = dueUrgency(a).rank, rb = dueUrgency(b).rank;
+    if (ra !== rb) return ra - rb;
+    const da = (a.dueDay && a.dueDay >= 1) ? a.dueDay : 99;
+    const db = (b.dueDay && b.dueDay >= 1) ? b.dueDay : 99;
+    return da - db;
+  }
+
   function renderSalaryCard() {
     const card = document.getElementById("salaryCard");
     const el = document.getElementById("salaryCutoffs");
@@ -1144,7 +1172,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 88;
+  const APP_VERSION = 89;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
