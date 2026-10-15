@@ -63,6 +63,8 @@
   .bd-date { color: var(--muted); font-size: 11px; text-decoration: none; }
   .bd-term { display: inline-block; background: rgba(79,140,255,0.18); color: #7fa8ff; font-size: 10px;
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
+  .due-tag { display: inline-block; background: rgba(245,197,66,0.15); color: var(--gold-bright); font-size: 10px;
+    font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
 
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 16px; }
   .card h2 { font-size: 13px; color: var(--gold-bright); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .5px; }
@@ -86,6 +88,7 @@
   const SUBCATS = { food:"Food", groceries:"Groceries", entertainment:"Entertainment", shopping:"Shopping",
     bills:"Bills / Utilities", transport:"Transportation", health:"Health / Medical", travel:"Travel", emergency:"Emergency", other:"Other" };
   function subLabel(s){ return SUBCATS[s] || "Other"; }
+  function cutoffForDueDay(day){ return (day>=1 && day<=15) ? "kinsenas" : "katapusan"; }
 
   // Timezone-safe month math (pure strings, no Date parsing drift).
   const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -153,9 +156,13 @@
           const amt = it.terms>1 ? perTermOf(it) : num(it.amount);
           let termTag = "";
           if (it.terms>1){ const i=termIndexFor(it,viewMonth); termTag=' <span class="bd-term">'+(i+1)+'/'+it.terms+'</span>'; }
+          let dueTag = "";
+          if (it.dueDay && it.dueDay>=1 && it.dueDay<=31){
+            dueTag = ' <span class="due-tag">\uD83D\uDCC5 '+it.dueDay+' ('+cutoffForDueDay(it.dueDay)+')</span>';
+          }
           rows += '<div class="bd-row'+(paidNow?' bd-paid':'')+'">' +
             '<span class="bd-dot'+(paidNow?' on':'')+'"></span>' +
-            '<span class="bd-label">'+label+termTag+(dt?' <span class="bd-date">'+dt+'</span>':'')+'</span>' +
+            '<span class="bd-label">'+label+termTag+dueTag+(dt?' <span class="bd-date">'+dt+'</span>':'')+'</span>' +
             '<span class="bd-amt">'+peso(amt)+'</span></div>';
         });
         boxes += '<div class="sub-box"><div class="sub-box-head"><span>'+subLabel(sub)+'</span><span>'+peso(due)+'</span></div>'+rows+'</div>';
