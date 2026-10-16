@@ -1451,7 +1451,12 @@
     circle.className = "circle" + (row.pending ? "" : " checked");
     circle.innerHTML = '<span class="tick">\u2713</span>';
     circle.title = row.pending ? "Pending order (tap to mark bought)" : "Active / bought (tap to mark pending)";
-    circle.onclick = () => { state.rows[coinId][i].pending = !state.rows[coinId][i].pending; saveState(); render(); };
+    circle.onclick = () => {
+      state.rows[coinId][i].pending = !state.rows[coinId][i].pending;
+      setSyncStatus("Saving\u2026 (" + (state.rows[coinId][i].pending ? "pending" : "active") + ")");
+      saveState();
+      render();
+    };
     tdChk.appendChild(circle);
 
     // currency selector (PHP / USDT / USDC). Changing it re-labels this row's money.
@@ -3217,14 +3222,20 @@
   }
 
   function cloudSave(immediate) {
-    if (!dbRef) return; // offline: localStorage already saved
+    if (!dbRef) { setSyncStatus("No cloud connection (saved on this device only)."); return; }
     clearTimeout(saveTimer);
     const doSave = () => {
       lastLocalWrite = Date.now();
       try { localStorage.setItem(SAVED_AT_KEY, String(lastLocalWrite)); } catch (e) {}
-      dbRef.set({ state: state, updatedAt: lastLocalWrite, client: CLIENT_ID })
+      setSyncStatus("Writing to cloud\u2026");
+      // Deep-clean: JSON round-trip strips any `undefined` values. Firebase rejects
+      // the ENTIRE write if a single value is undefined, which would silently freeze
+      // all cloud saves (looks exactly like "my changes revert on refresh").
+      let clean;
+      try { clean = JSON.parse(JSON.stringify(state)); } catch (e) { clean = state; }
+      dbRef.set({ state: clean, updatedAt: lastLocalWrite, client: CLIENT_ID })
         .then(() => setSyncStatus("Saved to cloud \u2601 " + new Date().toLocaleTimeString()))
-        .catch(() => setSyncStatus("Save failed (saved locally). Will retry on next change."));
+        .catch((err) => setSyncStatus("Save FAILED: " + (err && err.message ? err.message : String(err))));
     };
     if (immediate) doSave();
     else saveTimer = setTimeout(doSave, 800); // debounce rapid edits
@@ -3411,7 +3422,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 98;
+  const APP_VERSION = 99;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
