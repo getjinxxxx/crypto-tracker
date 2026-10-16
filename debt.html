@@ -1200,21 +1200,23 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 101;
+  const APP_VERSION = 102;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
       if (!res.ok) return;
       const j = await res.json();
-      if (j && typeof j.version === "number" && j.version > APP_VERSION) {
-        if (window.caches && caches.keys) {
-          try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
-        }
-        // Force-fetch fresh HTML (bust the browser HTTP cache) instead of a plain reload.
-        const u = new URL(location.href);
-        u.searchParams.set("v", String(j.version));
-        location.replace(u.toString());
+      if (!(j && typeof j.version === "number" && j.version > APP_VERSION)) return;
+      // Loop guard: don't reload twice for the same version (prevents an endless
+      // reload loop when the browser keeps serving stale cached HTML).
+      if (sessionStorage.getItem("ctUpdateTried") === String(j.version)) return;
+      sessionStorage.setItem("ctUpdateTried", String(j.version));
+      if (window.caches && caches.keys) {
+        try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
       }
+      const u = new URL(location.href);
+      u.searchParams.set("v", String(j.version));
+      location.replace(u.toString());
     } catch (e) {}
   }
 

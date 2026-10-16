@@ -3446,21 +3446,32 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 101;
+  const APP_VERSION = 102;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
       if (!res.ok) return;
       const j = await res.json();
-      if (j && typeof j.version === "number" && j.version > APP_VERSION) {
-        setSyncStatus("New version found. Updating\u2026");
-        if (window.caches && caches.keys) {
-          try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
-        }
-        const u = new URL(location.href);
-        u.searchParams.set("v", String(j.version));
-        location.replace(u.toString());
+      if (!(j && typeof j.version === "number" && j.version > APP_VERSION)) return;
+
+      // Loop guard: if we ALREADY reloaded for this target version this session but the
+      // browser STILL served old code (stale CDN/cache), do NOT reload again — that causes
+      // an endless reload loop where you can't scroll or type. Show a manual-refresh note
+      // once instead.
+      const already = sessionStorage.getItem("ctUpdateTried");
+      if (already === String(j.version)) {
+        setSyncStatus("Update ready (v" + j.version + "). Close the app fully and reopen to finish updating.");
+        return;
       }
+      sessionStorage.setItem("ctUpdateTried", String(j.version));
+
+      setSyncStatus("New version found. Updating\u2026");
+      if (window.caches && caches.keys) {
+        try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
+      }
+      const u = new URL(location.href);
+      u.searchParams.set("v", String(j.version));
+      location.replace(u.toString());
     } catch (e) {}
   }
 
