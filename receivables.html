@@ -373,6 +373,10 @@
       fbStateRef = fbDb.ref("receivables/state");
       fbStateRef.on("value", (snap) => {
         const remote = snap.val();
+        // Support both the new string format (stateJson) and the legacy object (state).
+        if (remote && typeof remote.stateJson === "string") {
+          try { remote.state = JSON.parse(remote.stateJson); } catch (e) { remote.state = null; }
+        }
         if (remote && remote.state && Array.isArray(remote.state.debts)) {
           if (remote.client === CLIENT_ID && !firstSnapshot) return; // ignore our own echo
           firstSnapshot = false;
@@ -403,13 +407,16 @@
   function cloudSaveState(immediate) {
     clearTimeout(saveTimer);
     const doSave = () => {
-      let clean;
-      try { clean = JSON.parse(JSON.stringify(state)); } catch (e) { clean = { debts: [], shareIds: {} }; }
-      const payload = JSON.stringify({ state: clean, updatedAt: Date.now(), client: CLIENT_ID });
+      // Store the whole state as ONE JSON string (immune to Firebase forbidden-key 400s).
+      let stateJson;
+      try { stateJson = JSON.stringify(state); } catch (e) { stateJson = JSON.stringify({ debts: [], shareIds: {} }); }
+      const payload = JSON.stringify({ stateJson: stateJson, updatedAt: Date.now(), client: CLIENT_ID });
       const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/receivables/state.json";
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
-      fetch(url, { method: "PUT", body: payload, headers: { "Content-Type": "application/json" }, signal: ctrl ? ctrl.signal : undefined })
+      // No custom Content-Type: avoids a CORS preflight that Firebase REST answers
+      // with HTTP 400 from the browser. Firebase parses the body as JSON regardless.
+      fetch(url, { method: "PUT", body: payload, signal: ctrl ? ctrl.signal : undefined })
         .then(() => { if (timer) clearTimeout(timer); })
         .catch((err) => { if (timer) clearTimeout(timer); console.warn("[receivables] cloud save failed:", err); });
     };
@@ -1030,7 +1037,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 100;
+  const APP_VERSION = 101;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });

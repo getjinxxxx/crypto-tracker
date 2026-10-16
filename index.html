@@ -3179,6 +3179,10 @@
       // the pagehide flush, so an edit-then-refresh is already persisted before reload.
       dbRef.on("value", (snap) => {
         const remote = snap.val();
+        // Support both the new string format (stateJson) and the legacy object (state).
+        if (remote && typeof remote.stateJson === "string") {
+          try { remote.state = JSON.parse(remote.stateJson); } catch (e) { remote.state = null; }
+        }
         if (remote && remote.state) {
           // Ignore echoes of our own writes (same client) — unless it's the first
           // snapshot, which we still apply to stay in sync after a reload.
@@ -3231,15 +3235,22 @@
       lastLocalWrite = Date.now();
       try { localStorage.setItem(SAVED_AT_KEY, String(lastLocalWrite)); } catch (e) {}
       setSyncStatus("Writing to cloud\u2026");
-      // Deep-clean strips any `undefined` (Firebase rejects writes containing undefined).
-      let clean;
-      try { clean = JSON.parse(JSON.stringify(state)); } catch (e) { clean = {}; }
-      const payload = JSON.stringify({ state: clean, updatedAt: lastLocalWrite, client: CLIENT_ID });
+      // Store the whole state as ONE JSON string value (stateJson), not a nested object.
+      // This makes the write immune to Firebase's forbidden-key rules (keys with . $ # [ ] /
+      // or empty "" keys cause an HTTP 400 that silently blocks every save). With a single
+      // string value there are no nested keys to reject.
+      let stateJson;
+      try { stateJson = JSON.stringify(state); } catch (e) { stateJson = "{}"; }
+      const payload = JSON.stringify({ stateJson: stateJson, updatedAt: lastLocalWrite, client: CLIENT_ID });
       const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/tracker/state.json";
       // Abort if it takes too long so the user gets clear feedback instead of hanging.
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
-      fetch(url, { method: "PUT", body: payload, headers: { "Content-Type": "application/json" }, signal: ctrl ? ctrl.signal : undefined })
+      // NO custom Content-Type header: that would trigger a CORS preflight (OPTIONS),
+      // which the Firebase REST endpoint answers with HTTP 400 from a browser. Sending
+      // the body as a "simple request" (text/plain default) skips the preflight;
+      // Firebase parses the body as JSON regardless of the Content-Type.
+      fetch(url, { method: "PUT", body: payload, signal: ctrl ? ctrl.signal : undefined })
         .then((res) => {
           if (timer) clearTimeout(timer);
           if (res.ok) setSyncStatus("Saved to cloud \u2601 " + new Date().toLocaleTimeString());
@@ -3435,7 +3446,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 100;
+  const APP_VERSION = 101;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
