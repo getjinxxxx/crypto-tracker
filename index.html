@@ -3147,6 +3147,7 @@
   let saveTimer = null;
   // Unique id for THIS device/tab, so we can ignore cloud echoes of our own writes.
   const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
+  let firstSnapshot = true; // first cloud snapshot after load is always applied (cloud wins)
 
   // True while the user is actively typing in a field (so we don't re-render and steal focus).
   function isTyping() {
@@ -3166,26 +3167,24 @@
       db = firebase.database();
       dbRef = db.ref("tracker/state");
 
-      // Realtime listener: whenever the cloud data changes on ANOTHER device, apply it here.
+      // Realtime listener. The cloud is the single source of truth: on the FIRST
+      // snapshot after load we always apply what's in the cloud (so a stale local
+      // copy on this device can never win). Later snapshots are live updates from
+      // another device. Our own edits reach the cloud via the debounced cloudSave +
+      // the pagehide flush, so an edit-then-refresh is already persisted before reload.
       dbRef.on("value", (snap) => {
         const remote = snap.val();
         if (remote && remote.state) {
-          // Ignore echoes of our own writes (same client) — prevents re-render while typing.
-          if (remote.client === CLIENT_ID) {
+          // Ignore echoes of our own writes (same client) — unless it's the first
+          // snapshot, which we still apply to stay in sync after a reload.
+          if (remote.client === CLIENT_ID && !firstSnapshot) {
             const when = remote.updatedAt ? new Date(remote.updatedAt).toLocaleTimeString() : "";
             setSyncStatus("Saved to cloud \u2601 " + when);
             return;
           }
-          // Last-write-wins: if OUR local copy is newer than this cloud snapshot
-          // (e.g. we edited then refreshed before the cloud write landed), keep local
-          // and push it up instead of letting a stale cloud copy clobber the change.
+          firstSnapshot = false;
           const remoteAt = remote.updatedAt || 0;
-          if (lastLocalWrite && remoteAt < lastLocalWrite) {
-            cloudSave(true); // re-push our newer local state
-            setSyncStatus("Kept newer local changes \u2601");
-            return;
-          }
-          // A genuine newer update from another device. Apply it, but don't interrupt typing.
+          // Apply the cloud copy. Don't interrupt active typing.
           applyingRemote = true;
           state = remote.state;
           lastLocalWrite = remoteAt;
@@ -3196,9 +3195,10 @@
           if (!isTyping()) render();
           applyingRemote = false;
           const when = remoteAt ? new Date(remoteAt).toLocaleTimeString() : "";
-          setSyncStatus("Synced from another device " + when + " \u2601");
+          setSyncStatus("Synced \u2601 " + when);
         } else {
           // No cloud data yet -> push our current (seeded/local) state up once.
+          firstSnapshot = false;
           cloudSave(true);
         }
       }, (err) => {
@@ -3404,7 +3404,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 96;
+  const APP_VERSION = 97;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });

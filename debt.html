@@ -395,38 +395,34 @@
   const catOpen = {};    // category -> bool (false = collapsed; default expanded)
   let fbStateRef = null, applyingRemote = false, saveTimer = null;
   const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
-  const SAVED_AT_KEY = "debtTrackerSavedAt"; // local last-write time (ms) for cloud merge
-  let lastLocalWrite = parseInt(localStorage.getItem(SAVED_AT_KEY) || "0", 10);
+  let firstSnapshot = true; // first cloud snapshot after load is always applied (cloud wins)
 
   function fbInit() {
     try {
       if (typeof firebase === "undefined") return;
       if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
       fbDb = firebase.database();
-      // Cloud sync of the whole debt state (two-way, like the crypto tracker).
+      // Cloud is the single source of truth. The FIRST snapshot after load is always
+      // applied (so a stale local copy on this device can never win). Our own edits
+      // reach the cloud via the debounced save + pagehide flush.
       fbStateRef = fbDb.ref("debt/state");
       fbStateRef.on("value", (snap) => {
         const remote = snap.val();
         if (remote && remote.state && Array.isArray(remote.state.debts)) {
-          if (remote.client === CLIENT_ID) return; // ignore our own echo
-          // Last-write-wins: if OUR local copy is newer than this cloud snapshot
-          // (we edited then refreshed before the cloud write landed), keep local
-          // and push it up instead of letting a stale cloud copy clobber the change.
-          const remoteAt = remote.updatedAt || 0;
-          if (lastLocalWrite && remoteAt < lastLocalWrite) { cloudSaveState(true); return; }
+          if (remote.client === CLIENT_ID && !firstSnapshot) return; // ignore our own echo
+          firstSnapshot = false;
           applyingRemote = true;
           try {
             state = remote.state;
             sanitizeState(); // fill in missing fields (paidTerms, etc.) so render won't crash
-            lastLocalWrite = remoteAt;
             localStorage.setItem(LS_KEY, JSON.stringify(state));
-            localStorage.setItem(SAVED_AT_KEY, String(remoteAt));
           } catch (e) {}
           applyingRemote = false;
           renderAll();
         } else {
           // Cloud is empty/invalid. Only seed it if WE actually have data,
           // so an empty device never wipes a populated cloud.
+          firstSnapshot = false;
           if (state.debts && state.debts.length) cloudSaveState(true);
         }
       }, (err) => { console.warn("[debt] firebase listen error:", err); });
@@ -440,9 +436,7 @@
       // would silently fail the whole save and look like "data disappeared").
       let clean;
       try { clean = JSON.parse(JSON.stringify(state)); } catch (e) { clean = { debts: [], shareIds: {} }; }
-      lastLocalWrite = Date.now();
-      try { localStorage.setItem(SAVED_AT_KEY, String(lastLocalWrite)); } catch (e) {}
-      fbStateRef.set({ state: clean, updatedAt: lastLocalWrite, client: CLIENT_ID })
+      fbStateRef.set({ state: clean, updatedAt: Date.now(), client: CLIENT_ID })
         .catch((err) => { console.warn("[debt] firebase save failed:", err); });
     };
     if (immediate) doSave(); else saveTimer = setTimeout(doSave, 800);
@@ -1188,7 +1182,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 96;
+  const APP_VERSION = 97;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
