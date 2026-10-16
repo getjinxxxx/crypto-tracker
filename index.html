@@ -3221,21 +3221,34 @@
     }
   }
 
+  // Writes go through the Firebase REST API (plain HTTPS PUT), NOT the realtime SDK's
+  // .set(). In some networks the SDK's WebSocket never completes a write (status stays
+  // "Writing to cloud..." forever) even though the DB is reachable — a plain HTTPS PUT
+  // works reliably. The SDK listener is still used for live reads from other devices.
   function cloudSave(immediate) {
-    if (!dbRef) { setSyncStatus("No cloud connection (saved on this device only)."); return; }
     clearTimeout(saveTimer);
     const doSave = () => {
       lastLocalWrite = Date.now();
       try { localStorage.setItem(SAVED_AT_KEY, String(lastLocalWrite)); } catch (e) {}
       setSyncStatus("Writing to cloud\u2026");
-      // Deep-clean: JSON round-trip strips any `undefined` values. Firebase rejects
-      // the ENTIRE write if a single value is undefined, which would silently freeze
-      // all cloud saves (looks exactly like "my changes revert on refresh").
+      // Deep-clean strips any `undefined` (Firebase rejects writes containing undefined).
       let clean;
-      try { clean = JSON.parse(JSON.stringify(state)); } catch (e) { clean = state; }
-      dbRef.set({ state: clean, updatedAt: lastLocalWrite, client: CLIENT_ID })
-        .then(() => setSyncStatus("Saved to cloud \u2601 " + new Date().toLocaleTimeString()))
-        .catch((err) => setSyncStatus("Save FAILED: " + (err && err.message ? err.message : String(err))));
+      try { clean = JSON.parse(JSON.stringify(state)); } catch (e) { clean = {}; }
+      const payload = JSON.stringify({ state: clean, updatedAt: lastLocalWrite, client: CLIENT_ID });
+      const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/tracker/state.json";
+      // Abort if it takes too long so the user gets clear feedback instead of hanging.
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+      fetch(url, { method: "PUT", body: payload, headers: { "Content-Type": "application/json" }, signal: ctrl ? ctrl.signal : undefined })
+        .then((res) => {
+          if (timer) clearTimeout(timer);
+          if (res.ok) setSyncStatus("Saved to cloud \u2601 " + new Date().toLocaleTimeString());
+          else setSyncStatus("Save FAILED: HTTP " + res.status + " (saved on this device).");
+        })
+        .catch((err) => {
+          if (timer) clearTimeout(timer);
+          setSyncStatus("Save FAILED: " + (err && err.name === "AbortError" ? "timed out (no internet?)" : (err && err.message ? err.message : String(err))) + " \u2014 saved on this device.");
+        });
     };
     if (immediate) doSave();
     else saveTimer = setTimeout(doSave, 800); // debounce rapid edits
@@ -3422,7 +3435,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 99;
+  const APP_VERSION = 100;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });

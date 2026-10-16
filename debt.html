@@ -433,16 +433,22 @@
       }, (err) => { console.warn("[debt] firebase listen error:", err); });
     } catch (e) { fbDb = null; }
   }
+  // Writes go through the Firebase REST API (plain HTTPS PUT), not the realtime SDK's
+  // .set(), which can hang forever on some networks. Reads still use the SDK listener.
   function cloudSaveState(immediate) {
-    if (!fbStateRef) return;
     clearTimeout(saveTimer);
     const doSave = () => {
       // Deep-clean to strip any undefined values (Firebase rejects undefined, which
       // would silently fail the whole save and look like "data disappeared").
       let clean;
       try { clean = JSON.parse(JSON.stringify(state)); } catch (e) { clean = { debts: [], shareIds: {} }; }
-      fbStateRef.set({ state: clean, updatedAt: Date.now(), client: CLIENT_ID })
-        .catch((err) => { console.warn("[debt] firebase save failed:", err); });
+      const payload = JSON.stringify({ state: clean, updatedAt: Date.now(), client: CLIENT_ID });
+      const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/debt/state.json";
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+      fetch(url, { method: "PUT", body: payload, headers: { "Content-Type": "application/json" }, signal: ctrl ? ctrl.signal : undefined })
+        .then(() => { if (timer) clearTimeout(timer); })
+        .catch((err) => { if (timer) clearTimeout(timer); console.warn("[debt] cloud save failed:", err); });
     };
     if (immediate) doSave(); else saveTimer = setTimeout(doSave, 800);
   }
@@ -1187,7 +1193,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 99;
+  const APP_VERSION = 100;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
