@@ -376,14 +376,19 @@
         if (remote && remote.state && Array.isArray(remote.state.debts)) {
           if (remote.client === CLIENT_ID && !firstSnapshot) return; // ignore our own echo
           firstSnapshot = false;
+          // try/finally so a render error can never leave applyingRemote stuck true
+          // (which would silently block every future save and freeze all writes).
           applyingRemote = true;
           try {
             state = remote.state;
             sanitizeState(); // fill in missing fields (paidTerms, etc.) so render won't crash
             localStorage.setItem(LS_KEY, JSON.stringify(state));
-          } catch (e) {}
-          applyingRemote = false;
-          renderAll();
+            renderAll();
+          } catch (e) {
+            console.error("[receivables] render after sync failed:", e);
+          } finally {
+            applyingRemote = false;
+          }
         } else {
           // Cloud is empty/invalid. Only seed it if WE actually have data,
           // so an empty device never wipes a populated cloud.
@@ -394,7 +399,7 @@
     } catch (e) { fbDb = null; }
   }
   function cloudSaveState(immediate) {
-    if (!fbStateRef || applyingRemote) return;
+    if (!fbStateRef) return;
     clearTimeout(saveTimer);
     const doSave = () => {
       let clean;
@@ -1019,7 +1024,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 97;
+  const APP_VERSION = 98;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });

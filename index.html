@@ -3185,15 +3185,22 @@
           firstSnapshot = false;
           const remoteAt = remote.updatedAt || 0;
           // Apply the cloud copy. Don't interrupt active typing.
+          // try/finally so a render() error can NEVER leave applyingRemote stuck true
+          // (which would silently block every future cloudSave and freeze all writes).
           applyingRemote = true;
-          state = remote.state;
-          lastLocalWrite = remoteAt;
           try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-            localStorage.setItem(SAVED_AT_KEY, String(remoteAt));
-          } catch (e) {}
-          if (!isTyping()) render();
-          applyingRemote = false;
+            state = remote.state;
+            lastLocalWrite = remoteAt;
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+              localStorage.setItem(SAVED_AT_KEY, String(remoteAt));
+            } catch (e) {}
+            if (!isTyping()) render();
+          } catch (e) {
+            console.error("[tracker] render after sync failed:", e);
+          } finally {
+            applyingRemote = false;
+          }
           const when = remoteAt ? new Date(remoteAt).toLocaleTimeString() : "";
           setSyncStatus("Synced \u2601 " + when);
         } else {
@@ -3210,7 +3217,7 @@
   }
 
   function cloudSave(immediate) {
-    if (!dbRef || applyingRemote) return;
+    if (!dbRef) return; // offline: localStorage already saved
     clearTimeout(saveTimer);
     const doSave = () => {
       lastLocalWrite = Date.now();
@@ -3404,7 +3411,7 @@
 
   // ---------- Auto-update (fixes stale Home Screen cache) ----------
   // This build's version. Must match version.json when published.
-  const APP_VERSION = 97;
+  const APP_VERSION = 98;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
