@@ -127,6 +127,16 @@
       return;
     }
     const items = data.items;
+    const isRecv = (data.kind === "receivable");
+    const capText = isRecv ? "Amount owed by" : "Debt summary for";
+    const defLabel = isRecv ? "Item" : "Debt";
+    const emptyText = isRecv ? "Nothing owed for this month." : "No debts for this month.";
+    const noteTitle = isRecv ? "Note to lender" : "Note to owner";
+    const notePlaceholder = isRecv
+      ? "Write a note here (e.g. I already paid this, or when you can pay)..."
+      : "Write a note here (e.g. I already paid this month, or a reminder)...";
+    const footText = isRecv ? "Personal use only &bull; read-only &bull; only your balance is shown here"
+                            : "Personal use only &bull; read-only &bull; no other debts are shown here";
 
     // summary (this month + overall)
     let monthDue=0, monthPaid=0, totalRemaining=0, owed=0, paid=0;
@@ -152,7 +162,7 @@
         list.forEach(it => {
           const paidNow = isPaidThisMonth(it, viewMonth);
           const dt = it.date ? new Date(it.date+"T00:00:00").toLocaleDateString("en-PH",{year:"2-digit",month:"short",day:"numeric"}) : "";
-          const label = (it.name && it.name.trim()) ? it.name : "Debt";
+          const label = (it.name && it.name.trim()) ? it.name : defLabel;
           const amt = it.terms>1 ? perTermOf(it) : num(it.amount);
           let termTag = "";
           if (it.terms>1){ const i=termIndexFor(it,viewMonth); termTag=' <span class="bd-term">'+(i+1)+'/'+it.terms+'</span>'; }
@@ -168,12 +178,12 @@
         boxes += '<div class="sub-box"><div class="sub-box-head"><span>'+subLabel(sub)+'</span><span>'+peso(due)+'</span></div>'+rows+'</div>';
       });
     } else {
-      boxes = '<div class="sub-box"><div class="bd-row">No debts for this month.</div></div>';
+      boxes = '<div class="sub-box"><div class="bd-row">' + emptyText + '</div></div>';
     }
 
     const paidOff = totalRemaining <= 0.009;
     app.innerHTML =
-      '<div class="hero"><div class="cap">Debt summary for</div>' +
+      '<div class="hero"><div class="cap">' + capText + '</div>' +
         '<div class="who">' + (data.person || "You") + '</div>' +
         '<div class="made">Shared ' + (data.madeAt || "") + ' &bull; read-only snapshot</div></div>' +
       '<div class="month-bar"><button id="pm">&#8249;</button><div class="m-label">' + monthLabel(viewMonth) + '</div><button id="nm">&#8250;</button></div>' +
@@ -189,12 +199,12 @@
           '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(totalRemaining) + '</div></div>' +
         '</div>' + boxes +
       '</div>' +
-      '<div class="card"><h2>Note to owner</h2>' +
-        '<textarea class="note-box" id="noteBox" placeholder="Write a note here (e.g. I already paid this month, or a reminder)..."></textarea>' +
+      '<div class="card"><h2>' + noteTitle + '</h2>' +
+        '<textarea class="note-box" id="noteBox" placeholder="' + notePlaceholder + '"></textarea>' +
         '<button class="send-btn" id="sendNote">Submit note</button>' +
         '<div class="note-hint" id="noteStatus">' + (data.shareId ? "Your note goes directly to the owner (cloud sync)." : "Note mode: saved on this device only (no reply channel on this link).") + '</div>' +
       '</div>' +
-      '<div class="foot">Personal use only &bull; read-only &bull; no other debts are shown here</div>';
+      '<div class="foot">' + footText + '</div>';
 
     document.getElementById("pm").onclick = () => { viewMonth = addMonths(viewMonth, -1); render(); };
     document.getElementById("nm").onclick = () => { viewMonth = addMonths(viewMonth, 1); render(); };
