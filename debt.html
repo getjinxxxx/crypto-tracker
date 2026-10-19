@@ -233,6 +233,78 @@
   .part-tag { display: inline-block; background: rgba(79,140,255,0.18); color: #7fa8ff; font-size: 10px;
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
   .efield label .sub { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
+
+  /* Payoff strategy */
+  .strat-tabs { display: flex; gap: 6px; margin: 2px 0 10px; }
+  .strat-tabs .mini { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; font-size: 12px; padding: 5px 14px; cursor: pointer; font-weight: 600; }
+  .strat-tabs .mini.active { background: var(--gold); color: #000; border-color: var(--gold); }
+  .strat-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .strat-row:first-of-type { border-top: none; }
+  .strat-rank { width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--panel-2);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--gold-bright); }
+  .strat-row.top .strat-rank { background: var(--gold); color: #000; }
+  .strat-info { flex: 1; }
+  .strat-info .sn { font-weight: 600; }
+  .strat-info .ss { color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+  .strat-amt { font-weight: 700; color: var(--red); }
+  .strat-sugg { background: var(--panel-2); border: 1px solid rgba(52,211,153,0.4); border-radius: 12px;
+    padding: 10px 12px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
+  .strat-sugg b { color: var(--green); }
+
+  /* Cash-flow forecast */
+  .fc-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .fc-row:first-of-type { border-top: none; }
+  .fc-row.short { background: rgba(255,107,107,0.06); }
+  .fc-month { flex: 1; font-weight: 600; }
+  .fc-fig { text-align: right; min-width: 92px; }
+  .fc-fig .fk { color: var(--muted); font-size: 10px; display: block; }
+  .fc-fig .fv { font-weight: 700; }
+  .fc-fig .fv.in { color: var(--green); }
+  .fc-fig .fv.out { color: var(--red); }
+  .fc-fig .fv.net.pos { color: var(--green); }
+  .fc-fig .fv.net.neg { color: var(--red); }
+  .fc-est { color: var(--muted); font-size: 10px; font-style: italic; }
+
+  /* Sinking funds */
+  .fund { padding: 10px 0; border-top: 1px solid var(--line); }
+  .fund:first-of-type { border-top: none; }
+  .fund-head { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 6px; }
+  .fund-head .fn { font-weight: 700; flex: 1; }
+  .fund-head .fdel { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 3px; }
+  .fund-head .fdel:hover { color: var(--danger); }
+  .fund-bar { height: 10px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin: 4px 0; }
+  .fund-bar .fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--green)); border-radius: 999px; }
+  .fund-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 11.5px; margin-top: 3px; }
+  .fund-meta b { color: var(--text); }
+  .fund-actions { display: flex; gap: 6px; margin-top: 7px; }
+  .fund-actions input { width: 110px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 6px 9px; font: inherit; font-size: 13px; }
+  .fund-actions input:focus { outline: none; border-color: var(--gold); }
+  .fund-actions button { background: var(--panel-2); color: var(--gold-bright); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .fund-actions button:hover { border-color: var(--gold); }
+  .fund-add { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .fund-add input { background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 9px 11px; font: inherit; font-size: 14px; }
+  .fund-add input#fundName { flex: 1; min-width: 140px; }
+  .fund-add input#fundTarget, .fund-add input#fundMonthly { width: 110px; }
+  .fund-add input:focus { outline: none; border-color: var(--gold); }
+  .fund-add .btn { flex: none; width: auto; }
+
+  /* Afford checker */
+  .afford-in { display: flex; gap: 8px; margin: 2px 0 10px; }
+  .afford-in input { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 15px; }
+  .afford-in input:focus { outline: none; border-color: var(--gold); }
+  .afford-res { font-size: 13px; line-height: 1.6; }
+  .afford-res .ar-row { display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid var(--line); }
+  .afford-res .ar-row:first-child { border-top: none; }
+  .afford-res .ar-v.ok { color: var(--green); font-weight: 700; }
+  .afford-res .ar-v.bad { color: var(--red); font-weight: 700; }
+  .afford-verdict { margin-top: 8px; padding: 10px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+  .afford-verdict.ok { background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.4); color: #4fd1a5; }
+  .afford-verdict.bad { background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.4); color: #ff8a8a; }
   .due-tag { display: inline-block; background: rgba(245,197,66,0.15); color: var(--gold-bright); font-size: 10px;
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
   .due-tag.u-over { background: rgba(255,107,107,0.18); color: #ff8a8a; }
@@ -279,6 +351,47 @@
       <h2>Salary vs Debt (per cutoff)</h2>
       <div class="hint">From the take-home pay you saved in the Salary Calculator. The month's debt is split across the 1st and 2nd cutoff.</div>
       <div id="salaryCutoffs"></div>
+    </div>
+
+    <!-- PAYOFF STRATEGY -->
+    <div class="card" id="strategyCard" style="display:none">
+      <h2>Payoff strategy</h2>
+      <div class="hint">Which debt to attack first with any extra money. <b>Snowball</b> = smallest balance first (quick wins). <b>Avalanche</b> = most urgent/overdue first (save on late fees).</div>
+      <div class="strat-tabs" id="stratTabs">
+        <button class="mini active" data-strat="snowball">Snowball</button>
+        <button class="mini" data-strat="avalanche">Avalanche</button>
+      </div>
+      <div id="strategyBody"></div>
+    </div>
+
+    <!-- CASH-FLOW FORECAST -->
+    <div class="card" id="forecastCard" style="display:none">
+      <h2>Cash-flow forecast (next 6 months)</h2>
+      <div class="hint">Estimated take-home pay minus scheduled debt each month, so you can see early when a month will come up short. Future take-home is estimated from your saved payslips.</div>
+      <div id="forecastBody"></div>
+    </div>
+
+    <!-- SINKING FUNDS -->
+    <div class="card" id="fundsCard">
+      <h2>Sinking funds</h2>
+      <div class="hint">Save up gradually for big expenses you know are coming (Christmas, tuition, insurance, registration, birthdays) so they don't surprise you.</div>
+      <div id="fundsBody"></div>
+      <div class="fund-add">
+        <input type="text" id="fundName" class="name-in" placeholder="Fund name (e.g. Christmas)" />
+        <input type="text" inputmode="decimal" id="fundTarget" placeholder="Target \u20b1" />
+        <input type="text" inputmode="decimal" id="fundMonthly" placeholder="Monthly \u20b1" />
+        <button class="btn primary" id="addFundBtn">Add fund</button>
+      </div>
+    </div>
+
+    <!-- AFFORD CHECKER -->
+    <div class="card" id="affordCard">
+      <h2>Can I afford this?</h2>
+      <div class="hint">Type the price of something you want to buy. See what's left this month after your debts, whether it affects your dues, and how long to save for it.</div>
+      <div class="afford-in">
+        <input type="text" inputmode="decimal" id="affordPrice" placeholder="Price \u20b1 (e.g. 5000)" />
+      </div>
+      <div id="affordBody"></div>
     </div>
 
     <!-- CHART -->
@@ -495,6 +608,15 @@
   function sanitizeState() {
     if (!state.shareIds) state.shareIds = {};
     if (!Array.isArray(state.debts)) state.debts = [];
+    // Sinking funds: separate "save up for" goals, not tied to any month.
+    if (!Array.isArray(state.funds)) state.funds = [];
+    state.funds.forEach(f => {
+      if (!f.id) f.id = uid();
+      f.target = Number(f.target) || 0;
+      f.monthly = Number(f.monthly) || 0;
+      f.saved = Number(f.saved) || 0;
+      if (typeof f.name !== "string") f.name = "";
+    });
     state.debts.forEach(d => {
       if (!d.terms || d.terms < 1) d.terms = 1;
       if (!d.startMonth) d.startMonth = monthKey(new Date());
@@ -1102,6 +1224,242 @@
     }).join("");
   }
 
+  // ---------- Payoff strategy (snowball vs avalanche) ----------
+  let stratMode = "snowball";
+  // Total leftover this month from the Salary vs Debt box: sum of take-home minus all dues.
+  function salarySurplusThisMonth() {
+    const hist = loadSalaryHistory().filter(h => h.period === viewMonth);
+    if (!hist.length) return null; // no salary saved for this month
+    const takeHome = hist.reduce((s, h) => s + num(h.net), 0);
+    let dues = 0;
+    state.debts.filter(d => isActiveIn(d, viewMonth)).forEach(d => { dues += remainingOf(d); });
+    return takeHome - dues;
+  }
+  function renderStrategyCard() {
+    const card = document.getElementById("strategyCard");
+    const body = document.getElementById("strategyBody");
+    if (!card || !body) return;
+    // Only non-recurring debts that still have a balance remaining.
+    const items = state.debts.filter(d => isActiveIn(d, viewMonth) && !d.recurring && remainingOf(d) > 0.009);
+    if (items.length < 2) { card.style.display = "none"; return; }
+    card.style.display = "";
+
+    const ranked = items.slice().sort((a, b) => {
+      if (stratMode === "snowball") return remainingOf(a) - remainingOf(b); // smallest balance first
+      // avalanche: most urgent first (lower urgency rank), then larger balance first
+      const ra = dueUrgency(a).rank, rb = dueUrgency(b).rank;
+      if (ra !== rb) return ra - rb;
+      return remainingOf(b) - remainingOf(a);
+    });
+
+    const surplus = salarySurplusThisMonth();
+    let suggHtml = "";
+    if (surplus != null && surplus > 0) {
+      const target = ranked[0];
+      const tLabel = (target.name && target.name.trim()) ? target.name : (target.person || catLabel(target.category));
+      const extra = Math.min(surplus, remainingOf(target));
+      suggHtml = '<div class="strat-sugg">You have <b>' + peso(surplus) + '</b> left this month. Put <b>' + peso(extra) +
+        '</b> extra on <b>' + tLabel + '</b> to clear it faster.</div>';
+    } else if (surplus != null && surplus <= 0) {
+      suggHtml = '<div class="strat-sugg" style="border-color:rgba(255,107,107,0.4)">No surplus this month \u2014 dues meet or exceed your take-home. Focus on the top item below first.</div>';
+    }
+
+    const rowsHtml = ranked.map((d, i) => {
+      const label = (d.name && d.name.trim()) ? d.name : (d.person || catLabel(d.category));
+      const rem = remainingOf(d);
+      const u = dueUrgency(d);
+      const sub = (d.dueDay ? ((u.icon ? u.icon + " " : "") + "due day " + d.dueDay) : "no deadline") +
+        (d.terms > 1 ? " \u00b7 " + (termIndexFor(d, viewMonth) + 1) + "/" + d.terms : "");
+      return '<div class="strat-row' + (i === 0 ? " top" : "") + '">' +
+        '<span class="strat-rank">' + (i + 1) + '</span>' +
+        '<span class="strat-info"><span class="sn">' + label + '</span><span class="ss">' + sub + '</span></span>' +
+        '<span class="strat-amt">' + peso(rem) + '</span>' +
+      '</div>';
+    }).join("");
+
+    body.innerHTML = suggHtml + rowsHtml;
+
+    document.querySelectorAll("#stratTabs .mini").forEach(b => {
+      b.classList.toggle("active", b.getAttribute("data-strat") === stratMode);
+      b.onclick = () => { stratMode = b.getAttribute("data-strat"); renderStrategyCard(); };
+    });
+  }
+
+  // ---------- Cash-flow forecast (next 6 months) ----------
+  // Estimate a month's take-home: actual saved payslips for that month if present,
+  // otherwise the average monthly take-home across all saved months.
+  function estimatedTakeHome(key, hist) {
+    const forMonth = hist.filter(h => h.period === key);
+    if (forMonth.length) return forMonth.reduce((s, h) => s + num(h.net), 0);
+    // average across saved months
+    const byMonth = {};
+    hist.forEach(h => { byMonth[h.period] = (byMonth[h.period] || 0) + num(h.net); });
+    const months = Object.keys(byMonth);
+    if (!months.length) return null; // no salary data at all
+    const avg = months.reduce((s, m) => s + byMonth[m], 0) / months.length;
+    return avg;
+  }
+  // Total scheduled debt for a given month (this month's per-term amount for each active debt).
+  function scheduledDuesForMonth(key) {
+    let dues = 0;
+    state.debts.forEach(d => { if (isActiveIn(d, key)) dues += perTermOf(d); });
+    return dues;
+  }
+  function renderForecastCard() {
+    const card = document.getElementById("forecastCard");
+    const body = document.getElementById("forecastBody");
+    if (!card || !body) return;
+    const hist = loadSalaryHistory();
+    const start = monthKey(new Date());
+    // Build 6 months starting from the later of today / viewMonth so it always looks forward.
+    const base = (monthDiff(viewMonth, start) > 0) ? viewMonth : start;
+    const rows = [];
+    let anyDue = false;
+    for (let i = 0; i < 6; i++) {
+      const key = addMonths(base, i);
+      const income = estimatedTakeHome(key, hist);
+      const dues = scheduledDuesForMonth(key);
+      if (dues > 0) anyDue = true;
+      rows.push({ key, income, dues });
+    }
+    if (!anyDue) { card.style.display = "none"; return; } // nothing scheduled -> hide
+    card.style.display = "";
+
+    const rowsHtml = rows.map(r => {
+      const hasIncome = r.income != null;
+      const net = (hasIncome ? r.income : 0) - r.dues;
+      const short = hasIncome && net < 0;
+      const estMark = (hasIncome && !hist.some(h => h.period === r.key)) ? ' <span class="fc-est">(est.)</span>' : "";
+      return '<div class="fc-row' + (short ? " short" : "") + '">' +
+        '<span class="fc-month">' + monthLabel(r.key) + estMark + '</span>' +
+        '<span class="fc-fig"><span class="fk">pay</span><span class="fv in">' + (hasIncome ? peso(r.income) : "\u2014") + '</span></span>' +
+        '<span class="fc-fig"><span class="fk">debt</span><span class="fv out">-' + peso(r.dues) + '</span></span>' +
+        '<span class="fc-fig"><span class="fk">left</span><span class="fv net ' + (net >= 0 ? "pos" : "neg") + '">' + (hasIncome ? peso(net) : "?") + '</span></span>' +
+      '</div>';
+    }).join("");
+    const noPay = rows.every(r => r.income == null);
+    const note = noPay
+      ? '<div class="hint" style="margin:8px 0 0">Save a payslip in the Salary Calculator to see pay vs debt here.</div>'
+      : '';
+    body.innerHTML = rowsHtml + note;
+  }
+
+  // ---------- Sinking funds ----------
+  function renderFundsCard() {
+    const body = document.getElementById("fundsBody");
+    if (!body) return;
+    if (!state.funds.length) {
+      body.innerHTML = '<div class="empty">No funds yet. Add one below to start saving up.</div>';
+      return;
+    }
+    body.innerHTML = state.funds.map(f => {
+      const pct = f.target > 0 ? Math.min(100, (f.saved / f.target) * 100) : 0;
+      const left = Math.max(0, f.target - f.saved);
+      const monthsLeft = (f.monthly > 0 && left > 0) ? Math.ceil(left / f.monthly) : 0;
+      const etaTxt = left <= 0 ? "\u2705 Goal reached" : (monthsLeft > 0 ? ("~" + monthsLeft + " month" + (monthsLeft === 1 ? "" : "s") + " to go") : "set a monthly amount");
+      return '<div class="fund" data-fund="' + f.id + '">' +
+        '<div class="fund-head"><span class="fn">' + (f.name || "Fund") + '</span>' +
+          '<button class="fdel" data-fdel="' + f.id + '" title="Delete fund">&times;</button></div>' +
+        '<div class="fund-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+        '<div class="fund-meta"><span><b>' + peso(f.saved) + '</b> / ' + peso(f.target) + ' (' + pct.toFixed(0) + '%)</span>' +
+          '<span>' + etaTxt + '</span></div>' +
+        '<div class="fund-actions">' +
+          '<input type="text" inputmode="decimal" data-fadd="' + f.id + '" placeholder="Add \u20b1" value="' + (f.monthly > 0 ? f.monthly : "") + '">' +
+          '<button data-fsave="' + f.id + '">Add to saved</button>' +
+          '<button data-fset="' + f.id + '">Edit target/monthly</button>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+
+    body.querySelectorAll("[data-fsave]").forEach(btn => btn.addEventListener("click", () => {
+      const f = state.funds.find(x => x.id === btn.getAttribute("data-fsave"));
+      if (!f) return;
+      const inp = body.querySelector('[data-fadd="' + f.id + '"]');
+      const add = num(inp ? inp.value : 0);
+      if (add <= 0) return;
+      f.saved = Math.max(0, f.saved + add);
+      saveState(); renderFundsCard();
+    }));
+    body.querySelectorAll("[data-fset]").forEach(btn => btn.addEventListener("click", () => {
+      const f = state.funds.find(x => x.id === btn.getAttribute("data-fset"));
+      if (!f) return;
+      const t = window.prompt("New target amount for \"" + (f.name || "Fund") + "\":", f.target);
+      if (t !== null) f.target = Math.max(0, num(t));
+      const m = window.prompt("Monthly set-aside amount:", f.monthly);
+      if (m !== null) f.monthly = Math.max(0, num(m));
+      saveState(); renderFundsCard();
+    }));
+    body.querySelectorAll("[data-fdel]").forEach(btn => btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-fdel");
+      const f = state.funds.find(x => x.id === id);
+      if (!confirm("Delete the \"" + (f ? f.name : "") + "\" fund? This cannot be undone.")) return;
+      state.funds = state.funds.filter(x => x.id !== id);
+      saveState(); renderFundsCard();
+    }));
+  }
+  function addFund() {
+    const name = (document.getElementById("fundName").value || "").trim();
+    const target = num(document.getElementById("fundTarget").value);
+    const monthly = num(document.getElementById("fundMonthly").value);
+    if (!name) { document.getElementById("fundName").focus(); return; }
+    if (target <= 0) { document.getElementById("fundTarget").focus(); return; }
+    state.funds.push({ id: uid(), name: name, target: target, monthly: monthly, saved: 0, createdAt: Date.now() });
+    document.getElementById("fundName").value = "";
+    document.getElementById("fundTarget").value = "";
+    document.getElementById("fundMonthly").value = "";
+    saveState(); renderFundsCard();
+  }
+
+  // ---------- "Can I afford this?" checker ----------
+  function renderAffordCard() {
+    const body = document.getElementById("affordBody");
+    const input = document.getElementById("affordPrice");
+    if (!body || !input) return;
+    const price = num(input.value);
+    if (price <= 0) { body.innerHTML = '<div class="empty">Enter a price above to check.</div>'; return; }
+
+    // This month's remaining debt + take-home (if a payslip is saved for the month).
+    let dues = 0;
+    state.debts.filter(d => isActiveIn(d, viewMonth)).forEach(d => { dues += remainingOf(d); });
+    const hist = loadSalaryHistory().filter(h => h.period === viewMonth);
+    const takeHome = hist.reduce((s, h) => s + num(h.net), 0);
+    const haveSalary = hist.length > 0;
+    const leftBefore = takeHome - dues;         // what's free this month before buying
+    const leftAfter = leftBefore - price;       // after buying
+    const affects = price > Math.max(0, leftBefore); // buying eats into money needed for dues
+
+    // Months to save: use total monthly set-aside across funds, else 10% of take-home as a guess.
+    const monthlySaveCap = state.funds.reduce((s, f) => s + num(f.monthly), 0);
+    const monthlyGuess = monthlySaveCap > 0 ? monthlySaveCap : (haveSalary ? takeHome * 0.10 : 0);
+    const monthsToSave = monthlyGuess > 0 ? Math.ceil(price / monthlyGuess) : 0;
+
+    let rows = "";
+    if (haveSalary) {
+      rows += '<div class="ar-row"><span>Take-home this month</span><span class="ar-v">' + peso(takeHome) + '</span></div>';
+      rows += '<div class="ar-row"><span>Debt still due this month</span><span class="ar-v">-' + peso(dues) + '</span></div>';
+      rows += '<div class="ar-row"><span>Free money before buying</span><span class="ar-v ' + (leftBefore >= 0 ? "ok" : "bad") + '">' + peso(leftBefore) + '</span></div>';
+      rows += '<div class="ar-row"><span>After buying (price ' + peso(price) + ')</span><span class="ar-v ' + (leftAfter >= 0 ? "ok" : "bad") + '">' + peso(leftAfter) + '</span></div>';
+    } else {
+      rows += '<div class="ar-row"><span>Debt still due this month</span><span class="ar-v">-' + peso(dues) + '</span></div>';
+      rows += '<div class="ar-row"><span>Save a payslip to compare vs take-home</span><span class="ar-v">\u2014</span></div>';
+    }
+
+    let verdict = "";
+    if (haveSalary) {
+      if (leftAfter >= 0 && !affects) {
+        verdict = '<div class="afford-verdict ok">\u2705 Yes \u2014 you can buy this and still cover your debts, with ' + peso(leftAfter) + ' to spare.</div>';
+      } else if (leftAfter >= 0 && affects) {
+        verdict = '<div class="afford-verdict bad">\u26a0\uFE0F Risky \u2014 it fits your take-home but eats into money meant for debts. ' + (monthsToSave > 0 ? "Better to save ~" + monthsToSave + " month(s) first." : "") + '</div>';
+      } else {
+        verdict = '<div class="afford-verdict bad">\u274c Not this month \u2014 you\u2019d be short ' + peso(Math.abs(leftAfter)) + '. ' + (monthsToSave > 0 ? "Save ~" + monthsToSave + " month(s) at " + peso(monthlyGuess) + "/mo." : "") + '</div>';
+      }
+    } else if (monthsToSave > 0) {
+      verdict = '<div class="afford-verdict">Save ~' + monthsToSave + ' month(s) at ' + peso(monthlyGuess) + '/mo to afford this.</div>';
+    }
+
+    body.innerHTML = '<div class="afford-res">' + rows + '</div>' + verdict;
+  }
+
   // All months (keys) that have at least one active debt.
   function monthsWithData() {
     const set = {};
@@ -1134,6 +1492,10 @@
     renderList();
     renderChart();
     renderSalaryCard();
+    renderStrategyCard();
+    renderForecastCard();
+    renderFundsCard();
+    renderAffordCard();
   }
 
   // ---------- Add debt (each add = one standalone item) ----------
@@ -1188,6 +1550,8 @@
     Object.keys(state.shareIds || {}).forEach(k => fbWatchNote(state.shareIds[k]));
 
     document.getElementById("addBtn").addEventListener("click", addDebt);
+    document.getElementById("addFundBtn").addEventListener("click", addFund);
+    document.getElementById("affordPrice").addEventListener("input", renderAffordCard);
     document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
     document.getElementById("nextMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, 1); renderAll(); });
 
@@ -1255,7 +1619,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 104;
+  const APP_VERSION = 105;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
