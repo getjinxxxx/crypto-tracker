@@ -212,6 +212,9 @@
 
   .recur-tag { display: inline-block; background: rgba(176,124,255,0.18); color: #c7a3ff; font-size: 10px;
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
+  .part-tag { display: inline-block; background: rgba(79,140,255,0.18); color: #7fa8ff; font-size: 10px;
+    font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
+  .efield label .sub { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
   .due-tag { display: inline-block; background: rgba(245,197,66,0.15); color: var(--gold-bright); font-size: 10px;
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
   .due-tag.u-over { background: rgba(255,107,107,0.18); color: #ff8a8a; }
@@ -458,6 +461,9 @@
       if (!d.terms || d.terms < 1) d.terms = 1;
       if (!d.startMonth) d.startMonth = monthKey(new Date());
       if (!d.paidTerms || typeof d.paidTerms !== "object") d.paidTerms = {};
+      // Partial collections: amount already collected toward THIS term.
+      if (!d.paidAmt || typeof d.paidAmt !== "object") d.paidAmt = {};
+      if (typeof d.paidOnce !== "number") d.paidOnce = 0;
       if (typeof d.paid !== "boolean") d.paid = false;
       if (!d.date) d.date = d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : "";
       if (typeof d.recurring !== "boolean") d.recurring = false;
@@ -536,13 +542,31 @@
     if (d.recurring || d.terms > 1) return paidTermsCount(d) * perTermOf(d);
     return d.paid ? num(d.amount) : 0;
   }
-  function remainingOf(d) {
-    if (d.recurring) return isPaidThisMonth(d) ? 0 : num(d.amount);
-    return Math.max(0, num(d.amount) - paidOf(d));
+  // ---- Partial collections ----
+  function partPaidThisMonth(d) {
+    if (d.recurring || d.terms > 1) return num((d.paidAmt || {})[viewMonth]) || 0;
+    return num(d.paidOnce) || 0;
   }
-  function isPaidThisMonth(d) {
+  function isTermChecked(d) {
     if (d.recurring || d.terms > 1) return !!(d.paidTerms && d.paidTerms[viewMonth]);
     return !!d.paid;
+  }
+  function paidOfMonth(d) {
+    if (isTermChecked(d)) return perTermOf(d);
+    return Math.min(perTermOf(d), partPaidThisMonth(d));
+  }
+  function remainingOf(d) {
+    if (d.recurring) return Math.max(0, perTermOf(d) - paidOfMonth(d));
+    if (d.terms > 1) {
+      const fullTermsPaid = paidTermsCount(d) * perTermOf(d);
+      const partialThis = isTermChecked(d) ? 0 : Math.min(perTermOf(d), partPaidThisMonth(d));
+      return Math.max(0, num(d.amount) - fullTermsPaid - partialThis);
+    }
+    return Math.max(0, num(d.amount) - (d.paid ? num(d.amount) : Math.min(num(d.amount), partPaidThisMonth(d))));
+  }
+  function isPaidThisMonth(d) {
+    if (isTermChecked(d)) return true;
+    return perTermOf(d) > 0 && partPaidThisMonth(d) >= perTermOf(d) - 0.009;
   }
 
   // ---------- Render ----------
@@ -558,7 +582,7 @@
       if (isActiveIn(d, viewMonth)) {
         const due = d.terms > 1 ? perTermOf(d) : num(d.amount);
         monthDue += due;
-        if (isPaidThisMonth(d)) monthPaid += due;
+        monthPaid += paidOfMonth(d); // counts partials too
       }
     });
     document.getElementById("sumMonthDue").textContent = peso(monthDue);
@@ -593,12 +617,17 @@
       const u = dueUrgency(d);
       dueTag = ' <span class="due-tag ' + u.cls + '" title="Deadline">' + (u.icon ? u.icon + " " : "") + d.dueDay + ' (' + cut + ')</span>';
     }
+    const part = partPaidThisMonth(d);
+    let partTag = "";
+    if (!isTermChecked(d) && part > 0 && part < amtShown - 0.009) {
+      partTag = ' <span class="part-tag">\u20b1' + part.toLocaleString("en-US", { maximumFractionDigits: 2 }) + ' collected</span>';
+    }
     return '<div class="bd-row' + (paidNow ? " bd-paid" : "") + '">' +
       '<input type="checkbox" class="bd-check" data-item="' + d.id + '"' + (paidNow ? " checked" : "") + '>' +
-      '<span class="bd-label">' + label + termTag + dueTag + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
+      '<span class="bd-label">' + label + termTag + dueTag + partTag + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
       '<span class="bd-amt">' + peso(amtShown) + '</span>' +
       stopBtn +
-      '<button class="bd-edit" data-edit="' + d.id + '" title="Edit">\u270E</button>' +
+      '<button class="bd-edit" data-edit="' + d.id + '" title="Edit / collect">\u270E</button>' +
       '<button class="bd-del" data-del="' + d.id + '" title="Delete">&times;</button>' +
       '</div>' +
       '<div class="edit-panel" id="edit-' + d.id + '" style="display:none">' +
@@ -607,6 +636,7 @@
         (d.recurring ? '' :
           '<div class="efield"><label>Number of terms</label><input type="text" inputmode="numeric" data-eterms="' + d.id + '" value="' + d.terms + '"></div>' +
           '<div class="efield"><label>Payment per term</label><input type="text" readonly data-eper="' + d.id + '" value="' + perTermOf(d).toFixed(2) + '"></div>') +
+        '<div class="efield"><label>Collected this term (partial)<span class="sub">of ' + peso(amtShown) + ' due</span></label><input type="text" inputmode="decimal" data-epay="' + d.id + '" value="' + (part > 0 ? part.toFixed(2) : "") + '" placeholder="0.00"></div>' +
         '<div class="ebtns"><button class="save" data-esave="' + d.id + '">Save</button><button class="cancel" data-ecancel="' + d.id + '">Cancel</button></div>' +
       '</div>';
   }
@@ -716,9 +746,12 @@
       if (!d) return;
       if (d.recurring || d.terms > 1) {
         if (!d.paidTerms) d.paidTerms = {};
-        if (chk.checked) d.paidTerms[viewMonth] = true; else delete d.paidTerms[viewMonth];
+        if (!d.paidAmt) d.paidAmt = {};
+        if (chk.checked) { d.paidTerms[viewMonth] = true; delete d.paidAmt[viewMonth]; }
+        else delete d.paidTerms[viewMonth];
       } else {
         d.paid = chk.checked;
+        if (chk.checked) d.paidOnce = 0;
       }
       saveState(); renderAll();
     }));
@@ -759,6 +792,22 @@
         const termsEl = el.querySelector('[data-eterms="' + id + '"]');
         if (termsEl) d.terms = Math.max(1, Math.round(num(termsEl.value)));
         Object.keys(d.paidTerms).forEach(k => { if (!isActiveIn(d, k)) delete d.paidTerms[k]; });
+      }
+      // Partial collection for this month's term.
+      const payEl = el.querySelector('[data-epay="' + id + '"]');
+      if (payEl) {
+        const pay = Math.max(0, num(payEl.value));
+        const per = perTermOf(d);
+        if (!d.paidAmt) d.paidAmt = {};
+        if (d.recurring || d.terms > 1) {
+          if (pay <= 0) delete d.paidAmt[viewMonth];
+          else if (pay >= per - 0.009) { d.paidTerms[viewMonth] = true; delete d.paidAmt[viewMonth]; }
+          else { d.paidAmt[viewMonth] = pay; delete d.paidTerms[viewMonth]; }
+        } else {
+          if (pay <= 0) { d.paidOnce = 0; }
+          else if (pay >= num(d.amount) - 0.009) { d.paid = true; d.paidOnce = 0; }
+          else { d.paidOnce = pay; d.paid = false; }
+        }
       }
       saveState(); renderAll();
     }));
@@ -1037,7 +1086,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 103;
+  const APP_VERSION = 104;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
