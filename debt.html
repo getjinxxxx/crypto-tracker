@@ -65,6 +65,14 @@
   body.locked { overflow: hidden; }
   #app.hidden { display: none; }
 
+  /* Easy / Detailed view toggle */
+  .view-toggle { display: flex; justify-content: center; gap: 0; margin: 0 auto 14px; max-width: 260px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .view-toggle button { flex: 1; background: none; border: none; color: var(--muted); font-size: 13px;
+    font-weight: 600; padding: 7px 10px; border-radius: 999px; cursor: pointer; }
+  .view-toggle button.active { background: var(--gold); color: #000; }
+  body.easy .adv-only { display: none !important; }
+
   /* Top bar */
   .topbar { display: flex; align-items: center; gap: 10px; margin: 6px 0 14px; }
   .topbar .home-link {
@@ -331,6 +339,12 @@
       <div class="page-title">Debt Tracker</div>
     </div>
 
+    <!-- EASY / DETAILED VIEW TOGGLE -->
+    <div class="view-toggle">
+      <button id="viewEasy">Easy</button>
+      <button id="viewDetailed">Detailed</button>
+    </div>
+
     <!-- MONTH SELECTOR -->
     <div class="month-bar">
       <button id="prevMonth" title="Previous month">&#8249;</button>
@@ -347,14 +361,14 @@
     </div>
 
     <!-- SALARY VS DEBT -->
-    <div class="card" id="salaryCard" style="display:none">
+    <div class="card adv-only" id="salaryCard" style="display:none">
       <h2>Salary vs Debt (per cutoff)</h2>
       <div class="hint">From the take-home pay you saved in the Salary Calculator. The month's debt is split across the 1st and 2nd cutoff.</div>
       <div id="salaryCutoffs"></div>
     </div>
 
     <!-- PAYOFF STRATEGY -->
-    <div class="card" id="strategyCard" style="display:none">
+    <div class="card adv-only" id="strategyCard" style="display:none">
       <h2>Payoff strategy</h2>
       <div class="hint">Which debt to attack first with any extra money. <b>Snowball</b> = smallest balance first (quick wins). <b>Avalanche</b> = most urgent/overdue first (save on late fees).</div>
       <div class="strat-tabs" id="stratTabs">
@@ -365,14 +379,14 @@
     </div>
 
     <!-- CASH-FLOW FORECAST -->
-    <div class="card" id="forecastCard" style="display:none">
+    <div class="card adv-only" id="forecastCard" style="display:none">
       <h2>Cash-flow forecast (next 6 months)</h2>
       <div class="hint">Estimated take-home pay minus scheduled debt each month, so you can see early when a month will come up short. Future take-home is estimated from your saved payslips.</div>
       <div id="forecastBody"></div>
     </div>
 
     <!-- SINKING FUNDS -->
-    <div class="card" id="fundsCard">
+    <div class="card adv-only" id="fundsCard">
       <h2>Sinking funds</h2>
       <div class="hint">Save up gradually for big expenses you know are coming (Christmas, tuition, insurance, registration, birthdays) so they don't surprise you.</div>
       <div id="fundsBody"></div>
@@ -385,7 +399,7 @@
     </div>
 
     <!-- AFFORD CHECKER -->
-    <div class="card" id="affordCard">
+    <div class="card adv-only" id="affordCard">
       <h2>Can I afford this?</h2>
       <div class="hint">Type the price of something you want to buy. See what's left this month after your debts, whether it affects your dues, and how long to save for it.</div>
       <div class="afford-in">
@@ -395,7 +409,7 @@
     </div>
 
     <!-- CHART -->
-    <div class="card" id="chartCard" style="display:none">
+    <div class="card adv-only" id="chartCard" style="display:none">
       <h2>Due this month per category</h2>
       <div class="hint">Hover/tap a slice to see the details.</div>
       <div style="position:relative;height:220px"><canvas id="debtChart"></canvas></div>
@@ -1619,7 +1633,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 105;
+  const APP_VERSION = 106;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
@@ -1651,6 +1665,27 @@
 
   document.getElementById("lockBtn").onclick = unlock;
   document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+
+  // ---------- Easy / Detailed view (per-device preference) ----------
+  // Easy = just the essentials (month, summary, debts, add). Detailed = all analysis tools.
+  function applyDebtView(mode) {
+    const easy = mode !== "detailed";
+    document.body.classList.toggle("easy", easy);
+    const bE = document.getElementById("viewEasy");
+    const bD = document.getElementById("viewDetailed");
+    if (bE) bE.classList.toggle("active", easy);
+    if (bD) bD.classList.toggle("active", !easy);
+    try { localStorage.setItem("debtView", easy ? "easy" : "detailed"); } catch (e) {}
+  }
+  (function () {
+    const bE = document.getElementById("viewEasy");
+    const bD = document.getElementById("viewDetailed");
+    if (bE) bE.onclick = () => applyDebtView("easy");
+    if (bD) bD.onclick = () => applyDebtView("detailed");
+    let saved = "easy";
+    try { saved = localStorage.getItem("debtView") || "easy"; } catch (e) {}
+    applyDebtView(saved); // default = Easy
+  })();
 
   if (sessionStorage.getItem("ctUnlocked") === "1") {
     revealApp();
