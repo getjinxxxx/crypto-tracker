@@ -107,6 +107,7 @@
   body.easy .detail-only { display: none !important; } /* term "1/3", cutoff label, full date, partial tag */
   body.easy .bd-edit, body.easy .d-share { display: none; } /* per-row edit + share in easy */
   body.easy .d-split { display: inline-flex !important; } /* keep the Split (paydays) button in easy */
+  body.easy .bd-del { display: inline-flex !important; } /* keep delete (x) in easy for mistakes */
   body.easy .sub-box { background: transparent; border: none; padding: 4px 0; margin-top: 4px; } /* flatten sub-category boxes */
   body.easy .sub-box-head { display: none; }        /* hide TRAVEL/OTHER headers in easy */
   body.easy .d-amounts .seg .k { font-size: 10px; } /* tighter */
@@ -894,7 +895,7 @@
     let html = '<div class="bd-row" style="border-top:1px solid var(--line)">' +
       '<span class="bd-label" style="font-weight:600">' + label +
         ' <span class="bd-term">Plan ' + totalPaydays + ' paydays</span></span>' +
-      '<button class="bd-edit" data-del="' + d.id + '" title="Delete whole item" style="margin-left:auto">&times;</button>' +
+      '<button class="bd-del" data-del="' + d.id + '" title="Delete whole item" style="margin-left:auto">&times;</button>' +
       '</div>';
     d.plan.forEach((p, pi) => {
       if (p.key !== viewMonth) return;
@@ -1254,7 +1255,25 @@
       const id = btn.getAttribute("data-del");
       const d = state.debts.find(x => x.id === id);
       const dLabel = d ? ((d.name && d.name.trim()) ? d.name : (d.person || catLabel(d.category))) : "this item";
-      if (!confirm("Delete \"" + dLabel + "\"? This cannot be undone.")) return;
+      let msg = "Delete \"" + dLabel + "\"?";
+      if (d) {
+        if (hasPlan(d)) {
+          const first = d.plan[0], last = d.plan[d.plan.length - 1];
+          msg += "\n\nThis removes the WHOLE debt \u2014 all " + d.plan.length +
+            " payday installments (" + monthLabel(first.key).split(" ")[0] + " " + first.payday +
+            " to " + monthLabel(last.key).split(" ")[0] + " " + last.payday + ") and their paid history.";
+        } else if (d.recurring) {
+          msg += "\n\nThis removes the WHOLE recurring bill \u2014 it will disappear from every month, along with its paid history.";
+        } else if (d.terms > 1) {
+          const lastKey = addMonths(d.startMonth, d.terms - 1);
+          msg += "\n\nThis removes the WHOLE debt \u2014 all " + d.terms + " terms (" +
+            monthLabel(d.startMonth) + " to " + monthLabel(lastKey) + ") and their paid history, not just this month.";
+        }
+        msg += "\n\nThis cannot be undone.";
+      } else {
+        msg += " This cannot be undone.";
+      }
+      if (!confirm(msg)) return;
       state.debts = state.debts.filter(x => x.id !== id);
       saveState(); renderAll();
     }));
@@ -1948,7 +1967,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 111;
+  const APP_VERSION = 112;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
