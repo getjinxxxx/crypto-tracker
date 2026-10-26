@@ -220,7 +220,7 @@
   }
 
   // ---------- Auto-update (manual banner only) ----------
-  const APP_VERSION = 136;
+  const APP_VERSION = 137;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -302,17 +302,23 @@
     });
     return found ? total : (Array.isArray(rows) && rows.length ? 0 : null);
   }
+  // Which cutoff is coming up? Day 1-15 of the month -> 1st cutoff (due days 1-15);
+  // day 16-end -> 2nd cutoff (due days 16-31). Shows whichever payday is next.
+  function currentCutoff() {
+    const d = new Date().getDate();
+    return d <= 15 ? { which: "1st", lo: 1, hi: 15, label: "Debt due (1st cutoff)", sub: "Due days 1\u201315" }
+                   : { which: "2nd", lo: 16, hi: 31, label: "Debt due (2nd cutoff)", sub: "Due days 16\u2013end" };
+  }
   function debtOutstanding() {
-    // 1st cutoff only: debts whose due day falls on the 1st-15th (kinsenas).
     const st = DASH.debt || localState("debtTrackerV3");
     if (!st || !Array.isArray(st.debts)) return null;
+    const co = currentCutoff();
     let total = 0;
     st.debts.forEach(d => {
       if (d.paid) return;
       const dueDay = num(d.dueDay);
-      if (!(dueDay >= 1 && dueDay <= 15)) return;   // 1st cutoff window only
+      if (!(dueDay >= co.lo && dueDay <= co.hi)) return;   // only the upcoming cutoff window
       const amt = num(d.amount), terms = Math.max(1, num(d.terms));
-      // per-term amount for installments; full amount otherwise
       const perTerm = terms > 1 ? amt / terms : amt;
       total += Math.max(0, perTerm - num(d.paidOnce));
     });
@@ -354,9 +360,10 @@
   // ---------- Render dashboard ----------
   function renderDashboard() {
     const inv = cryptoInvested(), debt = debtOutstanding(), recv = receivablesOutstanding(), sal = latestNet();
+    const cutoffInfo = currentCutoff();
     const cards = [
       { label: "Crypto invested", ico: "\uD83D\uDCB5", val: inv == null ? "\u2014" : fmtPeso(inv), sub: inv == null ? "Open the tracker to sync" : "Total put in", seed: 7, color: "var(--accent-2)" },
-      { label: "Debt due (1st cutoff)", ico: "\uD83E\uDDFE", val: debt == null ? "\u2014" : fmtPeso(debt), sub: debt == null ? "No debt data yet" : "Due days 1\u201315", seed: 3, color: "var(--red)" },
+      { label: cutoffInfo.label, ico: "\uD83E\uDDFE", val: debt == null ? "\u2014" : fmtPeso(debt), sub: debt == null ? "No debt data yet" : cutoffInfo.sub, seed: 3, color: "var(--red)" },
       { label: "Owed to you", ico: "\uD83E\uDD1D", val: recv == null ? "\u2014" : fmtPeso(recv), sub: recv == null ? "No receivables yet" : "Uncollected", seed: 11, color: "var(--green)" },
       { label: "Last take-home", ico: "\uD83D\uDCB0", val: sal == null ? "\u2014" : fmtPeso(sal.net), sub: sal == null ? "Save a cutoff to see it" : (sal.period + " \u00b7 " + sal.cutoff), seed: 5, color: "var(--accent)" }
     ];
