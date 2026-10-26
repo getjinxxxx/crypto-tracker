@@ -190,6 +190,8 @@
   .field.two > div { flex: 1; }
   .field.inline { display: flex; align-items: center; gap: 8px; }
   .field.inline input[type=checkbox] { width: auto; }
+  .field.inline label.rad { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--text); font-size: 13px; }
+  .field.inline label.rad input[type=radio] { width: auto; }
   .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
   .seg button { flex: 1; background: var(--panel-2); color: var(--muted); border: none; padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
   .seg button.active { background: var(--gold); color: #000; }
@@ -269,7 +271,10 @@
         <button class="icon-btn" id="nextDay">&rsaquo;</button>
       </div>
       <div class="day-strip" id="dayStrip"></div>
-      <div class="day-title" id="dayTitle"></div>
+      <div class="day-title-row" style="display:flex; align-items:center; gap:10px; margin:4px 0 10px;">
+        <div class="day-title" id="dayTitle" style="margin:0; flex:1;"></div>
+        <a id="mapsBtn" class="btn ghost sm" target="_blank" rel="noopener" style="text-decoration:none;">&#128506;&#65039; Open in Maps</a>
+      </div>
       <div class="legend" id="legendBar"></div>
       <div class="timeline" id="timeline"></div>
       <div class="add-row">
@@ -302,6 +307,22 @@
           </select>
         </div>
       </div>
+
+      <!-- Shift dates (edit mode only) -->
+      <div id="shiftBox" style="display:none; border:1px dashed var(--line); border-radius:12px; padding:12px; margin-bottom:12px; background:var(--panel-2);">
+        <div style="font-size:13px; font-weight:700; margin-bottom:8px;">Shift dates</div>
+        <div class="field inline" style="gap:14px; margin-bottom:10px;">
+          <label class="rad"><input type="radio" name="shiftMode" id="shiftWhole" value="whole" checked /> Whole trip</label>
+          <label class="rad"><input type="radio" name="shiftMode" id="shiftFrom" value="from" /> From a day</label>
+        </div>
+        <div class="field two">
+          <div id="shiftDayWrap" style="display:none;"><label>From day</label><select id="shiftDay"></select></div>
+          <div><label id="shiftNewLbl">New start date</label><input id="shiftNewDate" type="date" /></div>
+        </div>
+        <button class="btn ghost sm" id="shiftApply" type="button">Shift &rarr;</button>
+        <div class="scan-note" id="shiftNote">Moves the whole trip (and all entries) while keeping the number of days.</div>
+      </div>
+
       <div class="modal-actions">
         <button class="btn ghost" id="tmCancel">Cancel</button>
         <button class="btn" id="tmSave">Save</button>
@@ -435,7 +456,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 126;
+  const APP_VERSION = 127;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -558,6 +579,11 @@
     let cur = start, guard = 0;
     while (cmpDate(cur, end) <= 0 && guard < 3660) { out.push(cur); cur = addDays(cur, 1); guard++; }
     return out;
+  }
+  function diffDays(a, b) {
+    const pa = a.split("-").map(Number), pb = b.split("-").map(Number);
+    const da = Date.UTC(pa[0], pa[1] - 1, pa[2]), db = Date.UTC(pb[0], pb[1] - 1, pb[2]);
+    return Math.round((db - da) / 86400000);
   }
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -786,8 +812,30 @@
     document.getElementById("editLegendBtn").onclick = () => openLegendModal(t.id);
   }
 
+  // Words that are activities, not places — excluded from the Maps route.
+  const NON_PLACE_RE = /^(gising|tulog|matulog|pahinga|rest|kain|hapunan|tanghalian|almusal|breakfast|lunch|dinner|merienda|snack|alis|balik|gas|cr|unat|charge|check|ayos|ayusin|buy|bili| wait|antay|hintay|pigar|libot|pasyal|shopping)\b/i;
+  function placeQuery(it) {
+    // Use the title up to a colon/paren as the place name; drop trailing "(3 min)" etc.
+    let s = (it.title || "").split("(")[0].trim();
+    // "Bulacan: Welcome Arch" -> keep whole thing, it geocodes fine; just tidy.
+    s = s.replace(/\s{2,}/g, " ").trim();
+    return s;
+  }
+  function dayMapsUrl(t, date) {
+    const stops = dayEntries(t, date).filter(e => e.kind === "stop" && e.title && !NON_PLACE_RE.test(e.title.trim()));
+    const dest = t.destination || t.name || "";
+    const places = stops.map(placeQuery).filter(Boolean);
+    if (!places.length) return "";
+    if (places.length === 1) return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(places[0]);
+    return "https://www.google.com/maps/dir/" + places.map(p => encodeURIComponent(p)).join("/");
+  }
+
   function renderTimeline(t) {
     document.getElementById("dayTitle").textContent = dateLabel(state.ui.openDate);
+    const mapsBtn = document.getElementById("mapsBtn");
+    const url = dayMapsUrl(t, state.ui.openDate);
+    if (url) { mapsBtn.href = url; mapsBtn.style.display = ""; mapsBtn.style.opacity = "1"; mapsBtn.style.pointerEvents = "auto"; }
+    else { mapsBtn.removeAttribute("href"); mapsBtn.style.opacity = ".4"; mapsBtn.style.pointerEvents = "none"; }
     const entries = dayEntries(t, state.ui.openDate);
     const wrap = document.getElementById("timeline");
     if (!entries.length) { wrap.innerHTML = '<div class="empty" style="padding:24px;">Nothing planned for this day yet.</div>'; return; }
@@ -844,7 +892,73 @@
     document.getElementById("tmBudget").value = (t && t.budget != null) ? t.budget : "";
     document.getElementById("tmCurrency").value = t ? t.currency : "PHP";
     document.getElementById("tripModalErr").textContent = "";
+    // Shift box only makes sense when editing an existing trip.
+    const shiftBox = document.getElementById("shiftBox");
+    if (t) {
+      shiftBox.style.display = "";
+      const days = datesInRange(t.start, t.end);
+      document.getElementById("shiftDay").innerHTML = days.map((d, i) => '<option value="' + d + '">Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
+      document.getElementById("shiftWhole").checked = true;
+      document.getElementById("shiftFrom").checked = false;
+      document.getElementById("shiftDayWrap").style.display = "none";
+      document.getElementById("shiftNewLbl").textContent = "New start date";
+      document.getElementById("shiftNewDate").value = t.start;
+      document.getElementById("shiftNote").textContent = "Moves the whole trip (and all entries) while keeping the number of days.";
+    } else {
+      shiftBox.style.display = "none";
+    }
     document.getElementById("tripModalBg").classList.add("show");
+  }
+  function onShiftModeChange() {
+    const t = findTrip(editingTripId); if (!t) return;
+    const fromMode = document.getElementById("shiftFrom").checked;
+    document.getElementById("shiftDayWrap").style.display = fromMode ? "" : "none";
+    document.getElementById("shiftNewLbl").textContent = fromMode ? "New date for that day" : "New start date";
+    document.getElementById("shiftNewDate").value = fromMode ? document.getElementById("shiftDay").value : t.start;
+    document.getElementById("shiftNote").textContent = fromMode
+      ? "Moves the chosen day and every day after it; earlier days stay put."
+      : "Moves the whole trip (and all entries) while keeping the number of days.";
+  }
+  function applyShift() {
+    const t = findTrip(editingTripId); if (!t) return;
+    const err = document.getElementById("tripModalErr"); err.textContent = "";
+    const fromMode = document.getElementById("shiftFrom").checked;
+    const newDate = document.getElementById("shiftNewDate").value;
+    if (!newDate) { err.textContent = "Pick the new date first."; return; }
+    if (fromMode) {
+      const anchor = document.getElementById("shiftDay").value;
+      const delta = diffDays(anchor, newDate);
+      if (delta === 0) return;
+      // shift the anchor day and all days on/after it
+      t.items.forEach(it => { if (cmpDate(it.date, anchor) >= 0) it.date = addDays(it.date, delta); });
+      // extend trip end if the moved tail now goes past it; keep start as-is
+      if (cmpDate(addDays(t.end, delta), t.end) > 0 || delta > 0) {
+        const newEnd = addDays(t.end, delta);
+        if (cmpDate(newEnd, t.end) > 0) t.end = newEnd;
+      }
+      // if everything moved earlier and tail < end, recompute end from latest item
+      recomputeEndIfNeeded(t);
+    } else {
+      const delta = diffDays(t.start, newDate);
+      if (delta === 0) return;
+      t.start = addDays(t.start, delta);
+      t.end = addDays(t.end, delta);
+      t.items.forEach(it => it.date = addDays(it.date, delta));
+    }
+    // reflect new dates in the open fields + keep the view on the same relative day
+    document.getElementById("tmStart").value = t.start;
+    document.getElementById("tmEnd").value = t.end;
+    if (!datesInRange(t.start, t.end).includes(state.ui.openDate)) state.ui.openDate = t.start;
+    persist();
+    // refresh the shift day picker
+    const days = datesInRange(t.start, t.end);
+    document.getElementById("shiftDay").innerHTML = days.map((d, i) => '<option value="' + d + '">Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
+    err.textContent = ""; document.getElementById("shiftNote").textContent = "Dates shifted. Press Save to keep, or Cancel to discard.";
+  }
+  function recomputeEndIfNeeded(t) {
+    let latest = t.start;
+    t.items.forEach(it => { if (cmpDate(it.date, latest) > 0) latest = it.date; });
+    if (cmpDate(latest, t.end) > 0) t.end = latest;
   }
   function closeTripModal() { document.getElementById("tripModalBg").classList.remove("show"); }
   function saveTripModal() {
@@ -1250,6 +1364,10 @@
 
   document.getElementById("tmCancel").onclick = closeTripModal;
   document.getElementById("tmSave").onclick = saveTripModal;
+  document.getElementById("shiftWhole").onchange = onShiftModeChange;
+  document.getElementById("shiftFrom").onchange = onShiftModeChange;
+  document.getElementById("shiftDay").onchange = () => { if (document.getElementById("shiftFrom").checked) document.getElementById("shiftNewDate").value = document.getElementById("shiftDay").value; };
+  document.getElementById("shiftApply").onclick = applyShift;
   document.getElementById("imCancel").onclick = closeItemModal;
   document.getElementById("imSave").onclick = saveItemModal;
   document.getElementById("segStop").onclick = () => setModalKind("stop");
