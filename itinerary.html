@@ -144,6 +144,11 @@
   .timeline { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); margin-bottom: 14px; }
   .row { display: flex; gap: 0; border-bottom: 1px solid var(--line); position: relative; }
   .row:last-child { border-bottom: none; }
+  .row.dragging { opacity: .45; }
+  .row.drop-before { box-shadow: inset 0 3px 0 0 var(--gold); }
+  .row.drop-after { box-shadow: inset 0 -3px 0 0 var(--gold); }
+  .drag-h { flex: 0 0 auto; width: 22px; display: flex; align-items: center; justify-content: center; color: var(--muted); cursor: grab; font-size: 15px; border-right: 1px solid var(--line); }
+  .row.typed .drag-h { color: rgba(0,0,0,.5); border-right-color: rgba(0,0,0,.18); }
   .row .r-time {
     flex: 0 0 92px; padding: 12px 10px; font-size: 12px; font-weight: 700; color: var(--text);
     border-right: 1px solid var(--line); word-break: break-word;
@@ -283,10 +288,12 @@
       <div class="add-row">
         <button class="btn" id="addStopBtn">+ Add stop</button>
         <button class="btn ghost" id="addLegBtn">+ Travel leg</button>
+        <button class="btn ghost" id="recalcBtn">&#8635; Recompute times</button>
         <button class="btn ghost" id="scanBtn">&#128247; Scan</button>
         <button class="btn ghost" id="linkBtn">&#128279; From Maps link</button>
         <button class="btn ghost" id="copyBtn">Copy text</button>
       </div>
+      <div class="c-sub" style="font-size:11px;color:var(--muted);margin-top:2px;">Tip: drag the &#9775; handle (or use &#8963;/&#8964;) to reorder, then tap <b>Recompute times</b> to re-chain the schedule from the first stop.</div>
     </div>
 
     <div class="foot">Personal use only &bull; data stays on your device &amp; syncs to your cloud</div>
@@ -489,7 +496,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 135;
+  const APP_VERSION = 136;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -715,16 +722,9 @@
     return it.kind === "stop" ? (it.time || "") : "";
   }
   function dayEntries(t, date) {
-    // Keep manual order but float timed stops into chronological position among themselves.
-    // Simplest stable approach: sort by time when present, else preserve array order.
-    const arr = t.items.filter(it => it.date === date).map((it, i) => ({ it: it, i: i }));
-    arr.sort((a, b) => {
-      const at = sortKey(a.it), bt = sortKey(b.it);
-      if (at && bt) { if (at !== bt) return at < bt ? -1 : 1; return a.i - b.i; }
-      if (at && !bt) return 0; // don't yank legs around timed ones; keep relative order
-      return a.i - b.i;
-    });
-    return arr.map(x => x.it);
+    // Preserve the stored array order (this is what drag & drop / move up-down control).
+    // Times are set by the user or by "Recompute times from top", not by auto-sorting.
+    return t.items.filter(it => it.date === date);
   }
   function legendColor(t, typeId) { const lg = t.legend.find(x => x.id === typeId); return lg ? lg.color : ""; }
   function legendLabel(t, typeId) { const lg = t.legend.find(x => x.id === typeId); return lg ? lg.label : ""; }
@@ -886,6 +886,87 @@
     wrap.querySelectorAll("[data-del]").forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteItem(t.id, b.getAttribute("data-del")); });
     wrap.querySelectorAll("[data-done]").forEach(b => b.onclick = (e) => { e.stopPropagation(); toggleDone(t.id, b.getAttribute("data-done")); });
     wrap.querySelectorAll("[data-pin]").forEach(b => b.onclick = (e) => { e.stopPropagation(); togglePin(t.id, b.getAttribute("data-pin")); });
+    wrap.querySelectorAll("[data-up]").forEach(b => b.onclick = (e) => { e.stopPropagation(); moveEntry(t.id, b.getAttribute("data-up"), -1); });
+    wrap.querySelectorAll("[data-down]").forEach(b => b.onclick = (e) => { e.stopPropagation(); moveEntry(t.id, b.getAttribute("data-down"), 1); });
+    wireRowDrag(t, wrap);
+  }
+  // ---------- Drag & drop reorder within a day ----------
+  let dragRowId = null;
+  function wireRowDrag(t, wrap) {
+    wrap.querySelectorAll(".row[data-rowid]").forEach(row => {
+      row.addEventListener("dragstart", (e) => { dragRowId = row.getAttribute("data-rowid"); row.classList.add("dragging"); try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", dragRowId); } catch (x) {} });
+      row.addEventListener("dragend", () => { dragRowId = null; wrap.querySelectorAll(".row").forEach(r => r.classList.remove("dragging", "drop-before", "drop-after")); });
+      row.addEventListener("dragover", (e) => {
+        e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {}
+        const before = (e.clientY - row.getBoundingClientRect().top) < row.offsetHeight / 2;
+        wrap.querySelectorAll(".row").forEach(r => r.classList.remove("drop-before", "drop-after"));
+        row.classList.add(before ? "drop-before" : "drop-after");
+      });
+      row.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const targetId = row.getAttribute("data-rowid");
+        const id = dragRowId || (e.dataTransfer ? e.dataTransfer.getData("text/plain") : "");
+        const before = (e.clientY - row.getBoundingClientRect().top) < row.offsetHeight / 2;
+        reorderEntry(t.id, id, targetId, before);
+      });
+    });
+  }
+  function reorderEntry(tripId, id, targetId, before) {
+    const t = findTrip(tripId); if (!t || !id || id === targetId) { renderTripDetail(findTrip(tripId)); return; }
+    const items = t.items;
+    const from = items.findIndex(x => x.id === id);
+    if (from === -1) return;
+    const [moved] = items.splice(from, 1);
+    let to = items.findIndex(x => x.id === targetId);
+    if (to === -1) { items.push(moved); } else { items.splice(before ? to : to + 1, 0, moved); }
+    persist(); renderTripDetail(t);
+  }
+  // Move an entry up/down among the SAME day's entries (reliable on phone).
+  function moveEntry(tripId, id, dir) {
+    const t = findTrip(tripId); if (!t) return;
+    const dayIds = t.items.filter(x => x.date === state.ui.openDate).map(x => x.id);
+    const pos = dayIds.indexOf(id);
+    const swapWith = dayIds[pos + dir];
+    if (pos === -1 || swapWith == null) return;
+    const ai = t.items.findIndex(x => x.id === id), bi = t.items.findIndex(x => x.id === swapWith);
+    const tmp = t.items[ai]; t.items[ai] = t.items[bi]; t.items[bi] = tmp;
+    persist(); renderTripDetail(t);
+  }
+  // Recompute all times for the open day by chaining from the first entry's time.
+  function recomputeTimes(tripId) {
+    const t = findTrip(tripId); if (!t) return;
+    const entries = t.items.filter(x => x.date === state.ui.openDate);
+    if (!entries.length) return;
+    // find a starting clock: first stop with a time, else ask.
+    let startStop = entries.find(e => e.kind === "stop" && e.time);
+    let clock = startStop ? startStop.time : (prompt("Start time for the day (HH:MM, 24h)", "08:00") || "").trim();
+    if (!/^\d{1,2}:\d{2}$/.test(clock)) { alert("Enter a valid start time like 08:00."); return; }
+    entries.forEach((e, i) => {
+      if (e.kind === "leg") {
+        clock = addMinutes(clock, parseDurationMin(e.durationText));
+      } else {
+        e.time = clock; e.approx = true;
+        const stay = stopStayMin(e);
+        e.endTime = stay > 0 ? addMinutes(clock, stay) : "";
+        clock = addMinutes(clock, stay);
+      }
+    });
+    persist(); renderTripDetail(t);
+  }
+  // Minutes a stop occupies: from its own time range if set, else 0.
+  function stopStayMin(it) {
+    if (it.time && it.endTime) { const d = toMin(it.endTime) - toMin(it.time); return d > 0 ? d : 0; }
+    return 0;
+  }
+  function toMin(hm) { const p = hm.split(":").map(Number); return p[0] * 60 + p[1]; }
+  // Pull minutes out of a leg's duration text ("~2 hr 42 min", "~51 min", "1 oras 10 min").
+  function parseDurationMin(txt) {
+    if (!txt) return 0;
+    let mins = 0;
+    const hr = txt.match(/(\d+)\s*(hr|hour|hours|oras)/i); if (hr) mins += parseInt(hr[1], 10) * 60;
+    const mn = txt.match(/(\d+)\s*(min|mins|minute|minutes|minuto)/i); if (mn) mins += parseInt(mn[1], 10);
+    if (!hr && !mn) { const only = txt.match(/(\d+)/); if (only) mins = parseInt(only[1], 10); }
+    return mins;
   }
   function togglePin(tripId, itemId) {
     const t = findTrip(tripId); if (!t) return;
@@ -899,12 +980,15 @@
     const style = typed ? ' style="background:' + esc(color) + '"' : '';
     const td = timeDisplay(it);
     const costStr = it.cost ? ' <span class="cost-tag">' + fmtMoney(it.cost, t.currency) + '</span>' : '';
-    return '<div class="row' + (typed ? ' typed' : '') + (it.done ? ' done' : '') + '"' + style + '>' +
+    return '<div class="row' + (typed ? ' typed' : '') + (it.done ? ' done' : '') + '" draggable="true" data-rowid="' + it.id + '"' + style + '>' +
+      '<span class="drag-h" title="Drag to reorder" data-handle="' + it.id + '">\u283F</span>' +
       '<div class="r-time">' + (td ? esc(td) : '\u2014') + '</div>' +
       '<div class="r-body">' +
         '<div class="r-title">' + esc(it.title) + costStr + '</div>' +
         (it.note ? '<div class="r-note">' + esc(it.note) + '</div>' : '') +
         '<div class="r-actions">' +
+          '<button class="icon-btn" data-up="' + it.id + '" title="Move up">\u2303</button>' +
+          '<button class="icon-btn" data-down="' + it.id + '" title="Move down">\u2304</button>' +
           '<button class="icon-btn pin' + (it.inRoute ? ' on' : '') + '" data-pin="' + it.id + '" title="' + (it.inRoute ? 'In Maps route (tap to remove)' : 'Not in route (tap to add)') + '">\uD83D\uDCCD</button>' +
           '<button class="icon-btn" data-done="' + it.id + '" title="Done">' + (it.done ? '\u21A9\uFE0F' : '\u2713') + '</button>' +
           '<button class="icon-btn" data-edit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
@@ -915,12 +999,15 @@
   }
   function legRow(t, it) {
     const route = (it.fromText || it.toText) ? (esc(it.fromText) + ' \u2192 ' + esc(it.toText)) : '';
-    return '<div class="row leg">' +
+    return '<div class="row leg" draggable="true" data-rowid="' + it.id + '">' +
+      '<span class="drag-h" title="Drag to reorder" data-handle="' + it.id + '">\u283F</span>' +
       '<div class="r-time">\uD83C\uDFC3 ' + esc(it.label || "Takbo") + '</div>' +
       '<div class="r-body">' +
         '<div class="r-title"><span class="dur">' + esc(it.durationText || "\u2014") + '</span></div>' +
         (route ? '<div class="r-note route">' + route + '</div>' : '') +
         '<div class="r-actions">' +
+          '<button class="icon-btn" data-up="' + it.id + '" title="Move up">\u2303</button>' +
+          '<button class="icon-btn" data-down="' + it.id + '" title="Move down">\u2304</button>' +
           '<button class="icon-btn" data-edit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
           '<button class="icon-btn" data-del="' + it.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
         '</div>' +
@@ -1595,6 +1682,7 @@
   document.getElementById("backBtn").onclick = () => { state.ui.openTripId = null; state.ui.openDate = null; persist(); showTripsView(); renderTripsList(); };
   document.getElementById("addStopBtn").onclick = () => { openItemModal(state.ui.openTripId, null); setModalKind("stop"); };
   document.getElementById("addLegBtn").onclick = () => { openItemModal(state.ui.openTripId, null); setModalKind("leg"); };
+  document.getElementById("recalcBtn").onclick = () => recomputeTimes(state.ui.openTripId);
   document.getElementById("scanBtn").onclick = openScanModal;
   document.getElementById("copyBtn").onclick = () => { const t = findTrip(state.ui.openTripId); if (t) copyTripText(t); };
 
@@ -1649,5 +1737,6 @@
   if (sessionStorage.getItem("ctUnlocked") === "1") revealApp();
   else document.getElementById("lockInput").focus();
 </script>
+<script src="shell.js"></script>
 </body>
 </html>

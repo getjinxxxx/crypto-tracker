@@ -165,6 +165,9 @@
         <div class="welcome" id="greet">Welcome back</div>
         <div class="subdate" id="todayDate"></div>
 
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+          <button id="eyeBtn" style="display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 11px;font-size:14px;cursor:pointer;">&#128584; <span style="font-size:12px;font-weight:600;">Show amounts</span></button>
+        </div>
         <div class="stats" id="stats"></div>
 
         <div class="grid2">
@@ -217,7 +220,7 @@
   }
 
   // ---------- Auto-update (manual banner only) ----------
-  const APP_VERSION = 135;
+  const APP_VERSION = 136;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -300,14 +303,18 @@
     return found ? total : (Array.isArray(rows) && rows.length ? 0 : null);
   }
   function debtOutstanding() {
+    // 1st cutoff only: debts whose due day falls on the 1st-15th (kinsenas).
     const st = DASH.debt || localState("debtTrackerV3");
     if (!st || !Array.isArray(st.debts)) return null;
     let total = 0;
     st.debts.forEach(d => {
-      const amt = num(d.amount);
-      if (d.paid) return;             // one-time, fully paid
-      const paidOnce = num(d.paidOnce);
-      total += Math.max(0, amt - paidOnce);
+      if (d.paid) return;
+      const dueDay = num(d.dueDay);
+      if (!(dueDay >= 1 && dueDay <= 15)) return;   // 1st cutoff window only
+      const amt = num(d.amount), terms = Math.max(1, num(d.terms));
+      // per-term amount for installments; full amount otherwise
+      const perTerm = terms > 1 ? amt / terms : amt;
+      total += Math.max(0, perTerm - num(d.paidOnce));
     });
     return total;
   }
@@ -349,35 +356,43 @@
     const inv = cryptoInvested(), debt = debtOutstanding(), recv = receivablesOutstanding(), sal = latestNet();
     const cards = [
       { label: "Crypto invested", ico: "\uD83D\uDCB5", val: inv == null ? "\u2014" : fmtPeso(inv), sub: inv == null ? "Open the tracker to sync" : "Total put in", seed: 7, color: "var(--accent-2)" },
-      { label: "Debt remaining", ico: "\uD83E\uDDFE", val: debt == null ? "\u2014" : fmtPeso(debt), sub: debt == null ? "No debt data yet" : "Across all debts", seed: 3, color: "var(--red)" },
+      { label: "Debt due (1st cutoff)", ico: "\uD83E\uDDFE", val: debt == null ? "\u2014" : fmtPeso(debt), sub: debt == null ? "No debt data yet" : "Due days 1\u201315", seed: 3, color: "var(--red)" },
       { label: "Owed to you", ico: "\uD83E\uDD1D", val: recv == null ? "\u2014" : fmtPeso(recv), sub: recv == null ? "No receivables yet" : "Uncollected", seed: 11, color: "var(--green)" },
       { label: "Last take-home", ico: "\uD83D\uDCB0", val: sal == null ? "\u2014" : fmtPeso(sal.net), sub: sal == null ? "Save a cutoff to see it" : (sal.period + " \u00b7 " + sal.cutoff), seed: 5, color: "var(--accent)" }
     ];
+    const shown = valuesShown();
+    const mask = v => (v === "\u2014") ? v : "\u2022\u2022\u2022\u2022\u2022\u2022";
     document.getElementById("stats").innerHTML = cards.map(c =>
       '<div class="stat">' +
         '<div class="s-top"><div class="s-label">' + c.label + '</div><div class="s-ico">' + c.ico + '</div></div>' +
-        '<div class="s-val">' + c.val + '</div>' +
+        '<div class="s-val">' + (shown ? c.val : mask(c.val)) + '</div>' +
         '<div class="s-sub">' + c.sub + '</div>' +
         sparkline(c.seed, c.color) +
       '</div>'
     ).join("");
+    const eye = document.getElementById("eyeBtn");
+    if (eye) eye.innerHTML = (shown ? "\uD83D\uDC41\uFE0F" : "\uD83D\uDE48") + " <span style='font-size:12px;font-weight:600;'>" + (shown ? "Hide" : "Show") + " amounts</span>";
 
-    renderNetChart(inv, debt, recv);
+    renderNetChart(inv, debt, recv, shown);
     renderKanbanSnapshot();
   }
+  // Eye toggle: default HIDDEN. Remembered in localStorage.
+  function valuesShown() { try { return localStorage.getItem("dashShowAmounts") === "1"; } catch (e) { return false; } }
+  function toggleValues() { try { localStorage.setItem("dashShowAmounts", valuesShown() ? "0" : "1"); } catch (e) {} renderDashboard(); }
 
-  function renderNetChart(inv, debt, recv) {
+  function renderNetChart(inv, debt, recv, shown) {
     // Simple horizontal bars (no external lib needed): Assets vs Liabilities.
     const assets = (inv || 0) + (recv || 0);
     const liab = debt || 0;
     const net = assets - liab;
     const max = Math.max(assets, liab, 1);
+    const money = v => shown ? fmtPeso(v) : "\u2022\u2022\u2022\u2022\u2022\u2022";
     const canvas = document.getElementById("netChart");
     const wrap = canvas.parentElement;
     const bar = (label, val, color) => {
       const pct = Math.round(Math.abs(val) / max * 100);
       return '<div style="margin:10px 0;">' +
-        '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;"><span>' + label + '</span><span style="color:var(--text);font-weight:700;">' + fmtPeso(val) + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;"><span>' + label + '</span><span style="color:var(--text);font-weight:700;">' + money(val) + '</span></div>' +
         '<div style="height:12px;border-radius:6px;background:var(--panel-2);overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + color + ';"></div></div>' +
       '</div>';
     };
@@ -388,7 +403,7 @@
       bar("Assets (crypto + receivables)", assets, "linear-gradient(90deg,var(--accent),var(--accent-2))") +
       bar("Liabilities (debt)", liab, "var(--red)") +
       '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:14px;">' +
-        '<span style="color:var(--muted);">Net</span><span style="font-weight:800;color:' + (net >= 0 ? "var(--green)" : "var(--red)") + ';">' + fmtPeso(net) + '</span></div>';
+        '<span style="color:var(--muted);">Net</span><span style="font-weight:800;color:' + (net >= 0 ? "var(--green)" : "var(--red)") + ';">' + money(net) + '</span></div>';
   }
 
   function renderKanbanSnapshot() {
@@ -424,6 +439,7 @@
   document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
   document.getElementById("menuBtn").onclick = openSidebar;
   document.getElementById("scrim").onclick = closeSidebar;
+  document.getElementById("eyeBtn").onclick = toggleValues;
   document.getElementById("lockNav").onclick = () => { sessionStorage.removeItem("ctUnlocked"); location.reload(); };
   document.getElementById("navSearch").addEventListener("input", (e) => {
     const q = e.target.value.toLowerCase();

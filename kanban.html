@@ -222,7 +222,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 135;
+  const APP_VERSION = 136;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -543,5 +543,6 @@
   if (sessionStorage.getItem("ctUnlocked") === "1") revealApp();
   else document.getElementById("lockInput").focus();
 </script>
+<script src="shell.js"></script>
 </body>
 </html>

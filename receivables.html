@@ -1086,7 +1086,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 105;
+  const APP_VERSION = 136;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
@@ -1128,5 +1128,6 @@
   checkForUpdate();
   setInterval(checkForUpdate, 60000);
 </script>
+<script src="shell.js"></script>
 </body>
 </html>
