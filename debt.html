@@ -158,6 +158,9 @@
   .cd-total { display: flex; justify-content: space-between; align-items: center; font-size: 15px; padding: 2px 2px 4px; }
   .cd-total b { color: var(--gold-bright); font-variant-numeric: tabular-nums; }
   .cd-empty { padding: 18px 12px; text-align: center; color: var(--muted); font-size: 14px; }
+  .cd-sub { display: flex; justify-content: space-between; gap: 10px; padding: 3px 12px 3px 22px;
+    font-size: 12.5px; color: var(--muted); background: var(--panel-2); }
+  .cd-sub-amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   /* Monthly vs Per-payday toggle */
   .paymode { display: flex; gap: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
@@ -1565,11 +1568,21 @@
     const items = state.debts.filter(d => cardKeyOf(d) === cardKey && isActiveIn(d, viewMonth));
     const title = items.length ? cardTitleOf(items[0]) : "Detalye";
     let rowsHtml = "", total = 0;
+    // Saved breakdown (what's inside a combined debt), if any.
+    function lineItemsHtml(d) {
+      if (!Array.isArray(d.lineItems) || !d.lineItems.length) return "";
+      return d.lineItems.map(li =>
+        '<div class="cd-sub"><span class="cd-sub-nm">\u21B3 ' + String(li.label || "Item").replace(/</g, "&lt;") + '</span>' +
+        '<span class="cd-sub-amt">' + peso(num(li.price)) + '</span></div>'
+      ).join("");
+    }
     items.forEach(d => {
       const nm = (d.name && d.name.trim()) ? d.name : (d.person || catLabel(d.category));
+      const sub = lineItemsHtml(d);
       if (hasPlan(d)) {
         // show each payday portion that falls in this month
-        planEntriesFor(d, viewMonth).forEach(p => {
+        const entries = planEntriesFor(d, viewMonth);
+        entries.forEach((p, ei) => {
           const which = d.plan.findIndex(x => x === p) + 1;
           total += num(p.amount);
           rowsHtml += '<div class="cd-row' + (p.paid ? " cd-paid" : "") + '">' +
@@ -1578,6 +1591,8 @@
               monthLabel(p.key).split(" ")[0] + ' ' + p.payday + '</span></div>' +
             '<div class="cd-amt">' + peso(num(p.amount)) + (p.paid ? ' <span class="cd-ok">paid</span>' : '') + '</div>' +
             '</div>';
+          // show the saved breakdown once (under the first payday row)
+          if (ei === 0 && sub) rowsHtml += sub;
         });
       } else {
         const amt = perTermOf(d);
@@ -1596,6 +1611,7 @@
             (tags.length ? ' <span class="cd-tag">' + tags.join(" &middot; ") + '</span>' : '') + '</div>' +
           '<div class="cd-amt">' + peso(amt) + (paid ? ' <span class="cd-ok">paid</span>' : '') + '</div>' +
           '</div>';
+        if (sub) rowsHtml += sub;
       }
     });
     if (!rowsHtml) rowsHtml = '<div class="cd-empty">Walang babayaran ngayong ' + monthLabel(viewMonth) + '.</div>';
@@ -2587,7 +2603,9 @@
         ? person
         : (document.getElementById("siName").value.trim() || "Scanned items");
       const entry = Object.assign({}, base, {
-        id: uid(), name: name, amount: total, terms: terms, createdAt: Date.now()
+        id: uid(), name: name, amount: total, terms: terms, createdAt: Date.now(),
+        // keep the scanned breakdown so "Detalye" can show what's inside the combined debt
+        lineItems: chosen.map(it => ({ label: it.label, price: it.price }))
       });
       if (payday) entry.plan = buildPlanForAmount(total, payN, payStart);
       state.debts.push(entry);
@@ -2713,7 +2731,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 120;
+  const APP_VERSION = 121;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
