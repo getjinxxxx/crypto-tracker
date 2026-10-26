@@ -120,6 +120,24 @@
   .scan-found b { color: var(--gold-bright); }
   .scan-found .miss { color: var(--muted); }
 
+  /* Scanned itemized receipt picker */
+  .si-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .si-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line); font-size: 14px; }
+  .si-row:first-child { border-top: none; }
+  .si-row input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--gold); flex: 0 0 auto; }
+  .si-row .si-lbl { flex: 1; }
+  .si-row .si-price { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .si-row.off { opacity: 0.45; }
+  .si-total { display: flex; justify-content: space-between; align-items: center; padding: 10px 2px 0; font-size: 15px; }
+  .si-total b { color: var(--gold-bright); font-variant-numeric: tabular-nums; }
+  .si-mode { display: flex; flex-direction: column; gap: 6px; }
+  .si-radio { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); font-weight: 500; }
+  .si-radio input { width: 18px; height: 18px; accent-color: var(--gold); }
+  .si-err { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 16px; }
+
+  /* highlight a required field the scanner could not read */
+  .need-fill { border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(255,107,107,0.25); }
+
   /* Easy view: hide technical clutter, keep name + due date + amount + checkbox */
   body.easy .card .hint { display: none; }          /* long explanation paragraphs */
   body.easy .detail-only { display: none !important; } /* term "1/3", cutoff label, full date, partial tag */
@@ -584,6 +602,60 @@
 
     <!-- Floating Add button -->
     <button class="fab" id="fabAdd" title="Add a debt">+</button>
+
+    <!-- Scanned itemized receipt picker (multi-item) -->
+    <div class="add-overlay" id="scanItemsOverlay">
+      <div class="card add-modal">
+        <div class="add-modal-head">
+          <h2 style="margin:0">Scanned items</h2>
+          <button class="add-close" id="scanItemsClose" title="Close">&times;</button>
+        </div>
+        <div class="hint">Pumili ng items na idadagdag. Walang petsa sa litrato, kaya sagutin ang <b>Due day</b> at <b>Terms</b> sa ibaba.</div>
+        <div class="scan-result" style="display:flex;margin-bottom:10px">
+          <img id="scanItemsThumb" class="scan-thumb" alt="receipt" />
+          <div class="scan-found" id="scanItemsCount"></div>
+        </div>
+        <div id="scanItemsList" class="si-list"></div>
+        <div class="si-total"><span>Selected total</span><b id="scanItemsTotal">PHP 0.00</b></div>
+
+        <div class="field" style="margin-top:12px">
+          <label>Add as</label>
+          <div class="si-mode">
+            <label class="si-radio"><input type="radio" name="siMode" value="combined" checked /> One combined debt</label>
+            <label class="si-radio"><input type="radio" name="siMode" value="separate" /> Separate debts (per item)</label>
+          </div>
+        </div>
+        <div class="field" id="siNameField">
+          <label>Name / label<span class="sub">for the combined debt</span></label>
+          <input type="text" class="name-in" id="siName" placeholder="e.g. Shopee haul, Lazada order" />
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select id="siCategory" class="cat-sel">
+            <option value="other">Other</option>
+            <option value="person">Person (debt to someone)</option>
+            <option value="creditcard">Credit Card</option>
+            <option value="bankloan">Bank Loan</option>
+            <option value="onlineloan">Online Loan / App</option>
+            <option value="government">Government (SSS/Pag-IBIG/GSIS)</option>
+            <option value="salaryloan">Salary / Company Loan</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Due day (1-31)<span class="sub">required &mdash; wala sa litrato</span></label>
+          <input type="number" inputmode="numeric" id="siDueDay" min="1" max="31" placeholder="e.g. 15" />
+        </div>
+        <div class="field">
+          <label>Number of terms<span class="sub">1 = single payment</span></label>
+          <input type="text" inputmode="numeric" id="siTerms" placeholder="1" />
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="siAddBtn">Add selected</button>
+          <button class="btn" id="siCancelBtn" style="margin-left:8px">Cancel</button>
+        </div>
+        <div class="si-err" id="siErr"></div>
+      </div>
+    </div>
 
     <div class="note" style="text-align:center">
       Personal use only. All data stays on this device (nothing is sent anywhere).
@@ -1965,10 +2037,17 @@
       bar.style.width = "100%";
       const text = (data && data.text) ? data.text : "";
       const found = parseBillText(text);
-      applyBillToForm(found);
       status.style.display = "none";
-      showBillFound(found);
-      result.style.display = "flex";
+      if (found.items && found.items.length >= 2) {
+        // bulk / itemized receipt -> open the multi-item picker
+        result.style.display = "none";
+        openScanItems(found, thumbUrl);
+      } else {
+        applyBillToForm(found);
+        showBillFound(found);
+        result.style.display = "flex";
+        highlightMissingDue(found.dueDay);
+      }
     } catch (e) {
       msg.textContent = (e && e.message) ? e.message : "Sorry, could not read that image. Try a clearer photo.";
       bar.style.width = "0%";
@@ -1979,10 +2058,27 @@
 
   // Pull amount, due day, and a likely biller name out of raw OCR text.
   function parseBillText(text) {
-    const out = { amount: 0, dueDay: 0, name: "", recurring: false, raw: text };
+    const out = { amount: 0, dueDay: 0, name: "", recurring: false, items: [], raw: text };
     if (!text) return out;
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const lower = text.toLowerCase();
+
+    // ---- Itemized lines: "some words ... 1,234.56" (label + trailing price) ----
+    // Used to detect a shopping-list / bulk receipt (your Shopee-style screenshot).
+    const items = [];
+    lines.forEach(line => {
+      // skip obvious totals/subtotals so they don't become a line item
+      if (/subtotal|total|amount due|balance|shipping|voucher|discount|grand total/i.test(line)) return;
+      const m = line.match(/^(.*?[a-z].*?)\s+([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]+\.[0-9]{2})\s*$/i);
+      if (m) {
+        const label = m[1].replace(/\s{2,}/g, " ").trim();
+        const price = parseFloat(m[2].replace(/,/g, ""));
+        if (label.replace(/[^a-z]/gi, "").length >= 2 && isFinite(price) && price > 0) {
+          items.push({ label: label.slice(0, 40), price: price });
+        }
+      }
+    });
+    if (items.length >= 2) out.items = items;
 
     // ---- Amount ----
     // Prefer a number near a "total / amount due / balance / please pay" keyword.
@@ -2071,6 +2167,104 @@
     el.innerHTML = "<b style='color:var(--text)'>Filled in below \u2014 please check &amp; edit:</b><br>" + parts.join("<br>");
   }
 
+  // Highlight the Due-day field when the scanner couldn't find a date (so the user fills it).
+  function highlightMissingDue(dueDay) {
+    const el = document.getElementById("newDueDay");
+    if (!el) return;
+    if (dueDay >= 1 && dueDay <= 31) { el.classList.remove("need-fill"); return; }
+    el.classList.add("need-fill");
+    const clear = () => { el.classList.remove("need-fill"); el.removeEventListener("input", clear); };
+    el.addEventListener("input", clear);
+  }
+
+  // ---------- Scanned itemized receipt (multi-item picker) ----------
+  let scanItemsData = []; // [{label, price, on}]
+  function openScanItems(found, thumbUrl) {
+    scanItemsData = found.items.map(it => ({ label: it.label, price: it.price, on: true }));
+    document.getElementById("scanItemsThumb").src = thumbUrl;
+    document.getElementById("scanItemsCount").innerHTML =
+      "<b>" + found.items.length + " items</b> na-detect. I-uncheck ang ayaw mong isama.";
+    // prefill combined name if a biller/first line was detected
+    document.getElementById("siName").value = found.name || "";
+    document.getElementById("siDueDay").value = (found.dueDay >= 1 && found.dueDay <= 31) ? found.dueDay : "";
+    document.getElementById("siTerms").value = "1";
+    document.getElementById("siErr").textContent = "";
+    renderScanItems();
+    syncSiMode();
+    document.getElementById("scanItemsOverlay").classList.add("open");
+  }
+  function closeScanItems() { document.getElementById("scanItemsOverlay").classList.remove("open"); }
+
+  function renderScanItems() {
+    const box = document.getElementById("scanItemsList");
+    box.innerHTML = scanItemsData.map((it, i) =>
+      '<label class="si-row' + (it.on ? "" : " off") + '">' +
+        '<input type="checkbox" data-si="' + i + '"' + (it.on ? " checked" : "") + '>' +
+        '<span class="si-lbl">' + it.label.replace(/</g, "&lt;") + '</span>' +
+        '<span class="si-price">' + peso(it.price) + '</span>' +
+      '</label>'
+    ).join("");
+    box.querySelectorAll("[data-si]").forEach(chk => chk.addEventListener("change", () => {
+      const i = parseInt(chk.getAttribute("data-si"), 10);
+      scanItemsData[i].on = chk.checked;
+      chk.closest(".si-row").classList.toggle("off", !chk.checked);
+      updateScanItemsTotal();
+    }));
+    updateScanItemsTotal();
+  }
+  function updateScanItemsTotal() {
+    const t = scanItemsData.filter(x => x.on).reduce((s, x) => s + x.price, 0);
+    document.getElementById("scanItemsTotal").textContent = peso(t);
+  }
+  function siMode() {
+    const r = document.querySelector('input[name="siMode"]:checked');
+    return r ? r.value : "combined";
+  }
+  function syncSiMode() {
+    // Name field only matters for the combined mode.
+    document.getElementById("siNameField").style.display = (siMode() === "combined") ? "" : "none";
+  }
+
+  function addScannedItems() {
+    const chosen = scanItemsData.filter(x => x.on);
+    const err = document.getElementById("siErr");
+    if (!chosen.length) { err.textContent = "Pumili ng kahit isang item."; return; }
+    let dueDay = Math.round(num(document.getElementById("siDueDay").value));
+    if (!(dueDay >= 1 && dueDay <= 31)) {
+      err.textContent = "Ilagay ang Due day (1-31) \u2014 wala ito sa litrato.";
+      document.getElementById("siDueDay").classList.add("need-fill");
+      document.getElementById("siDueDay").focus();
+      return;
+    }
+    const terms = Math.max(1, Math.round(num(document.getElementById("siTerms").value) || 1));
+    const category = document.getElementById("siCategory").value;
+    const mode = siMode();
+    const today = new Date().toISOString().slice(0, 10);
+    const base = {
+      category: category, person: "", subCat: usesSubCat(category) ? "other" : "",
+      recurring: false, endMonth: "", dueDay: dueDay,
+      startMonth: viewMonth, paidTerms: {}, paid: false, date: today
+    };
+
+    if (mode === "separate") {
+      chosen.forEach(it => {
+        state.debts.push(Object.assign({}, base, {
+          id: uid(), name: it.label, amount: it.price, terms: terms, createdAt: Date.now()
+        }));
+      });
+    } else {
+      const total = chosen.reduce((s, x) => s + x.price, 0);
+      const name = document.getElementById("siName").value.trim() || "Scanned items";
+      state.debts.push(Object.assign({}, base, {
+        id: uid(), name: name, amount: total, terms: terms, createdAt: Date.now()
+      }));
+    }
+    saveState();
+    renderAll();
+    closeScanItems();
+    closeAddModal();
+  }
+
   // ---------- App start ----------
   let appStarted = false;
   function startApp() {
@@ -2097,6 +2291,14 @@
     document.getElementById("scanUpBtn").addEventListener("click", () => document.getElementById("scanUpInput").click());
     document.getElementById("scanCamInput").addEventListener("change", (e) => { handleBillImage(e.target.files[0]); e.target.value = ""; });
     document.getElementById("scanUpInput").addEventListener("change", (e) => { handleBillImage(e.target.files[0]); e.target.value = ""; });
+    // Scanned itemized receipt picker
+    document.getElementById("scanItemsClose").addEventListener("click", closeScanItems);
+    document.getElementById("siCancelBtn").addEventListener("click", closeScanItems);
+    document.getElementById("siAddBtn").addEventListener("click", addScannedItems);
+    document.querySelectorAll('input[name="siMode"]').forEach(r => r.addEventListener("change", syncSiMode));
+    document.getElementById("scanItemsOverlay").addEventListener("click", (e) => {
+      if (e.target === document.getElementById("scanItemsOverlay")) closeScanItems();
+    });
     document.getElementById("addFundBtn").addEventListener("click", addFund);
     document.getElementById("affordPrice").addEventListener("input", renderAffordCard);
     document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
@@ -2166,7 +2368,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 113;
+  const APP_VERSION = 114;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
