@@ -470,6 +470,13 @@
       <button id="viewDetailed">Detailed</button>
     </div>
 
+    <!-- CUTOFF FILTER: show only debts due in a payday window (13th / 28th), or all -->
+    <div class="view-toggle" id="cutoffToggle" style="margin-top:8px;">
+      <button id="cutoff1st">13th</button>
+      <button id="cutoff2nd">28th</button>
+      <button id="cutoffAll">All</button>
+    </div>
+
     <!-- MONTH SELECTOR -->
     <div class="month-bar">
       <button id="prevMonth" title="Previous month">&#8249;</button>
@@ -1059,7 +1066,7 @@
     let monthDue = 0, monthPaid = 0, totalRemaining = 0;
     state.debts.forEach(d => {
       totalRemaining += remainingOf(d);
-      if (isActiveIn(d, viewMonth)) {
+      if (isActiveIn(d, viewMonth) && passesCutoffFilter(d)) {
         // perTermOf is plan-aware (split paydays this month), recurring-aware, and term-aware,
         // so it gives the correct amount due THIS MONTH for every kind of debt.
         monthDue += perTermOf(d);
@@ -1241,7 +1248,7 @@
 
   function renderList() {
     const el = document.getElementById("debtList");
-    const activeThisMonth = state.debts.filter(d => isActiveIn(d, viewMonth));
+    const activeThisMonth = state.debts.filter(d => isActiveIn(d, viewMonth) && passesCutoffFilter(d));
     if (!activeThisMonth.length) {
       // Find the nearest month that DOES have active debts, so the user can jump there.
       let jumpMonth = "";
@@ -1777,6 +1784,18 @@
   }
   // Which cutoff does a due day fall under? 1-15 = 1st (kinsenas), 16-31 = 2nd (katapusan).
   function cutoffForDueDay(day) { return (day >= 1 && day <= 15) ? "1st" : "2nd"; }
+
+  // ---------- Cutoff view filter (13th / 28th / All) ----------
+  // Boundary for THIS filter: due days 1-13 = 1st cutoff (13th), 14-31 = 2nd cutoff (28th).
+  // Items with no due day (0) always show in every cutoff. Separate from cutoffForDueDay
+  // so we don't change the existing display labels / Salary-vs-Debt behavior.
+  var cutoffFilter = "all"; // "all" | "1st" | "2nd"
+  function passesCutoffFilter(d) {
+    if (cutoffFilter === "all") return true;
+    if (!d.dueDay || d.dueDay < 1 || d.dueDay > 31) return true; // no deadline -> always shown
+    const bucket = (d.dueDay <= 13) ? "1st" : "2nd";
+    return bucket === cutoffFilter;
+  }
 
   // Urgency of a debt's deadline for the month being viewed, vs today's real date.
   // Returns { rank, icon, cls } where lower rank = more urgent (sorts first).
@@ -2737,7 +2756,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 138;
+  const APP_VERSION = 140;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
@@ -2789,6 +2808,32 @@
     let saved = "easy";
     try { saved = localStorage.getItem("debtView") || "easy"; } catch (e) {}
     applyDebtView(saved); // default = Easy
+  })();
+
+  // ---------- Cutoff filter toggle (mirrors the Easy/Detailed pattern, but re-renders) ----------
+  function applyCutoffFilter(mode) {
+    cutoffFilter = (mode === "1st" || mode === "2nd") ? mode : "all";
+    const b1 = document.getElementById("cutoff1st");
+    const b2 = document.getElementById("cutoff2nd");
+    const bA = document.getElementById("cutoffAll");
+    if (b1) b1.classList.toggle("active", cutoffFilter === "1st");
+    if (b2) b2.classList.toggle("active", cutoffFilter === "2nd");
+    if (bA) bA.classList.toggle("active", cutoffFilter === "all");
+    try { localStorage.setItem("debtCutoffFilter", cutoffFilter); } catch (e) {}
+    if (appStarted) renderAll(); // avoid rendering before the app has loaded state
+  }
+  (function () {
+    const b1 = document.getElementById("cutoff1st");
+    const b2 = document.getElementById("cutoff2nd");
+    const bA = document.getElementById("cutoffAll");
+    if (b1) b1.onclick = () => applyCutoffFilter("1st");
+    if (b2) b2.onclick = () => applyCutoffFilter("2nd");
+    if (bA) bA.onclick = () => applyCutoffFilter("all");
+    // Default: last choice, else the upcoming cutoff based on today (<=13 -> 1st, else 2nd).
+    let saved = "";
+    try { saved = localStorage.getItem("debtCutoffFilter") || ""; } catch (e) {}
+    if (!saved) saved = (new Date().getDate() <= 13) ? "1st" : "2nd";
+    applyCutoffFilter(saved);
   })();
 
   if (sessionStorage.getItem("ctUnlocked") === "1") {
