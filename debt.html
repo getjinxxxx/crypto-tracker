@@ -138,11 +138,20 @@
   /* highlight a required field the scanner could not read */
   .need-fill { border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(255,107,107,0.25); }
 
+  /* Monthly vs Per-payday toggle */
+  .paymode { display: flex; gap: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .pm-btn { flex: 1; background: none; border: none; color: var(--muted); font-size: 13px; font-weight: 700;
+    padding: 9px 8px; border-radius: 999px; cursor: pointer; }
+  .pm-btn.active { background: var(--gold); color: #000; }
+  .pm-preview { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    margin: 4px 0 10px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+  .pm-preview b { color: var(--text); }
+
   /* Easy view: hide technical clutter, keep name + due date + amount + checkbox */
   body.easy .card .hint { display: none; }          /* long explanation paragraphs */
   body.easy .detail-only { display: none !important; } /* term "1/3", cutoff label, full date, partial tag */
   body.easy .bd-edit, body.easy .d-share { display: none; } /* per-row edit + share in easy */
-  body.easy .d-split { display: inline-flex !important; } /* keep the Split (paydays) button in easy */
+  .d-split { display: none !important; } /* retired: payday split is now chosen in the Add form */
   body.easy .bd-del { display: inline-flex !important; } /* keep delete (x) in easy for mistakes */
   body.easy .sub-box { background: transparent; border: none; padding: 4px 0; margin-top: 4px; } /* flatten sub-category boxes */
   body.easy .sub-box-head { display: none; }        /* hide TRAVEL/OTHER headers in easy */
@@ -585,6 +594,17 @@
         <label>Recurring bill<span class="sub">monthly, until further notice (e.g. Netflix, Meralco)</span></label>
         <input type="checkbox" id="newRecurring" style="width:22px;height:22px;accent-color:#34d399" />
       </div>
+
+      <!-- How to split the payment -->
+      <div class="field" id="payModeField">
+        <label>Hatiin ang bayad</label>
+        <div class="paymode">
+          <button type="button" class="pm-btn active" data-paymode="monthly" id="pmMonthly">Monthly terms</button>
+          <button type="button" class="pm-btn" data-paymode="payday" id="pmPayday">Per payday (13 &amp; 28)</button>
+        </div>
+      </div>
+
+      <!-- MONTHLY fields -->
       <div class="field" id="termsField">
         <label>Number of terms<span class="sub">1 = single payment (no installment)</span></label>
         <input type="text" inputmode="numeric" id="newTerms" placeholder="1" />
@@ -593,6 +613,21 @@
         <label>Payment per term<span class="sub">auto: total &divide; terms</span></label>
         <input type="text" id="newPerTerm" readonly placeholder="0.00" />
       </div>
+
+      <!-- PER-PAYDAY fields -->
+      <div class="field" id="paydayCountField" style="display:none">
+        <label>Bilang ng paydays<span class="sub">ilang hulog tuwing 13 &amp; 28</span></label>
+        <input type="number" inputmode="numeric" id="newPaydays" min="2" max="60" placeholder="e.g. 3" />
+      </div>
+      <div class="field" id="paydayStartField" style="display:none">
+        <label>Start payday</label>
+        <select id="newPayStart" class="cat-sel">
+          <option value="28" selected>28 (this month)</option>
+          <option value="13">13 (this month)</option>
+        </select>
+      </div>
+      <div class="pm-preview" id="payPreview" style="display:none"></div>
+
       <div class="btn-row">
         <button class="btn primary" id="addBtn">Add debt</button>
         <button class="btn" id="addCancel" style="margin-left:8px">Cancel</button>
@@ -650,8 +685,26 @@
           <input type="number" inputmode="numeric" id="siDueDay" min="1" max="31" placeholder="e.g. 15" />
         </div>
         <div class="field">
+          <label>Hatiin ang bayad</label>
+          <div class="paymode">
+            <button type="button" class="pm-btn active" data-simode="monthly" id="siPmMonthly">Monthly terms</button>
+            <button type="button" class="pm-btn" data-simode="payday" id="siPmPayday">Per payday (13 &amp; 28)</button>
+          </div>
+        </div>
+        <div class="field" id="siTermsField">
           <label>Number of terms<span class="sub">1 = single payment</span></label>
           <input type="text" inputmode="numeric" id="siTerms" placeholder="1" />
+        </div>
+        <div class="field" id="siPaydaysField" style="display:none">
+          <label>Bilang ng paydays<span class="sub">ilang hulog tuwing 13 &amp; 28</span></label>
+          <input type="number" inputmode="numeric" id="siPaydays" min="2" max="60" placeholder="e.g. 3" />
+        </div>
+        <div class="field" id="siPayStartField" style="display:none">
+          <label>Start payday</label>
+          <select id="siPayStart" class="cat-sel">
+            <option value="28" selected>28 (this month)</option>
+            <option value="13">13 (this month)</option>
+          </select>
         </div>
         <div class="btn-row">
           <button class="btn primary" id="siAddBtn">Add selected</button>
@@ -1443,6 +1496,19 @@
     return slots;
   }
 
+  // Build a payday plan array for a single amount (reused by Add form + Scanned items).
+  // Equal split across n paydays starting at startPayday; last slot absorbs rounding.
+  function buildPlanForAmount(total, n, startPayday) {
+    n = Math.max(2, Math.min(60, Math.round(n) || 2));
+    const slots = buildPaydaySlots(viewMonth, startPayday, n);
+    const base = Math.floor((total / n) * 100) / 100;
+    return slots.map((s, i) => ({
+      key: s.key, payday: s.payday,
+      amount: (i === n - 1) ? Math.round((total - base * (n - 1)) * 100) / 100 : base,
+      paid: false
+    }));
+  }
+
   // Apply an equal split of each item's CURRENT this-month due across n paydays.
   function applySplit(cardKey, n, startPayday) {
     const items = state.debts.filter(d => cardKeyOf(d) === cardKey && isActiveIn(d, viewMonth) && !d.recurring);
@@ -1950,8 +2016,10 @@
     const amount = num(document.getElementById("newAmount").value);
     let dueDay = Math.round(num(document.getElementById("newDueDay").value));
     if (dueDay < 1 || dueDay > 31) dueDay = 0; // 0 = no deadline
-    const recurring = document.getElementById("newRecurring").checked;
-    const terms = recurring ? 1 : Math.max(1, Math.round(num(document.getElementById("newTerms").value) || 1));
+    // Per-payday mode never uses recurring; it builds a fixed payday plan instead.
+    const payday = (addPayMode === "payday");
+    const recurring = payday ? false : document.getElementById("newRecurring").checked;
+    const terms = (recurring || payday) ? 1 : Math.max(1, Math.round(num(document.getElementById("newTerms").value) || 1));
 
     if (category === "person") {
       if (!person) { document.getElementById("newPerson").focus(); return; }
@@ -1960,14 +2028,25 @@
     }
     if (amount <= 0) { document.getElementById("newAmount").focus(); return; }
 
+    // Build a payday plan now if the user chose "Per payday".
+    let plan = null;
+    if (payday) {
+      const n = Math.max(2, Math.min(60, Math.round(num(document.getElementById("newPaydays").value)) || 0));
+      if (n < 2) { document.getElementById("newPaydays").classList.add("need-fill"); document.getElementById("newPaydays").focus(); return; }
+      const start = parseInt(document.getElementById("newPayStart").value, 10);
+      plan = buildPlanForAmount(amount, n, start);
+    }
+
     const today = new Date().toISOString().slice(0, 10);
-    state.debts.push({
+    const entry = {
       id: uid(), category: category, person: category === "person" ? person : "",
       name: name, subCat: subCat, amount: amount, terms: terms,
       recurring: recurring, endMonth: "", dueDay: dueDay,
       startMonth: viewMonth, paidTerms: {}, paid: false,
       date: today, createdAt: Date.now()
-    });
+    };
+    if (plan) entry.plan = plan;
+    state.debts.push(entry);
     saveState();
 
     document.getElementById("newPerson").value = "";
@@ -1977,6 +2056,9 @@
     document.getElementById("newRecurring").checked = false;
     document.getElementById("newTerms").value = "";
     document.getElementById("newPerTerm").value = "";
+    document.getElementById("newPaydays").value = "";
+    document.getElementById("newPaydays").classList.remove("need-fill");
+    setAddPayMode("monthly");
     renderAll();
     closeAddModal();
   }
@@ -1989,6 +2071,36 @@
   function closeAddModal() {
     const ov = document.getElementById("addOverlay");
     if (ov) ov.classList.remove("open");
+  }
+
+  // ---------- Add-form payment mode (Monthly terms vs Per payday) ----------
+  let addPayMode = "monthly"; // "monthly" | "payday"
+  function setAddPayMode(mode) {
+    addPayMode = (mode === "payday") ? "payday" : "monthly";
+    const monthly = addPayMode === "monthly";
+    document.getElementById("pmMonthly").classList.toggle("active", monthly);
+    document.getElementById("pmPayday").classList.toggle("active", !monthly);
+    document.getElementById("termsField").style.display = monthly ? "" : "none";
+    document.getElementById("perTermField").style.display = monthly ? "" : "none";
+    document.getElementById("paydayCountField").style.display = monthly ? "none" : "";
+    document.getElementById("paydayStartField").style.display = monthly ? "none" : "";
+    // Per-payday can't also be recurring (recurring = open-ended monthly bill).
+    const recField = document.getElementById("recurringField");
+    if (recField) recField.style.display = monthly ? "" : "none";
+    renderPayPreview();
+  }
+  function renderPayPreview() {
+    const box = document.getElementById("payPreview");
+    if (!box) return;
+    if (addPayMode !== "payday") { box.style.display = "none"; return; }
+    const total = num(document.getElementById("newAmount").value);
+    const n = Math.max(2, Math.min(60, Math.round(num(document.getElementById("newPaydays").value)) || 2));
+    const start = parseInt(document.getElementById("newPayStart").value, 10);
+    if (total <= 0) { box.style.display = "block"; box.innerHTML = "Maglagay ng amount para makita ang hatian."; return; }
+    const plan = buildPlanForAmount(total, n, start);
+    const lines = plan.map(p => "&bull; " + monthLabel(p.key).split(" ")[0] + " " + p.payday + " &rarr; <b>" + peso(p.amount) + "</b>").join("<br>");
+    box.style.display = "block";
+    box.innerHTML = "<b style='color:var(--text)'>Preview (" + n + " hulog, tuwing 13 &amp; 28):</b><br>" + lines;
   }
 
   // ---------- Scan a bill (on-device OCR via Tesseract.js) ----------
@@ -2192,7 +2304,9 @@
     document.getElementById("siName").value = found.name || "";
     document.getElementById("siDueDay").value = (found.dueDay >= 1 && found.dueDay <= 31) ? found.dueDay : "";
     document.getElementById("siTerms").value = "1";
+    document.getElementById("siPaydays").value = "";
     document.getElementById("siErr").textContent = "";
+    setSiPayMode("monthly");
     renderScanItems();
     syncSiMode();
     document.getElementById("scanItemsOverlay").classList.add("open");
@@ -2224,6 +2338,16 @@
     const r = document.querySelector('input[name="siMode"]:checked');
     return r ? r.value : "combined";
   }
+  let siPayMode = "monthly"; // "monthly" | "payday"
+  function setSiPayMode(mode) {
+    siPayMode = (mode === "payday") ? "payday" : "monthly";
+    const monthly = siPayMode === "monthly";
+    document.getElementById("siPmMonthly").classList.toggle("active", monthly);
+    document.getElementById("siPmPayday").classList.toggle("active", !monthly);
+    document.getElementById("siTermsField").style.display = monthly ? "" : "none";
+    document.getElementById("siPaydaysField").style.display = monthly ? "none" : "";
+    document.getElementById("siPayStartField").style.display = monthly ? "none" : "";
+  }
   function syncSiMode() {
     const isPerson = document.getElementById("siCategory").value === "person";
     // Person name shows only when category = person.
@@ -2245,7 +2369,6 @@
       document.getElementById("siDueDay").focus();
       return;
     }
-    const terms = Math.max(1, Math.round(num(document.getElementById("siTerms").value) || 1));
     const category = document.getElementById("siCategory").value;
     const person = category === "person" ? document.getElementById("siPerson").value.trim() : "";
     if (category === "person" && !person) {
@@ -2253,6 +2376,20 @@
       document.getElementById("siPerson").classList.add("need-fill");
       document.getElementById("siPerson").focus();
       return;
+    }
+    // Payment split: monthly terms or per-payday plan.
+    const payday = (siPayMode === "payday");
+    const terms = payday ? 1 : Math.max(1, Math.round(num(document.getElementById("siTerms").value) || 1));
+    let payN = 0, payStart = 28;
+    if (payday) {
+      payN = Math.max(2, Math.min(60, Math.round(num(document.getElementById("siPaydays").value)) || 0));
+      if (payN < 2) {
+        err.textContent = "Ilagay ang bilang ng paydays (2 pataas).";
+        document.getElementById("siPaydays").classList.add("need-fill");
+        document.getElementById("siPaydays").focus();
+        return;
+      }
+      payStart = parseInt(document.getElementById("siPayStart").value, 10);
     }
     const mode = siMode();
     const today = new Date().toISOString().slice(0, 10);
@@ -2264,9 +2401,11 @@
 
     if (mode === "separate") {
       chosen.forEach(it => {
-        state.debts.push(Object.assign({}, base, {
+        const entry = Object.assign({}, base, {
           id: uid(), name: it.label, amount: it.price, terms: terms, createdAt: Date.now()
-        }));
+        });
+        if (payday) entry.plan = buildPlanForAmount(it.price, payN, payStart);
+        state.debts.push(entry);
       });
     } else {
       const total = chosen.reduce((s, x) => s + x.price, 0);
@@ -2274,9 +2413,11 @@
       const name = (category === "person")
         ? person
         : (document.getElementById("siName").value.trim() || "Scanned items");
-      state.debts.push(Object.assign({}, base, {
+      const entry = Object.assign({}, base, {
         id: uid(), name: name, amount: total, terms: terms, createdAt: Date.now()
-      }));
+      });
+      if (payday) entry.plan = buildPlanForAmount(total, payN, payStart);
+      state.debts.push(entry);
     }
     saveState();
     renderAll();
@@ -2305,6 +2446,12 @@
       if (e.target === document.getElementById("addOverlay")) closeAddModal();
     });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAddModal(); });
+    // Payment mode toggle (Monthly terms vs Per payday)
+    document.getElementById("pmMonthly").addEventListener("click", () => setAddPayMode("monthly"));
+    document.getElementById("pmPayday").addEventListener("click", () => setAddPayMode("payday"));
+    document.getElementById("newPaydays").addEventListener("input", () => { document.getElementById("newPaydays").classList.remove("need-fill"); renderPayPreview(); });
+    document.getElementById("newPayStart").addEventListener("change", renderPayPreview);
+    document.getElementById("newAmount").addEventListener("input", renderPayPreview);
     // Scan a bill (OCR)
     document.getElementById("scanCamBtn").addEventListener("click", () => document.getElementById("scanCamInput").click());
     document.getElementById("scanUpBtn").addEventListener("click", () => document.getElementById("scanUpInput").click());
@@ -2317,6 +2464,9 @@
     document.querySelectorAll('input[name="siMode"]').forEach(r => r.addEventListener("change", syncSiMode));
     document.getElementById("siCategory").addEventListener("change", syncSiMode);
     document.getElementById("siPerson").addEventListener("input", () => document.getElementById("siPerson").classList.remove("need-fill"));
+    document.getElementById("siPmMonthly").addEventListener("click", () => setSiPayMode("monthly"));
+    document.getElementById("siPmPayday").addEventListener("click", () => setSiPayMode("payday"));
+    document.getElementById("siPaydays").addEventListener("input", () => document.getElementById("siPaydays").classList.remove("need-fill"));
     document.getElementById("scanItemsOverlay").addEventListener("click", (e) => {
       if (e.target === document.getElementById("scanItemsOverlay")) closeScanItems();
     });
@@ -2389,7 +2539,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 115;
+  const APP_VERSION = 116;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
