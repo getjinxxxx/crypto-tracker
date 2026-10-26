@@ -435,7 +435,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 124;
+  const APP_VERSION = 125;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1095,10 +1095,36 @@
   }
 
   // Parse the road-trip style text (matches the screenshots' format).
+  // Filters out OCR junk: phone status bar, the page title/legend header, and
+  // stray fragments. Orphan place names right after a leg become that leg's "to".
   function parseItineraryText(text, t) {
     const out = [];
     if (!text) return out;
-    const lines = text.split(/\r?\n/).map(l => l.replace(/\s{2,}/g, " ").trim()).filter(Boolean);
+    const rawLines = text.split(/\r?\n/).map(l => l.replace(/\s{2,}/g, " ").trim()).filter(Boolean);
+
+    // ---- Junk / non-entry line detector ----
+    function isJunk(line) {
+      const l = line.toLowerCase();
+      // phone status bar: a clock plus odd symbols / battery (e.g. "6:324 oll = @» = ...")
+      if (/@|\u00bb|\u00ab|\boll\b|\bal\b\s*\bl\b/.test(line) && /\d{1,2}:\d{2,}/.test(line)) return true;
+      // the screen's own title: "Day N: X -> Y", "... takbo ...", route-only header "cee"
+      if (/^day\s*\d*\s*[:#]/i.test(line) && /\u2192|->|>/.test(line)) return true;
+      // the legend row baked into the screenshot
+      if (/checkpoint\/?cutoff/i.test(l) && /welcome arch|litrato/i.test(l)) return true;
+      if (/^legend\b/i.test(l) || /hinto\/tanawin/i.test(l) && l.length < 60 && !/\d/.test(l)) return true;
+      // a lone "Oct 31: takbo ..." date header that also carries legend words
+      if (/^[a-z]{3}\s+\d{1,2}\s*[:#]/i.test(line) && /(takbo|checkpoint|welcome arch|hinto)/i.test(l)) return true;
+      // mostly-symbol garbage (few letters, lots of punctuation)
+      const letters = (line.match(/[a-z]/gi) || []).length;
+      const symbols = (line.match(/[^a-z0-9\s]/gi) || []).length;
+      if (letters <= 2 && symbols >= 2) return true;
+      return false;
+    }
+    // A short line that is just a place name (no verb/time) — used to complete a leg's "to".
+    function looksLikePlaceOnly(line) {
+      return /^[A-Z][A-Za-z\u00f1\u00d1\. ]{1,28}$/.test(line) && !/\d/.test(line) && line.split(" ").length <= 3;
+    }
+
     const typeFor = (s) => {
       const l = s.toLowerCase();
       if (/welcome arch|litrato|arko|arch/.test(l)) return findType(t, /arch|welcome|litrato/i);
@@ -1106,9 +1132,14 @@
       if (/hinto|tanawin|sightsee|pahinga|gas|cr\b/.test(l)) return findType(t, /hinto|tanawin|sight/i);
       return "";
     };
+    const hasDuration = (s) => /\d+\s*(min|mins|minuto|oras|hour|hr|hrs)/i.test(s);
+
+    const lines = rawLines.filter(l => !isJunk(l));
+
     lines.forEach(line => {
-      // Travel leg: starts with "Takbo" / "Drive" / "Travel", or has "min/oras" + "->"
-      if (/^(takbo|drive|travel|byahe|lakad)\b/i.test(line) || (/(\d+\s*(min|oras|hour|hr))/i.test(line) && /\u2192|->|to\b/i.test(line) && !/:\s*\d{1,2}:\d{2}/.test(line))) {
+      // Travel leg: starts with "Takbo"/"Drive"/..., OR has a duration + "->" and no clock time.
+      const isLegStart = /^(takbo|drive|travel|byahe|lakad)\b/i.test(line);
+      if (isLegStart || (hasDuration(line) && /\u2192|->|\bto\b/i.test(line) && !/\d{1,2}:\d{2}/.test(line))) {
         const labelMatch = line.match(/^(takbo|drive|travel|byahe|lakad)\b/i);
         const label = labelMatch ? labelMatch[1] : "Takbo";
         const rest = line.replace(/^(takbo|drive|travel|byahe|lakad)\b/i, "").trim();
@@ -1117,6 +1148,11 @@
         const rt = rest.split(/\u2192|->|\bto\b/i);
         const from = rt.length > 1 ? rt[0].replace(dur, "").replace(/[,:-]+$/, "").trim() : "";
         const to = rt.length > 1 ? rt.slice(1).join(" ").trim() : "";
+        // Drop a junk leg with no real duration (e.g. a stray "4").
+        if (!dur || !/\d/.test(dur) || /^\d{1,2}$/.test(dur)) {
+          // keep only if it has a real from/to; otherwise skip
+          if (!from && !to) return;
+        }
         out.push({ kind: "leg", label: label, durationText: dur, fromText: from, toText: to });
         return;
       }
@@ -1133,11 +1169,20 @@
         out.push(makeStop(to24(m[2], m[3] || ""), "", !!m[1], m[4], typeFor(line)));
         return;
       }
-      // Otherwise: treat a reasonably long line as a note on the previous stop, else a plain stop.
-      if (/[a-z]/i.test(line) && line.length >= 3) {
-        const prev = out[out.length - 1];
-        if (prev && prev.kind === "stop" && !prev.note && line.length <= 120 && !/^(day|cutoff|legend)\b/i.test(line)) { prev.note = line; }
-        else if (!/^(day|cutoff|legend|checkpoint\/)/i.test(line)) { out.push(makeStop("", "", false, line, typeFor(line))); }
+
+      const prev = out[out.length - 1];
+      // A lone place name right after a leg with no "to" completes that leg.
+      if (prev && prev.kind === "leg" && !prev.toText && looksLikePlaceOnly(line)) { prev.toText = line; return; }
+      // A continuation fragment (starts lowercase, or clearly mid-sentence) -> append to previous stop's note.
+      const isContinuation = /^[a-z]/.test(line) || /^(gas|cr|kape|litrato|dumaan|pigar)/i.test(line);
+      if (prev && prev.kind === "stop" && isContinuation && line.length <= 120) {
+        prev.note = prev.note ? (prev.note + " " + line) : line; return;
+      }
+      // Otherwise a reasonably substantial line becomes a plain (untimed) stop.
+      if (/[a-z]/i.test(line) && line.length >= 4 && !looksLikePlaceOnly(line)) {
+        out.push(makeStop("", "", false, line, typeFor(line)));
+      } else if (prev && prev.kind === "stop" && !prev.note && line.length >= 3) {
+        prev.note = line; // short leftover -> note on previous stop
       }
     });
     return out;
