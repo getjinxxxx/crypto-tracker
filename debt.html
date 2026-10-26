@@ -688,7 +688,7 @@
           <label>Name / label<span class="sub">for the combined debt</span></label>
           <input type="text" class="name-in" id="siName" placeholder="e.g. Shopee haul, Lazada order" />
         </div>
-        <div class="field">
+        <div class="field" id="siDueDayField">
           <label>Due day (1-31)<span class="sub">required &mdash; wala sa litrato</span></label>
           <input type="number" inputmode="numeric" id="siDueDay" min="1" max="31" placeholder="e.g. 15" />
         </div>
@@ -2435,6 +2435,9 @@
     document.getElementById("siTermsField").style.display = monthly ? "" : "none";
     document.getElementById("siPaydaysField").style.display = monthly ? "none" : "";
     document.getElementById("siPayStartField").style.display = monthly ? "none" : "";
+    // Per-payday uses the 13/28 plan dates, so a due day is irrelevant -> hide it.
+    document.getElementById("siDueDayField").style.display = monthly ? "" : "none";
+    if (!monthly) document.getElementById("siDueDay").classList.remove("need-fill");
   }
   function syncSiMode() {
     const isPerson = document.getElementById("siCategory").value === "person";
@@ -2452,7 +2455,9 @@
     const err = document.getElementById("siErr");
     if (!chosen.length) { err.textContent = "Pumili/maglagay ng kahit isang item na may presyo."; return; }
     let dueDay = Math.round(num(document.getElementById("siDueDay").value));
-    if (!(dueDay >= 1 && dueDay <= 31)) {
+    if (!(dueDay >= 1 && dueDay <= 31)) dueDay = 0; // 0 = no deadline
+    // Due day is only required for Monthly terms. Per-payday uses the 13/28 plan dates.
+    if (siPayMode !== "payday" && dueDay === 0) {
       err.textContent = "Ilagay ang Due day (1-31) \u2014 wala ito sa litrato.";
       document.getElementById("siDueDay").classList.add("need-fill");
       document.getElementById("siDueDay").focus();
@@ -2629,7 +2634,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 118;
+  const APP_VERSION = 119;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
