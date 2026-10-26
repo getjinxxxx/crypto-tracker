@@ -221,7 +221,7 @@
   }
 
   // ---------- Auto-update (manual banner only) ----------
-  const APP_VERSION = 138;
+  const APP_VERSION = 139;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -290,18 +290,29 @@
   function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
   function fmtPeso(n) { return "\u20b1" + (Math.round(n)).toLocaleString(); }
 
+  // Crypto state shape: rows = { coinId: [ { peso, price, pending, currency }, ... ] }.
+  // "peso" is the invested amount (PHP for PHP buys). Sum active (non-pending) PHP buys.
   function cryptoInvested() {
     const st = DASH.crypto || localState("cryptoTrackerState");
-    if (!st) return null;
-    const rows = st.rows || st.coins || st.holdings || [];
-    let total = 0, found = false;
-    (Array.isArray(rows) ? rows : []).forEach(r => {
-      // sum any plausible "invested"/"amount in PHP" field
-      const v = num(r.invested != null ? r.invested : (r.valuePhp != null ? r.valuePhp : (r.php != null ? r.php : r.amount)));
-      if (v) { total += v; found = true; }
-      if (Array.isArray(r.entries)) r.entries.forEach(e => { const ev = num(e.invested != null ? e.invested : e.php); if (ev) { total += ev; found = true; } });
+    if (!st || !st.rows || typeof st.rows !== "object") return null;
+    let total = 0;
+    Object.keys(st.rows).forEach(coin => {
+      const arr = st.rows[coin];
+      if (!Array.isArray(arr)) return;
+      arr.forEach(e => {
+        if (e.pending) return;                       // waiting orders are not invested yet
+        if (e.currency && e.currency !== "PHP") return; // keep PHP totals clean (skip USDT/USDC)
+        total += num(e.peso);
+      });
     });
-    return found ? total : (Array.isArray(rows) && rows.length ? 0 : null);
+    return total;
+  }
+  // Current total portfolio value from the tracker's own history (latest snapshot).
+  function cryptoValue() {
+    const st = DASH.crypto || localState("cryptoTrackerState");
+    if (!st || !Array.isArray(st.history) || !st.history.length) return null;
+    const last = st.history[st.history.length - 1];
+    return num(last && last.value);
   }
   // Paydays: 1st cutoff = 13th, 2nd cutoff = 28th. On/before the 13th we show the 1st
   // cutoff window (due days 1-13); after the 13th we show the 2nd (due days 14-end).
@@ -360,10 +371,15 @@
 
   // ---------- Render dashboard ----------
   function renderDashboard() {
-    const inv = cryptoInvested(), debt = debtOutstanding(), recv = receivablesOutstanding(), sal = latestNet();
+    const inv = cryptoInvested(), cval = cryptoValue(), debt = debtOutstanding(), recv = receivablesOutstanding(), sal = latestNet();
     const cutoffInfo = currentCutoff();
+    const cryptoHeadline = (cval != null) ? cval : inv;   // prefer live value, fall back to invested
+    const shownForSub = valuesShown();
+    const cryptoSub = (cval != null && inv != null)
+      ? ("Invested " + (shownForSub ? fmtPeso(inv) : "\u2022\u2022\u2022\u2022"))
+      : (cryptoHeadline == null ? "Open the tracker to sync" : "Total put in");
     const cards = [
-      { label: "Crypto invested", ico: "\uD83D\uDCB5", val: inv == null ? "\u2014" : fmtPeso(inv), sub: inv == null ? "Open the tracker to sync" : "Total put in", seed: 7, color: "var(--accent-2)" },
+      { label: (cval != null ? "Crypto value" : "Crypto invested"), ico: "\uD83D\uDCB5", val: cryptoHeadline == null ? "\u2014" : fmtPeso(cryptoHeadline), sub: cryptoSub, seed: 7, color: "var(--accent-2)" },
       { label: cutoffInfo.label, ico: "\uD83E\uDDFE", val: debt == null ? "\u2014" : fmtPeso(debt), sub: debt == null ? "No debt data yet" : cutoffInfo.sub, seed: 3, color: "var(--red)" },
       { label: "Owed to you", ico: "\uD83E\uDD1D", val: recv == null ? "\u2014" : fmtPeso(recv), sub: recv == null ? "No receivables yet" : "Uncollected", seed: 11, color: "var(--green)" },
       { label: "Last take-home", ico: "\uD83D\uDCB0", val: sal == null ? "\u2014" : fmtPeso(sal.net), sub: sal == null ? "Save a cutoff to see it" : (sal.period + " \u00b7 " + sal.cutoff), seed: 5, color: "var(--accent)" }
@@ -381,7 +397,7 @@
     const eye = document.getElementById("eyeBtn");
     if (eye) eye.innerHTML = (shown ? "\uD83D\uDC41\uFE0F" : "\uD83D\uDE48") + " <span style='font-size:12px;font-weight:600;'>" + (shown ? "Hide" : "Show") + " amounts</span>";
 
-    renderNetChart(inv, debt, recv, shown);
+    renderNetChart(cryptoHeadline, debt, recv, shown);
     renderKanbanSnapshot();
   }
   // Eye toggle: default HIDDEN. Remembered in localStorage.
