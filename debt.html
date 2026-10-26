@@ -102,6 +102,24 @@
   }
   .add-close:active { transform: scale(0.94); }
 
+  /* Scan a bill (OCR) */
+  .scan-box { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-bottom: 14px; }
+  .scan-btns { display: flex; gap: 8px; }
+  .scan-btn { flex: 1; background: var(--panel); border: 1px solid var(--gold); color: var(--gold-bright);
+    border-radius: 10px; padding: 11px 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .scan-btn:active { transform: scale(0.97); }
+  .scan-btn:disabled { opacity: 0.5; cursor: default; }
+  .scan-note { color: var(--muted); font-size: 11px; margin-top: 8px; line-height: 1.4; }
+  .scan-status { margin-top: 10px; }
+  .scan-prog { height: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .scan-bar { height: 100%; width: 0%; background: var(--gold); transition: width .2s; }
+  .scan-msg { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .scan-result { margin-top: 10px; display: flex; gap: 10px; align-items: flex-start; }
+  .scan-thumb { width: 66px; height: 66px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); flex: 0 0 auto; }
+  .scan-found { font-size: 12.5px; color: var(--text); line-height: 1.5; }
+  .scan-found b { color: var(--gold-bright); }
+  .scan-found .miss { color: var(--muted); }
+
   /* Easy view: hide technical clutter, keep name + due date + amount + checkbox */
   body.easy .card .hint { display: none; }          /* long explanation paragraphs */
   body.easy .detail-only { display: none !important; } /* term "1/3", cutoff label, full date, partial tag */
@@ -482,6 +500,26 @@
         <button class="add-close" id="addClose" title="Close">&times;</button>
       </div>
       <div class="hint">This will be added to the <b id="addMonthLabel">current month</b>. If it has terms, it is spread across the following months (1 term per month). Same name/label = <b>add up</b> with the existing entry.</div>
+
+      <!-- Scan a bill (on-device OCR) -->
+      <div class="scan-box">
+        <div class="scan-btns">
+          <button type="button" class="scan-btn" id="scanCamBtn">&#128247; Scan a bill</button>
+          <button type="button" class="scan-btn" id="scanUpBtn">&#128444;&#65039; Upload image</button>
+        </div>
+        <div class="scan-note">Reads the photo on your device (offline). Nothing is uploaded. Check the fields after.</div>
+        <input type="file" id="scanCamInput" accept="image/*" capture="environment" style="display:none" />
+        <input type="file" id="scanUpInput" accept="image/*" style="display:none" />
+        <div class="scan-status" id="scanStatus" style="display:none">
+          <div class="scan-prog"><div class="scan-bar" id="scanBar"></div></div>
+          <div class="scan-msg" id="scanMsg">Reading bill&hellip;</div>
+        </div>
+        <div class="scan-result" id="scanResult" style="display:none">
+          <img id="scanThumb" class="scan-thumb" alt="bill" />
+          <div class="scan-found" id="scanFound"></div>
+        </div>
+      </div>
+
       <div class="field">
         <label>Category</label>
         <select id="newCategory" class="cat-sel">
@@ -1877,6 +1915,162 @@
     if (ov) ov.classList.remove("open");
   }
 
+  // ---------- Scan a bill (on-device OCR via Tesseract.js) ----------
+  let tesseractLoading = null;
+  // Lazy-load Tesseract.js only when the user actually scans (keeps page start fast).
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (tesseractLoading) return tesseractLoading;
+    tesseractLoading = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.onload = () => resolve(window.Tesseract);
+      s.onerror = () => reject(new Error("Could not load the scanner. Check your connection and try again."));
+      document.head.appendChild(s);
+    });
+    return tesseractLoading;
+  }
+
+  function setScanBusy(busy) {
+    const a = document.getElementById("scanCamBtn"), b = document.getElementById("scanUpBtn");
+    if (a) a.disabled = busy; if (b) b.disabled = busy;
+  }
+
+  async function handleBillImage(file) {
+    if (!file) return;
+    const status = document.getElementById("scanStatus");
+    const result = document.getElementById("scanResult");
+    const bar = document.getElementById("scanBar");
+    const msg = document.getElementById("scanMsg");
+    result.style.display = "none";
+    status.style.display = "block";
+    bar.style.width = "5%";
+    msg.textContent = "Loading scanner\u2026";
+    setScanBusy(true);
+
+    // show a thumbnail of what was captured
+    const thumbUrl = URL.createObjectURL(file);
+    document.getElementById("scanThumb").src = thumbUrl;
+
+    try {
+      const Tesseract = await loadTesseract();
+      msg.textContent = "Reading bill\u2026";
+      const { data } = await Tesseract.recognize(file, "eng", {
+        logger: (m) => {
+          if (m.status === "recognizing text" && typeof m.progress === "number") {
+            bar.style.width = Math.max(10, Math.round(m.progress * 100)) + "%";
+          }
+        }
+      });
+      bar.style.width = "100%";
+      const text = (data && data.text) ? data.text : "";
+      const found = parseBillText(text);
+      applyBillToForm(found);
+      status.style.display = "none";
+      showBillFound(found);
+      result.style.display = "flex";
+    } catch (e) {
+      msg.textContent = (e && e.message) ? e.message : "Sorry, could not read that image. Try a clearer photo.";
+      bar.style.width = "0%";
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
+  // Pull amount, due day, and a likely biller name out of raw OCR text.
+  function parseBillText(text) {
+    const out = { amount: 0, dueDay: 0, name: "", recurring: false, raw: text };
+    if (!text) return out;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const lower = text.toLowerCase();
+
+    // ---- Amount ----
+    // Prefer a number near a "total / amount due / balance / please pay" keyword.
+    const amtKeywords = /(total amount due|amount due|total due|please pay|balance due|statement balance|total|balance|amount)/i;
+    const moneyRe = /(?:php|p|\u20b1|\$)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+\.[0-9]{2})/i;
+    let best = 0, bestKeyScore = -1;
+    lines.forEach(line => {
+      const hasKey = amtKeywords.test(line);
+      // collect all money-looking tokens on this line
+      const re = /([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{2})?|[0-9]+\.[0-9]{2})/g;
+      let m;
+      while ((m = re.exec(line)) !== null) {
+        const val = parseFloat(m[1].replace(/,/g, ""));
+        if (!isFinite(val) || val <= 0) continue;
+        const keyScore = hasKey ? 1 : 0;
+        // choose: keyword lines win; within same tier, the larger amount wins
+        if (keyScore > bestKeyScore || (keyScore === bestKeyScore && val > best)) {
+          best = val; bestKeyScore = keyScore;
+        }
+      }
+    });
+    out.amount = best;
+
+    // ---- Due date (day of month 1-31) ----
+    // Look for "due" near a date. Supports "Due Date: 02/15/2026", "due 15", "due on March 15".
+    const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+    const dueLine = lines.find(l => /due/i.test(l)) || "";
+    let day = 0;
+    // mm/dd/yyyy or dd/mm — take the day portion; also plain "due 15"
+    let dm = dueLine.match(/due[^0-9]{0,12}(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/i);
+    if (dm) {
+      // assume mm/dd (common on PH bills); day is the 2nd group, but guard range
+      let a = parseInt(dm[1], 10), b = parseInt(dm[2], 10);
+      day = (b >= 1 && b <= 31) ? b : a;
+    }
+    if (!day) {
+      const dmon = dueLine.match(new RegExp("due[^a-z0-9]{0,12}(?:" + MONTHS.join("|") + ")[a-z]*\\.?\\s+(\\d{1,2})", "i"));
+      if (dmon) day = parseInt(dmon[1], 10);
+    }
+    if (!day) {
+      const dplain = dueLine.match(/due(?:\s*date)?[^0-9]{0,12}(\d{1,2})\b/i);
+      if (dplain) day = parseInt(dplain[1], 10);
+    }
+    if (day >= 1 && day <= 31) out.dueDay = day;
+
+    // ---- Biller / name ----
+    // Known billers (also flag as recurring) take priority, else first strong text line.
+    const billers = [
+      { re: /meralco/i, name: "Meralco" }, { re: /maynilad/i, name: "Maynilad" },
+      { re: /manila water/i, name: "Manila Water" }, { re: /globe/i, name: "Globe" },
+      { re: /smart|pldt/i, name: "PLDT / Smart" }, { re: /converge/i, name: "Converge" },
+      { re: /sky\s?cable|skycable/i, name: "SKYcable" }, { re: /netflix/i, name: "Netflix" },
+      { re: /spotify/i, name: "Spotify" }, { re: /water district/i, name: "Water District" }
+    ];
+    let biller = billers.find(x => x.re.test(lower));
+    if (biller) { out.name = biller.name; out.recurring = true; }
+    else {
+      // first line that is mostly letters and reasonably long = likely the biller/company
+      const cand = lines.find(l => l.replace(/[^a-z]/gi, "").length >= 4 && !/statement|invoice|bill|account|customer|date|page/i.test(l));
+      if (cand) out.name = cand.replace(/\s{2,}/g, " ").slice(0, 40);
+    }
+    return out;
+  }
+
+  function applyBillToForm(f) {
+    if (f.amount > 0) document.getElementById("newAmount").value = f.amount.toFixed(2);
+    if (f.dueDay >= 1 && f.dueDay <= 31) document.getElementById("newDueDay").value = f.dueDay;
+    if (f.name) document.getElementById("newName").value = f.name;
+    if (f.recurring) {
+      const cat = document.getElementById("newCategory");
+      // bills are usually "other" + recurring; keep whatever the user already picked if not default
+      const rec = document.getElementById("newRecurring");
+      if (rec) { rec.checked = true; rec.dispatchEvent(new Event("change")); }
+    }
+    // refresh per-term preview / field visibility
+    const amt = document.getElementById("newAmount");
+    if (amt) amt.dispatchEvent(new Event("input"));
+  }
+
+  function showBillFound(f) {
+    const parts = [];
+    parts.push(f.amount > 0 ? "Amount: <b>" + peso(f.amount) + "</b>" : "<span class='miss'>Amount: not found</span>");
+    parts.push(f.dueDay ? "Due day: <b>" + f.dueDay + "</b>" : "<span class='miss'>Due day: not found</span>");
+    parts.push(f.name ? "Name: <b>" + f.name.replace(/</g, "&lt;") + "</b>" : "<span class='miss'>Name: not found</span>");
+    const el = document.getElementById("scanFound");
+    el.innerHTML = "<b style='color:var(--text)'>Filled in below \u2014 please check &amp; edit:</b><br>" + parts.join("<br>");
+  }
+
   // ---------- App start ----------
   let appStarted = false;
   function startApp() {
@@ -1898,6 +2092,11 @@
       if (e.target === document.getElementById("addOverlay")) closeAddModal();
     });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAddModal(); });
+    // Scan a bill (OCR)
+    document.getElementById("scanCamBtn").addEventListener("click", () => document.getElementById("scanCamInput").click());
+    document.getElementById("scanUpBtn").addEventListener("click", () => document.getElementById("scanUpInput").click());
+    document.getElementById("scanCamInput").addEventListener("change", (e) => { handleBillImage(e.target.files[0]); e.target.value = ""; });
+    document.getElementById("scanUpInput").addEventListener("change", (e) => { handleBillImage(e.target.files[0]); e.target.value = ""; });
     document.getElementById("addFundBtn").addEventListener("click", addFund);
     document.getElementById("affordPrice").addEventListener("input", renderAffordCard);
     document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
@@ -1967,7 +2166,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 112;
+  const APP_VERSION = 113;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
