@@ -445,7 +445,7 @@
         <div><label>Start time</label><input id="linkStart" type="time" value="08:00" /></div>
       </div>
       <div class="field two">
-        <div><label>Avg speed (km/h)</label><input id="linkSpeed" type="number" inputmode="decimal" value="50" /></div>
+        <div><label>Avg speed (km/h)</label><input id="linkSpeed" type="number" inputmode="decimal" value="60" /></div>
         <div><label>Buffer per stop (min)</label><input id="linkBuffer" type="number" inputmode="decimal" value="15" /></div>
       </div>
       <div class="field inline"><input type="checkbox" id="linkReplace" /><label for="linkReplace" style="margin:0;">Replace day's entries</label></div>
@@ -489,7 +489,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 132;
+  const APP_VERSION = 133;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1379,7 +1379,7 @@
     document.getElementById("linkAdd").style.display = "none";
     document.getElementById("linkInput").value = "";
     document.getElementById("linkStart").value = "08:00";
-    document.getElementById("linkSpeed").value = "50";
+    document.getElementById("linkSpeed").value = "60";
     document.getElementById("linkBuffer").value = "15";
     document.getElementById("linkReplace").checked = false;
     const days = datesInRange(t.start, t.end);
@@ -1453,7 +1453,7 @@
     const R = 6371, toRad = d => d * Math.PI / 180;
     const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
     const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)) * 1.3; // *1.3 road-factor over straight line
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)) * 1.18; // road-factor over straight line (long PH highways ~1.1-1.2)
   }
   function minsToText(mins) {
     mins = Math.max(1, Math.round(mins));
@@ -1465,42 +1465,73 @@
     total = ((total % 1440) + 1440) % 1440;
     return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
   }
+  // Working model for the preview: ordered stops + per-leg minutes (editable).
+  let linkStops = [];     // [{ name, lat, lng, km, legMin }]  (km/legMin apply to leg INTO this stop; index 0 has none)
   function buildLinkPreview() {
     const t = findTrip(state.ui.openTripId); if (!t) return;
     const err = document.getElementById("linkErr"); err.textContent = "";
     const stops = parseMapsLink(document.getElementById("linkInput").value);
-    if (stops.length < 1) { err.textContent = "Couldn't read any stops from that link. Paste a Google Maps directions link (it has /dir/ in it)."; return; }
-    const speed = Math.max(5, Number(document.getElementById("linkSpeed").value) || 50);
-    const buffer = Math.max(0, Number(document.getElementById("linkBuffer").value) || 0);
-    let clock = document.getElementById("linkStart").value || "08:00";
+    if (stops.length < 1) { err.textContent = "Couldn't read any stops from that link. Paste a Google Maps directions link."; return; }
+    const speed = Math.max(5, Number(document.getElementById("linkSpeed").value) || 60);
     const anyCoords = stops.some(s => s.lat != null);
     const DEFAULT_LEG_MIN = 45;
 
-    const out = [];
-    stops.forEach((s, i) => {
-      if (i > 0) {
-        const km = haversineKm(stops[i - 1], s);
-        const legMin = km != null ? (km / speed) * 60 : DEFAULT_LEG_MIN;
-        const durTxt = (km != null ? "~" + minsToText(legMin) + " (\u2248" + Math.round(km) + " km)" : "~" + minsToText(legMin) + " (est.)");
-        out.push({ kind: "leg", label: "Drive", durationText: durTxt, fromText: stops[i - 1].name, toText: s.name });
-        clock = addMinutes(clock, legMin);
-      }
-      out.push({ kind: "stop", time: clock, endTime: "", approx: true, typeId: "", title: s.name, note: "", category: "Transport", cost: 0, inRoute: true });
-      clock = addMinutes(clock, buffer); // leave buffer before departing to next
+    linkStops = stops.map((s, i) => {
+      if (i === 0) return { name: s.name, lat: s.lat, lng: s.lng, km: null, legMin: 0 };
+      const km = haversineKm(stops[i - 1], s);
+      const legMin = km != null ? Math.round((km / speed) * 60) : DEFAULT_LEG_MIN;
+      return { name: s.name, lat: s.lat, lng: s.lng, km: km != null ? Math.round(km) : null, legMin: legMin };
     });
-    linkParsed = out;
-    const stopCount = out.filter(e => e.kind === "stop").length;
-    document.getElementById("linkFound").textContent = "Scheduled " + stopCount + " stop" + (stopCount === 1 ? "" : "s") + (anyCoords ? " using link coordinates." : " (no coords in link \u2014 using " + DEFAULT_LEG_MIN + " min/leg estimate; edit after).");
-    renderLinkPreview(t);
+    document.getElementById("linkFound").textContent = "Scheduled " + stops.length + " stop" + (stops.length === 1 ? "" : "s") +
+      (anyCoords ? " using link coordinates. Edit any drive time below \u2014 times recompute automatically." : " (no coords \u2014 " + DEFAULT_LEG_MIN + " min/leg default; edit drive times below).");
+    rescheduleLink();
     document.getElementById("linkResultWrap").style.display = "block";
     document.getElementById("linkAdd").style.display = "block";
   }
+  // Rebuild linkParsed (stops + legs with times) from linkStops + start/buffer, then render.
+  function rescheduleLink() {
+    const buffer = Math.max(0, Number(document.getElementById("linkBuffer").value) || 0);
+    let clock = document.getElementById("linkStart").value || "08:00";
+    const out = [];
+    linkStops.forEach((s, i) => {
+      if (i > 0) {
+        const km = s.km, legMin = Math.max(0, Number(s.legMin) || 0);
+        const durTxt = "~" + minsToText(legMin) + (km != null ? " (\u2248" + km + " km)" : " (est.)");
+        out.push({ kind: "leg", label: "Drive", durationText: durTxt, fromText: linkStops[i - 1].name, toText: s.name });
+        clock = addMinutes(clock, legMin);
+      }
+      out.push({ kind: "stop", time: clock, endTime: "", approx: true, typeId: "", title: s.name, note: "", category: "Transport", cost: 0, inRoute: true });
+      clock = addMinutes(clock, buffer);
+    });
+    linkParsed = out;
+    renderLinkPreview(findTrip(state.ui.openTripId));
+  }
   function renderLinkPreview(t) {
     const wrap = document.getElementById("linkPreview");
-    wrap.innerHTML = linkParsed.map(e => {
-      if (e.kind === "leg") return '<div class="pv-row leg"><div class="pv-t">\uD83C\uDFC3 Drive</div><div>' + esc(e.durationText) + '  (' + esc(e.fromText) + ' \u2192 ' + esc(e.toText) + ')</div></div>';
-      return '<div class="pv-row"><span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span><div class="pv-t">' + esc(timeDisplay(e)) + '</div><div>' + esc(e.title) + '</div></div>';
-    }).join("");
+    // render stops with times, and between them an editable leg-minutes input
+    let html = "";
+    linkStops.forEach((s, i) => {
+      if (i > 0) {
+        html += '<div class="pv-row leg"><div class="pv-t">\uD83C\uDFC3 Drive</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+          '<input type="number" min="0" data-legmin="' + i + '" value="' + (Number(s.legMin) || 0) + '" style="width:64px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 6px;font-size:12px;" /> min' +
+          (s.km != null ? ' <span style="color:var(--muted)">\u2248' + s.km + ' km</span>' : ' <span style="color:var(--muted)">(est.)</span>') +
+          '</div></div>';
+      }
+      const timed = linkParsed.filter(e => e.kind === "stop")[i];
+      const tLabel = timed ? timeDisplay(timed) : "";
+      html += '<div class="pv-row"><span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span><div class="pv-t">' + esc(tLabel) + '</div><div>' + esc(s.name) + '</div></div>';
+    });
+    wrap.innerHTML = html;
+    // total line
+    const totalMin = linkStops.reduce((a, s) => a + (Number(s.legMin) || 0), 0);
+    const totalLine = document.createElement("div");
+    totalLine.style.cssText = "padding:8px 10px;font-size:12px;color:var(--gold-bright);border-top:1px solid var(--line);";
+    totalLine.textContent = "Total driving: " + minsToText(totalMin);
+    wrap.appendChild(totalLine);
+    // wire the editable leg inputs
+    wrap.querySelectorAll("[data-legmin]").forEach(inp => {
+      inp.onchange = () => { const i = Number(inp.getAttribute("data-legmin")); if (linkStops[i]) { linkStops[i].legMin = Math.max(0, Number(inp.value) || 0); rescheduleLink(); } };
+    });
   }
   function confirmLinkInsert() {
     const t = findTrip(state.ui.openTripId); if (!t || !linkParsed.length) return;
@@ -1577,6 +1608,8 @@
   document.getElementById("linkCancel").onclick = closeLinkModal;
   document.getElementById("linkParse").onclick = buildLinkPreview;
   document.getElementById("linkAdd").onclick = confirmLinkInsert;
+  document.getElementById("linkStart").addEventListener("change", () => { if (linkStops.length) rescheduleLink(); });
+  document.getElementById("linkBuffer").addEventListener("change", () => { if (linkStops.length) rescheduleLink(); });
   document.getElementById("scanCamBtn").onclick = () => document.getElementById("scanCamInput").click();
   document.getElementById("scanUpBtn").onclick = () => document.getElementById("scanUpInput").click();
   document.getElementById("scanCamInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
