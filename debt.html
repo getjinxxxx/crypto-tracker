@@ -1060,8 +1060,9 @@
     state.debts.forEach(d => {
       totalRemaining += remainingOf(d);
       if (isActiveIn(d, viewMonth)) {
-        const due = d.terms > 1 ? perTermOf(d) : num(d.amount);
-        monthDue += due;
+        // perTermOf is plan-aware (split paydays this month), recurring-aware, and term-aware,
+        // so it gives the correct amount due THIS MONTH for every kind of debt.
+        monthDue += perTermOf(d);
         monthPaid += paidOfMonth(d); // counts partials too
       }
     });
@@ -1507,8 +1508,11 @@
       items: items.map(d => ({
         name: d.name || "", subCat: d.subCat || "", amount: num(d.amount),
         terms: d.terms || 1, startMonth: d.startMonth || "",
-        paidTerms: d.paidTerms || {}, paid: !!d.paid, date: d.date || "",
-        dueDay: d.dueDay || 0, recurring: !!d.recurring, endMonth: d.endMonth || ""
+        paidTerms: d.paidTerms || {}, paidAmt: d.paidAmt || {}, paidOnce: num(d.paidOnce) || 0,
+        paid: !!d.paid, date: d.date || "",
+        dueDay: d.dueDay || 0, recurring: !!d.recurring, endMonth: d.endMonth || "",
+        plan: Array.isArray(d.plan) ? d.plan : null,
+        lineItems: Array.isArray(d.lineItems) ? d.lineItems : null
       }))
     };
   }
@@ -2731,7 +2735,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 121;
+  const APP_VERSION = 122;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {

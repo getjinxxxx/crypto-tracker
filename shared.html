@@ -97,14 +97,32 @@
   function monthLabel(k){ const[y,m]=parseKey(k); return (isNaN(y)||m<0||m>11)?k:(MONTH_NAMES[m]+" "+y); }
   function addMonths(k,n){ let[y,m]=parseKey(k); const t=y*12+m+n; return Math.floor(t/12)+"-"+String((t%12)+1).padStart(2,"0"); }
   function termIndexFor(it,k){ const[sy,sm]=parseKey(it.startMonth),[cy,cm]=parseKey(k); return (cy-sy)*12+(cm-sm); }
-  function isActiveIn(it,k){ const i=termIndexFor(it,k); if(i<0)return false; if(it.recurring)return !it.endMonth||k<=it.endMonth; return i<(it.terms||1); }
-  function isPaidThisMonth(it,k){ if(it.recurring||it.terms>1)return !!(it.paidTerms||{})[k]; return !!it.paid; }
-  function perTermOf(it){ return (it.terms>1 && !it.recurring) ? num(it.amount)/it.terms : num(it.amount); }
+  // Plan (payday split) awareness — mirrors the main tracker so shared totals match.
+  function hasPlan(it){ return Array.isArray(it.plan) && it.plan.length>0; }
+  function planEntriesFor(it,k){ return hasPlan(it) ? it.plan.filter(p=>p.key===k).sort((a,b)=>a.payday-b.payday) : []; }
+  function isActiveIn(it,k){
+    if (hasPlan(it)) return planEntriesFor(it,k).length>0;
+    const i=termIndexFor(it,k); if(i<0)return false;
+    if(it.recurring)return !it.endMonth||k<=it.endMonth; return i<(it.terms||1);
+  }
+  function perTermOf(it){
+    if (hasPlan(it)) return planEntriesFor(it, viewMonth).reduce((s,p)=>s+num(p.amount),0);
+    return (it.terms>1 && !it.recurring) ? num(it.amount)/it.terms : num(it.amount);
+  }
+  function isPaidThisMonth(it,k){
+    if (hasPlan(it)) { const es=planEntriesFor(it,k); return es.length>0 && es.every(p=>p.paid); }
+    if(it.recurring||it.terms>1)return !!(it.paidTerms||{})[k]; return !!it.paid;
+  }
   function paidOf(it){
+    if (hasPlan(it)) return it.plan.reduce((s,p)=>s+(p.paid?num(p.amount):0),0);
     if (it.recurring || it.terms>1) return Object.keys(it.paidTerms||{}).filter(x=>it.paidTerms[x]).length * perTermOf(it);
     return it.paid ? num(it.amount) : 0;
   }
-  function remainingOf(it){ if(it.recurring) return isPaidThisMonth(it, viewMonth)?0:num(it.amount); return Math.max(0, num(it.amount)-paidOf(it)); }
+  function remainingOf(it){
+    if (hasPlan(it)) return it.plan.reduce((s,p)=>s+(p.paid?0:num(p.amount)),0);
+    if(it.recurring) return isPaidThisMonth(it, viewMonth)?0:num(it.amount);
+    return Math.max(0, num(it.amount)-paidOf(it));
+  }
 
   let data = null;
   let viewMonth = monthKey(new Date());
@@ -143,7 +161,7 @@
     items.forEach(it => {
       owed += num(it.amount); paid += paidOf(it); totalRemaining += remainingOf(it);
       if (isActiveIn(it, viewMonth)) {
-        const due = it.terms>1 ? perTermOf(it) : num(it.amount);
+        const due = perTermOf(it); // plan-aware this-month amount
         monthDue += due;
         if (isPaidThisMonth(it, viewMonth)) monthPaid += due;
       }
@@ -157,23 +175,34 @@
       active.forEach(it => { const s = it.subCat || "other"; (bySub[s]=bySub[s]||[]).push(it); });
       Object.keys(bySub).forEach(sub => {
         const list = bySub[sub];
-        const due = list.reduce((s,it)=> s + (it.terms>1?perTermOf(it):remainingOf(it)), 0);
+        const due = list.reduce((s,it)=> s + perTermOf(it), 0);
         let rows = "";
         list.forEach(it => {
           const paidNow = isPaidThisMonth(it, viewMonth);
           const dt = it.date ? new Date(it.date+"T00:00:00").toLocaleDateString("en-PH",{year:"2-digit",month:"short",day:"numeric"}) : "";
           const label = (it.name && it.name.trim()) ? it.name : defLabel;
-          const amt = it.terms>1 ? perTermOf(it) : num(it.amount);
+          const amt = perTermOf(it);
           let termTag = "";
-          if (it.terms>1){ const i=termIndexFor(it,viewMonth); termTag=' <span class="bd-term">'+(i+1)+'/'+it.terms+'</span>'; }
+          if (hasPlan(it)) {
+            const es = planEntriesFor(it, viewMonth);
+            const labels = es.map(p => { const which = it.plan.findIndex(x=>x===p)+1; return "split "+which+"/"+it.plan.length+" \u00b7 "+monthLabel(p.key).split(" ")[0]+" "+p.payday; });
+            termTag = ' <span class="bd-term">' + labels.join(", ") + '</span>';
+          } else if (it.terms>1){ const i=termIndexFor(it,viewMonth); termTag=' <span class="bd-term">'+(i+1)+'/'+it.terms+'</span>'; }
           let dueTag = "";
-          if (it.dueDay && it.dueDay>=1 && it.dueDay<=31){
+          if (!hasPlan(it) && it.dueDay && it.dueDay>=1 && it.dueDay<=31){
             dueTag = ' <span class="due-tag">\uD83D\uDCC5 '+it.dueDay+' ('+cutoffForDueDay(it.dueDay)+')</span>';
+          }
+          // saved breakdown (what's inside a combined debt)
+          let subHtml = "";
+          if (Array.isArray(it.lineItems) && it.lineItems.length) {
+            subHtml = it.lineItems.map(li => '<div class="bd-row" style="padding-left:16px;font-size:12.5px;color:var(--muted)">' +
+              '<span class="bd-label">\u21B3 '+String(li.label||"Item").replace(/</g,"&lt;")+'</span>' +
+              '<span class="bd-amt">'+peso(num(li.price))+'</span></div>').join("");
           }
           rows += '<div class="bd-row'+(paidNow?' bd-paid':'')+'">' +
             '<span class="bd-dot'+(paidNow?' on':'')+'"></span>' +
             '<span class="bd-label">'+label+termTag+dueTag+(dt?' <span class="bd-date">'+dt+'</span>':'')+'</span>' +
-            '<span class="bd-amt">'+peso(amt)+'</span></div>';
+            '<span class="bd-amt">'+peso(amt)+'</span></div>' + subHtml;
         });
         boxes += '<div class="sub-box"><div class="sub-box-head"><span>'+subLabel(sub)+'</span><span>'+peso(due)+'</span></div>'+rows+'</div>';
       });
