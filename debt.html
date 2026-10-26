@@ -113,6 +113,19 @@
   }
   .card .hint { color: var(--muted); font-size: 12px; margin: -6px 0 12px; line-height: 1.5; }
 
+  /* To-Pay / Paid section headers */
+  .sec-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px;
+    padding: 10px 14px; border-radius: 12px; cursor: default; }
+  .sec-head.topay { background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.3); }
+  .sec-head.paid  { background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.3); cursor: pointer; }
+  .sec-head .sec-title { font-size: 13px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+  .sec-head.topay .sec-title { color: #ff8a8a; }
+  .sec-head.paid .sec-title { color: #4fd1a5; }
+  .sec-head .sec-total { font-size: 14px; font-weight: 800; }
+  .sec-head.topay .sec-total { color: var(--red); }
+  .sec-head.paid .sec-total { color: var(--green); }
+  .sec-head .sec-chev { font-size: 10px; margin-right: 6px; }
+
   /* Category group */
   .cat-group { margin-bottom: 20px; }
   .cat-header { display: flex; align-items: center; justify-content: space-between;
@@ -524,6 +537,7 @@
   const noteOpen = {};   // shareId -> bool (is the recipient note expanded?)
   const catOpen = {};    // category -> bool (false = collapsed; default expanded)
   const cardOpen = {};   // cardKey -> bool (false = minimized; default expanded)
+  let paidSectionOpen = false; // the "Paid" section is collapsed by default
   let fbStateRef = null, applyingRemote = false, saveTimer = null;
   const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
   let firstSnapshot = true; // first cloud snapshot after load is always applied (cloud wins)
@@ -715,9 +729,21 @@
     const [cy, cm] = parseKey(key);
     return (cy - sy) * 12 + (cm - sm);
   }
+  // ---------- Payday split plan ----------
+  // An item may have a `plan`: an array of installments tied to a payday.
+  //   plan entry = { key:"YYYY-MM", payday:13|28, amount:Number, paid:Bool }
+  // When present, the item's dues follow the plan (ignores terms/recurring).
+  function hasPlan(d) { return Array.isArray(d.plan) && d.plan.length > 0; }
+  // Plan entries that fall in a given month, in payday order.
+  function planEntriesFor(d, key) {
+    if (!hasPlan(d)) return [];
+    return d.plan.filter(p => p.key === key).sort((a, b) => a.payday - b.payday);
+  }
+
   // Is the debt active in the given month? Recurring bills run every month from
   // startMonth onward until stopped (endMonth set); otherwise it's N fixed terms.
   function isActiveIn(d, key) {
+    if (hasPlan(d)) return planEntriesFor(d, key).length > 0;
     const idx = termIndexFor(d, key);
     if (idx < 0) return false;
     if (d.recurring) return !d.endMonth || key <= d.endMonth;
@@ -727,7 +753,11 @@
   // ---------- Derived amounts (per item) ----------
   // Recurring bills charge the FULL amount every active month (not divided like installments)
   // and track paid status PER MONTH (like installments), since there's no fixed total.
-  function perTermOf(d) { return (d.terms > 1 && !d.recurring) ? num(d.amount) / d.terms : num(d.amount); }
+  // For planned items, "this month" due = sum of this month's plan entries.
+  function perTermOf(d) {
+    if (hasPlan(d)) return planEntriesFor(d, viewMonth).reduce((s, p) => s + num(p.amount), 0);
+    return (d.terms > 1 && !d.recurring) ? num(d.amount) / d.terms : num(d.amount);
+  }
   function paidTermsCount(d) { return Object.keys(d.paidTerms || {}).filter(k => d.paidTerms[k]).length; }
   function paidOf(d) {
     if (d.recurring || d.terms > 1) return paidTermsCount(d) * perTermOf(d);
@@ -746,11 +776,16 @@
   }
   // What counts as paid for this month's term: full per-term if checked, else the partial.
   function paidOfMonth(d) {
+    if (hasPlan(d)) return planEntriesFor(d, viewMonth).reduce((s, p) => s + (p.paid ? num(p.amount) : 0), 0);
     if (isTermChecked(d)) return perTermOf(d);
     return Math.min(perTermOf(d), partPaidThisMonth(d));
   }
   // For recurring bills, "remaining" = this month's amount minus what's paid this month.
   function remainingOf(d) {
+    if (hasPlan(d)) {
+      // total remaining across ALL future plan entries (unpaid), not just this month
+      return d.plan.reduce((s, p) => s + (p.paid ? 0 : num(p.amount)), 0);
+    }
     if (d.recurring) return Math.max(0, perTermOf(d) - paidOfMonth(d));
     if (d.terms > 1) {
       const fullTermsPaid = paidTermsCount(d) * perTermOf(d);
@@ -761,6 +796,10 @@
   }
   // A term is "paid this month" if explicitly checked OR the partial covers the per-term due.
   function isPaidThisMonth(d) {
+    if (hasPlan(d)) {
+      const es = planEntriesFor(d, viewMonth);
+      return es.length > 0 && es.every(p => p.paid);
+    }
     if (isTermChecked(d)) return true;
     return perTermOf(d) > 0 && partPaidThisMonth(d) >= perTermOf(d) - 0.009;
   }
@@ -797,8 +836,33 @@
     return (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category));
   }
 
+  // Rows for a planned (split) item: the item label, then one row per payday this month.
+  function planItemRowsHtml(d) {
+    const label = (d.name && d.name.trim()) ? d.name : (d.person ? d.person : "Name/Label");
+    const totalPaydays = d.plan.length;
+    let html = '<div class="bd-row" style="border-top:1px solid var(--line)">' +
+      '<span class="bd-label" style="font-weight:600">' + label +
+        ' <span class="bd-term">Plan ' + totalPaydays + ' paydays</span></span>' +
+      '<button class="bd-edit" data-del="' + d.id + '" title="Delete whole item" style="margin-left:auto">&times;</button>' +
+      '</div>';
+    d.plan.forEach((p, pi) => {
+      if (p.key !== viewMonth) return;
+      const payLabel = monthLabel(p.key).split(" ")[0] + " " + p.payday; // e.g. "Oct 28"
+      const which = d.plan.findIndex(x => x === p) + 1;
+      html += '<div class="bd-row' + (p.paid ? " bd-paid" : "") + '" style="padding-left:14px">' +
+        '<input type="checkbox" class="bd-check" data-plan="' + d.id + ':' + pi + '"' + (p.paid ? " checked" : "") + '>' +
+        '<span class="bd-label"><span class="due-tag u-up">' + payLabel + '</span> ' +
+          '<span class="bd-date">payday ' + which + ' of ' + totalPaydays + '</span></span>' +
+        '<span class="bd-amt">' + peso(num(p.amount)) + '</span>' +
+        '</div>';
+    });
+    return html;
+  }
+
   // One item row inside a sub-category box, with its own paid checkbox.
   function itemRowHtml(d) {
+    // Planned (split) item: render one row per payday that falls in this month.
+    if (hasPlan(d)) return planItemRowsHtml(d);
     const dt = d.date ? new Date(d.date + "T00:00:00").toLocaleDateString("en-PH", { year: "2-digit", month: "short", day: "numeric" }) : "";
     const label = (d.name && d.name.trim()) ? d.name : (d.person ? d.person : "Name/Label");
     const paidNow = isPaidThisMonth(d);
@@ -878,6 +942,14 @@
     const shareBtn = (category === "person")
       ? '<button class="d-share" data-share="' + encodeURIComponent(cardKey) + '" title="Share with ' + title + '">\uD83D\uDD17</button>'
       : "";
+    // Split-into-paydays button (any card with a this-month due and not fully paid).
+    const anyPlanned = items.some(d => d.plan && d.plan.length);
+    const splitBtn = (owed > 0.009)
+      ? '<button class="d-share" data-split="' + encodeURIComponent(cardKey) + '" title="Split into paydays" style="color:var(--gold-bright)">\uD83D\uDCC4</button>'
+      : "";
+    const planTag = anyPlanned
+      ? ' <span class="part-tag" title="Split across paydays">Plan</span>'
+      : "";
 
     // Recipient's note (from Firebase), if this person has a share with a reply.
     // Collapsible: minimized by default; click the header to expand/hide.
@@ -900,8 +972,9 @@
     return '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
       '<div class="debt-head">' +
         '<div class="d-name" data-cardtoggle="' + encodeURIComponent(cardKey) + '" style="cursor:pointer">' +
-          '<span class="cat-chev" style="font-size:10px;color:var(--muted)">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + title + '</div>' +
+          '<span class="cat-chev" style="font-size:10px;color:var(--muted)">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + title + planTag + '</div>' +
         '<span class="d-badge ' + (paidOff ? "b-paid" : "b-ok") + '">' + (paidOff ? "Fully paid" : (items.length + " item" + (items.length === 1 ? "" : "s"))) + '</span>' +
+        splitBtn +
         shareBtn +
       '</div>' +
       // When minimized, show a compact one-line summary instead of the full body.
@@ -953,30 +1026,71 @@
       return;
     }
     const order = ["person", "creditcard", "bankloan", "onlineloan", "government", "salaryloan", "other"];
-    const groups = {};
-    activeThisMonth.forEach(d => { const c = d.category || "other"; (groups[c] = groups[c] || []).push(d); });
+
+    // A card (person/label) is "paid" when all its items are paid this month.
+    function cardIsPaid(items) {
+      return items.every(d => isPaidThisMonth(d));
+    }
+
+    // Build the category-grouped HTML for a given subset of debts.
+    // sectionTag namespaces the collapse keys so To-Pay and Paid don't clash.
+    function buildGroups(subset, sectionTag) {
+      const groups = {};
+      subset.forEach(d => { const c = d.category || "other"; (groups[c] = groups[c] || []).push(d); });
+      let h = "";
+      order.forEach(cat => {
+        const list = groups[cat];
+        if (!list || !list.length) return;
+        const catDue = list.reduce((s, d) => s + perTermOf(d), 0);
+        const catKey = sectionTag + ":" + cat;
+        const open = catOpen[catKey] !== false; // expanded by default
+        h += '<div class="cat-group">' +
+          '<div class="cat-header" data-cattoggle="' + catKey + '">' +
+            '<span class="cat-title"><span class="cat-chev">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + catLabel(cat) + '</span>' +
+            '<span class="cat-total">' + (sectionTag === "paid" ? "" : "Due: ") + peso(catDue) + '</span></div>';
+        if (open) {
+          const cards = {};
+          const cardOrder = [];
+          list.forEach(d => { const k = cardKeyOf(d); if (!cards[k]) { cards[k] = []; cardOrder.push(k); } cards[k].push(d); });
+          cardOrder.forEach(k => { h += cardHtml(cardTitleOf(cards[k][0]), cat, cards[k], k); });
+        }
+        h += '</div>';
+      });
+      return h;
+    }
+
+    // Split active cards into To-Pay vs Paid (by card, so a person fully paid this month moves down).
+    const cardsMap = {};
+    const cardSeen = [];
+    activeThisMonth.forEach(d => { const k = cardKeyOf(d); if (!cardsMap[k]) { cardsMap[k] = []; cardSeen.push(k); } cardsMap[k].push(d); });
+    const toPayDebts = [], paidDebts = [];
+    cardSeen.forEach(k => {
+      (cardIsPaid(cardsMap[k]) ? paidDebts : toPayDebts).push(...cardsMap[k]);
+    });
+
+    const toPayTotal = toPayDebts.reduce((s, d) => s + remainingOf(d), 0);
+    const paidTotal  = paidDebts.reduce((s, d) => s + perTermOf(d), 0);
 
     let html = "";
-    order.forEach(cat => {
-      const list = groups[cat];
-      if (!list || !list.length) return;
-      // category total = sum of THIS month's dues (per-term amount for everyone)
-      const catDue = list.reduce((s, d) => s + perTermOf(d), 0);
-      const open = catOpen[cat] !== false; // expanded by default
-      html += '<div class="cat-group">' +
-        '<div class="cat-header" data-cattoggle="' + cat + '">' +
-          '<span class="cat-title"><span class="cat-chev">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + catLabel(cat) + '</span>' +
-          '<span class="cat-total">Due: ' + peso(catDue) + '</span></div>';
-      if (open) {
-        // group items within this category into cards (per person/label)
-        const cards = {};
-        const cardOrder = [];
-        list.forEach(d => { const k = cardKeyOf(d); if (!cards[k]) { cards[k] = []; cardOrder.push(k); } cards[k].push(d); });
-        cardOrder.forEach(k => { html += cardHtml(cardTitleOf(cards[k][0]), cat, cards[k], k); });
-      }
-      html += '</div>';
-    });
+    // TO PAY section
+    html += '<div class="sec-head topay"><span class="sec-title">To Pay</span>' +
+      '<span class="sec-total">' + peso(toPayTotal) + '</span></div>';
+    html += toPayDebts.length ? buildGroups(toPayDebts, "topay")
+      : '<div class="empty">Nothing left to pay this month \uD83C\uDF89</div>';
+
+    // PAID section (collapsed by default)
+    if (paidDebts.length) {
+      html += '<div class="sec-head paid" id="paidSectionHead"><span class="sec-title">' +
+        '<span class="sec-chev">' + (paidSectionOpen ? "\u25BC" : "\u25B6") + '</span>\u2713 Paid</span>' +
+        '<span class="sec-total">' + peso(paidTotal) + '</span></div>';
+      if (paidSectionOpen) html += buildGroups(paidDebts, "paid");
+    }
+
     el.innerHTML = html;
+
+    // wire the Paid section collapse/expand
+    const psh = document.getElementById("paidSectionHead");
+    if (psh) psh.addEventListener("click", () => { paidSectionOpen = !paidSectionOpen; renderList(); });
 
     // wire category collapse/expand
     el.querySelectorAll("[data-cattoggle]").forEach(h => h.addEventListener("click", (e) => {
@@ -1007,6 +1121,21 @@
         if (chk.checked) d.paidOnce = 0; // full payment supersedes any partial
       }
       saveState(); renderAll();
+    }));
+
+    // wire planned (split) payday checkbox
+    el.querySelectorAll("[data-plan]").forEach(chk => chk.addEventListener("change", () => {
+      const parts = chk.getAttribute("data-plan").split(":");
+      const d = state.debts.find(x => x.id === parts[0]);
+      if (!d || !hasPlan(d)) return;
+      const pi = parseInt(parts[1], 10);
+      if (d.plan[pi]) d.plan[pi].paid = chk.checked;
+      saveState(); renderAll();
+    }));
+
+    // wire split-into-paydays button
+    el.querySelectorAll("[data-split]").forEach(btn => btn.addEventListener("click", () => {
+      openSplitDialog(decodeURIComponent(btn.getAttribute("data-split")));
     }));
 
     // wire stop-recurring button
@@ -1116,6 +1245,108 @@
   }
 
   // Store the data in Firebase under shares/<shareId>/data and return a SHORT link.
+  // ---------- Split into paydays (13 & 28) ----------
+  // Build N consecutive payday slots starting at a given month+payday.
+  // Returns [{ key:"YYYY-MM", payday:13|28 }, ...]
+  function buildPaydaySlots(startKey, startPayday, n) {
+    const slots = [];
+    let key = startKey, pd = (startPayday === 13 ? 13 : 28);
+    for (let i = 0; i < n; i++) {
+      slots.push({ key: key, payday: pd });
+      if (pd === 13) { pd = 28; }            // same month, move to 28
+      else { pd = 13; key = addMonths(key, 1); } // next month's 13
+    }
+    return slots;
+  }
+
+  // Apply an equal split of each item's CURRENT this-month due across n paydays.
+  function applySplit(cardKey, n, startPayday) {
+    const items = state.debts.filter(d => cardKeyOf(d) === cardKey && isActiveIn(d, viewMonth) && !d.recurring);
+    if (!items.length) { alert("Nothing to split."); return; }
+    const slots = buildPaydaySlots(viewMonth, startPayday, n);
+    items.forEach(d => {
+      // Total to split: full remaining if already planned (re-split), else this month's due.
+      const total = hasPlan(d) ? remainingOf(d) : perTermOf(d);
+      if (total <= 0) return;
+      // equal split, last slot absorbs rounding remainder
+      const base = Math.floor((total / n) * 100) / 100;
+      const plan = slots.map((s, i) => ({
+        key: s.key, payday: s.payday,
+        amount: (i === n - 1) ? Math.round((total - base * (n - 1)) * 100) / 100 : base,
+        paid: false
+      }));
+      d.plan = plan;
+    });
+    saveState();
+    renderAll();
+  }
+
+  function openSplitDialog(cardKey) {
+    const items = state.debts.filter(d => cardKeyOf(d) === cardKey && isActiveIn(d, viewMonth) && !d.recurring);
+    if (!items.length) { alert("This card has nothing to split this month."); return; }
+    const title = cardTitleOf(items[0]);
+    const total = items.reduce((s, d) => s + perTermOf(d), 0);
+    const alreadyPlanned = items.some(d => hasPlan(d));
+
+    const ov = document.createElement("div");
+    ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:700;display:flex;align-items:center;justify-content:center;padding:20px";
+    const box = document.createElement("div");
+    box.style.cssText = "background:var(--panel);border:1px solid var(--line);border-radius:18px;max-width:420px;width:100%;padding:18px";
+    box.innerHTML =
+      '<div style="font-size:16px;font-weight:700;margin-bottom:4px">\uD83D\uDCC4 Split ' + peso(total) + '</div>' +
+      '<div style="color:var(--muted);font-size:12px;margin-bottom:14px">' + title +
+        ' \u2014 spread this month\u2019s due equally across your paydays (13 &amp; 28). Each item is divided proportionally.</div>' +
+      (alreadyPlanned ? '<div style="color:var(--gold-bright);font-size:12px;margin-bottom:10px">This card already has a plan. Applying again will replace it.</div>' : '') +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0">' +
+        '<label style="font-size:14px">Number of paydays</label>' +
+        '<input id="splitN" type="number" min="2" max="24" value="3" style="width:90px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit;text-align:right"></label>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0">' +
+        '<label style="font-size:14px">Start payday</label>' +
+        '<select id="splitStart" style="width:150px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit">' +
+          '<option value="13">13 (this month)</option><option value="28" selected>28 (this month)</option>' +
+        '</select>' +
+      '</div>' +
+      '<div id="splitPreview" style="background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:12.5px;color:var(--muted)"></div>' +
+      '<div style="display:flex;gap:10px;margin-top:4px">' +
+        '<button id="splitApply" class="btn primary" style="flex:1">Apply split</button>' +
+        '<button id="splitCancel" class="btn" style="flex:1">Cancel</button>' +
+      '</div>' +
+      (alreadyPlanned ? '<button id="splitClear" class="btn" style="width:100%;margin-top:8px;color:#ff8a8a">Remove plan (back to normal)</button>' : '');
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+
+    const nInput = box.querySelector("#splitN");
+    const startSel = box.querySelector("#splitStart");
+    const prev = box.querySelector("#splitPreview");
+    function refresh() {
+      const n = Math.max(2, Math.min(24, Math.round(num(nInput.value)) || 2));
+      const slots = buildPaydaySlots(viewMonth, parseInt(startSel.value, 10), n);
+      const base = Math.floor((total / n) * 100) / 100;
+      const last = Math.round((total - base * (n - 1)) * 100) / 100;
+      let lines = slots.map((s, i) => {
+        const amt = (i === n - 1) ? last : base;
+        return '&bull; ' + monthLabel(s.key).split(" ")[0] + ' ' + s.payday + '  \u2192  ' + peso(amt);
+      }).join("<br>");
+      prev.innerHTML = '<b style="color:var(--text)">Preview (paid every 13 &amp; 28):</b><br>' + lines;
+    }
+    nInput.oninput = refresh; startSel.onchange = refresh; refresh();
+
+    function close() { document.body.removeChild(ov); }
+    box.querySelector("#splitCancel").onclick = close;
+    box.querySelector("#splitApply").onclick = () => {
+      const n = Math.max(2, Math.min(24, Math.round(num(nInput.value)) || 2));
+      applySplit(cardKey, n, parseInt(startSel.value, 10));
+      close();
+    };
+    const clearBtn = box.querySelector("#splitClear");
+    if (clearBtn) clearBtn.onclick = () => {
+      items.forEach(d => { delete d.plan; });
+      saveState(); renderAll(); close();
+    };
+    ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  }
+
   function openShareFor(cardKey) {
     const person = cardKey.replace(/^person::/, "");
     let shareId = state.shareIds[cardKey];
@@ -1647,7 +1878,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 107;
+  const APP_VERSION = 108;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
