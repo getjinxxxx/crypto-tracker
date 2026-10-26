@@ -73,6 +73,35 @@
   .view-toggle button.active { background: var(--gold); color: #000; }
   body.easy .adv-only { display: none !important; }
 
+  /* Floating Add button (FAB) */
+  .fab {
+    position: fixed; right: 18px; bottom: 22px; z-index: 300;
+    width: 58px; height: 58px; border-radius: 50%; border: none;
+    background: var(--gold); color: #000; font-size: 32px; font-weight: 400; line-height: 1;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding-bottom: 3px;
+  }
+  .fab:active { transform: scale(0.94); }
+  @supports (padding: max(0px)) {
+    .fab { bottom: max(22px, env(safe-area-inset-bottom)); }
+  }
+
+  /* Add-debt modal */
+  .add-overlay {
+    position: fixed; inset: 0; z-index: 320; background: rgba(0,0,0,0.6);
+    display: none; align-items: flex-start; justify-content: center;
+    padding: 24px 12px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .add-overlay.open { display: flex; }
+  .add-modal { max-width: 520px; width: 100%; margin: auto 0; }
+  .add-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .add-close {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    width: 34px; height: 34px; border-radius: 50%; font-size: 22px; line-height: 1; cursor: pointer;
+  }
+  .add-close:active { transform: scale(0.94); }
+
   /* Easy view: hide technical clutter, keep name + due date + amount + checkbox */
   body.easy .card .hint { display: none; }          /* long explanation paragraphs */
   body.easy .detail-only { display: none !important; } /* term "1/3", cutoff label, full date, partial tag */
@@ -444,9 +473,13 @@
     <!-- DEBT LIST -->
     <div id="debtList"></div>
 
-    <!-- ADD DEBT -->
-    <div class="card">
-      <h2>Add a debt</h2>
+    <!-- ADD DEBT (modal) -->
+    <div class="add-overlay" id="addOverlay">
+    <div class="card add-modal">
+      <div class="add-modal-head">
+        <h2 style="margin:0">Add a debt</h2>
+        <button class="add-close" id="addClose" title="Close">&times;</button>
+      </div>
       <div class="hint">This will be added to the <b id="addMonthLabel">current month</b>. If it has terms, it is spread across the following months (1 term per month). Same name/label = <b>add up</b> with the existing entry.</div>
       <div class="field">
         <label>Category</label>
@@ -505,8 +538,13 @@
       </div>
       <div class="btn-row">
         <button class="btn primary" id="addBtn">Add debt</button>
+        <button class="btn" id="addCancel" style="margin-left:8px">Cancel</button>
       </div>
     </div>
+    </div>
+
+    <!-- Floating Add button -->
+    <button class="fab" id="fabAdd" title="Add a debt">+</button>
 
     <div class="note" style="text-align:center">
       Personal use only. All data stays on this device (nothing is sent anywhere).
@@ -1807,6 +1845,17 @@
     document.getElementById("newTerms").value = "";
     document.getElementById("newPerTerm").value = "";
     renderAll();
+    closeAddModal();
+  }
+
+  // ---------- Add-debt modal open/close ----------
+  function openAddModal() {
+    const ov = document.getElementById("addOverlay");
+    if (ov) ov.classList.add("open");
+  }
+  function closeAddModal() {
+    const ov = document.getElementById("addOverlay");
+    if (ov) ov.classList.remove("open");
   }
 
   // ---------- App start ----------
@@ -1822,6 +1871,14 @@
     Object.keys(state.shareIds || {}).forEach(k => fbWatchNote(state.shareIds[k]));
 
     document.getElementById("addBtn").addEventListener("click", addDebt);
+    // Floating add button + modal controls
+    document.getElementById("fabAdd").addEventListener("click", openAddModal);
+    document.getElementById("addClose").addEventListener("click", closeAddModal);
+    document.getElementById("addCancel").addEventListener("click", closeAddModal);
+    document.getElementById("addOverlay").addEventListener("click", (e) => {
+      if (e.target === document.getElementById("addOverlay")) closeAddModal();
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAddModal(); });
     document.getElementById("addFundBtn").addEventListener("click", addFund);
     document.getElementById("affordPrice").addEventListener("input", renderAffordCard);
     document.getElementById("prevMonth").addEventListener("click", () => { viewMonth = addMonths(viewMonth, -1); renderAll(); });
@@ -1891,7 +1948,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 110;
+  const APP_VERSION = 111;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
