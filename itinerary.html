@@ -489,7 +489,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 133;
+  const APP_VERSION = 134;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1476,11 +1476,14 @@
     const anyCoords = stops.some(s => s.lat != null);
     const DEFAULT_LEG_MIN = 45;
 
+    const defBuffer = Math.max(0, Number(document.getElementById("linkBuffer").value) || 0);
     linkStops = stops.map((s, i) => {
-      if (i === 0) return { name: s.name, lat: s.lat, lng: s.lng, km: null, legMin: 0 };
+      // stayMin = how long you stay before leaving; first+last default to 0, middle stops get the buffer.
+      const isEnd = (i === 0 || i === stops.length - 1);
+      if (i === 0) return { name: s.name, lat: s.lat, lng: s.lng, km: null, legMin: 0, stayMin: 0 };
       const km = haversineKm(stops[i - 1], s);
       const legMin = km != null ? Math.round((km / speed) * 60) : DEFAULT_LEG_MIN;
-      return { name: s.name, lat: s.lat, lng: s.lng, km: km != null ? Math.round(km) : null, legMin: legMin };
+      return { name: s.name, lat: s.lat, lng: s.lng, km: km != null ? Math.round(km) : null, legMin: legMin, stayMin: isEnd ? 0 : defBuffer };
     });
     document.getElementById("linkFound").textContent = "Scheduled " + stops.length + " stop" + (stops.length === 1 ? "" : "s") +
       (anyCoords ? " using link coordinates. Edit any drive time below \u2014 times recompute automatically." : " (no coords \u2014 " + DEFAULT_LEG_MIN + " min/leg default; edit drive times below).");
@@ -1488,9 +1491,8 @@
     document.getElementById("linkResultWrap").style.display = "block";
     document.getElementById("linkAdd").style.display = "block";
   }
-  // Rebuild linkParsed (stops + legs with times) from linkStops + start/buffer, then render.
+  // Rebuild linkParsed (stops + legs with arrival & end times) from linkStops + start, then render.
   function rescheduleLink() {
-    const buffer = Math.max(0, Number(document.getElementById("linkBuffer").value) || 0);
     let clock = document.getElementById("linkStart").value || "08:00";
     const out = [];
     linkStops.forEach((s, i) => {
@@ -1500,37 +1502,46 @@
         out.push({ kind: "leg", label: "Drive", durationText: durTxt, fromText: linkStops[i - 1].name, toText: s.name });
         clock = addMinutes(clock, legMin);
       }
-      out.push({ kind: "stop", time: clock, endTime: "", approx: true, typeId: "", title: s.name, note: "", category: "Transport", cost: 0, inRoute: true });
-      clock = addMinutes(clock, buffer);
+      const arrive = clock;
+      const stay = Math.max(0, Number(s.stayMin) || 0);
+      const end = stay > 0 ? addMinutes(arrive, stay) : "";
+      out.push({ kind: "stop", time: arrive, endTime: end, approx: true, typeId: "", title: s.name, note: "", category: "Transport", cost: 0, inRoute: true });
+      clock = addMinutes(clock, stay);
     });
     linkParsed = out;
     renderLinkPreview(findTrip(state.ui.openTripId));
   }
   function renderLinkPreview(t) {
     const wrap = document.getElementById("linkPreview");
-    // render stops with times, and between them an editable leg-minutes input
+    const stopEntries = linkParsed.filter(e => e.kind === "stop");
     let html = "";
     linkStops.forEach((s, i) => {
       if (i > 0) {
         html += '<div class="pv-row leg"><div class="pv-t">\uD83C\uDFC3 Drive</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
-          '<input type="number" min="0" data-legmin="' + i + '" value="' + (Number(s.legMin) || 0) + '" style="width:64px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 6px;font-size:12px;" /> min' +
+          '<input type="number" min="0" data-legmin="' + i + '" value="' + (Number(s.legMin) || 0) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 6px;font-size:12px;" /> min' +
           (s.km != null ? ' <span style="color:var(--muted)">\u2248' + s.km + ' km</span>' : ' <span style="color:var(--muted)">(est.)</span>') +
           '</div></div>';
       }
-      const timed = linkParsed.filter(e => e.kind === "stop")[i];
+      const timed = stopEntries[i];
       const tLabel = timed ? timeDisplay(timed) : "";
-      html += '<div class="pv-row"><span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span><div class="pv-t">' + esc(tLabel) + '</div><div>' + esc(s.name) + '</div></div>';
+      html += '<div class="pv-row"><span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span>' +
+        '<div class="pv-t">' + esc(tLabel) + '</div>' +
+        '<div style="flex:1;min-width:0;">' + esc(s.name) +
+          '<div style="margin-top:4px;color:var(--muted);">stay <input type="number" min="0" data-staymin="' + i + '" value="' + (Number(s.stayMin) || 0) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:3px 6px;font-size:12px;" /> min</div>' +
+        '</div></div>';
     });
     wrap.innerHTML = html;
-    // total line
-    const totalMin = linkStops.reduce((a, s) => a + (Number(s.legMin) || 0), 0);
+    const driveMin = linkStops.reduce((a, s) => a + (Number(s.legMin) || 0), 0);
+    const stayMin = linkStops.reduce((a, s) => a + (Number(s.stayMin) || 0), 0);
     const totalLine = document.createElement("div");
     totalLine.style.cssText = "padding:8px 10px;font-size:12px;color:var(--gold-bright);border-top:1px solid var(--line);";
-    totalLine.textContent = "Total driving: " + minsToText(totalMin);
+    totalLine.textContent = "Driving: " + minsToText(driveMin) + "  \u00b7  Stops: " + minsToText(stayMin);
     wrap.appendChild(totalLine);
-    // wire the editable leg inputs
     wrap.querySelectorAll("[data-legmin]").forEach(inp => {
       inp.onchange = () => { const i = Number(inp.getAttribute("data-legmin")); if (linkStops[i]) { linkStops[i].legMin = Math.max(0, Number(inp.value) || 0); rescheduleLink(); } };
+    });
+    wrap.querySelectorAll("[data-staymin]").forEach(inp => {
+      inp.onchange = () => { const i = Number(inp.getAttribute("data-staymin")); if (linkStops[i]) { linkStops[i].stayMin = Math.max(0, Number(inp.value) || 0); rescheduleLink(); } };
     });
   }
   function confirmLinkInsert() {
@@ -1609,7 +1620,14 @@
   document.getElementById("linkParse").onclick = buildLinkPreview;
   document.getElementById("linkAdd").onclick = confirmLinkInsert;
   document.getElementById("linkStart").addEventListener("change", () => { if (linkStops.length) rescheduleLink(); });
-  document.getElementById("linkBuffer").addEventListener("change", () => { if (linkStops.length) rescheduleLink(); });
+  // Buffer is only a default for new previews; changing it re-applies to middle stops that still
+  // hold the old default (keeps your custom per-stop stays intact).
+  document.getElementById("linkBuffer").addEventListener("change", () => {
+    if (!linkStops.length) return;
+    const nb = Math.max(0, Number(document.getElementById("linkBuffer").value) || 0);
+    linkStops.forEach((s, i) => { if (i > 0 && i < linkStops.length - 1) s.stayMin = nb; });
+    rescheduleLink();
+  });
   document.getElementById("scanCamBtn").onclick = () => document.getElementById("scanCamInput").click();
   document.getElementById("scanUpBtn").onclick = () => document.getElementById("scanUpInput").click();
   document.getElementById("scanCamInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
