@@ -489,7 +489,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 131;
+  const APP_VERSION = 132;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
