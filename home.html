@@ -12,93 +12,112 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="My Dashboard" />
 <title>Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   :root {
-    --bg: #000000;
-    --panel: #16161a;
-    --panel-2: #232329;
-    --line: #2a2a30;
-    --text: #f2f2f7;
-    --muted: #8e8e93;
-    --gold: #d4a017;
-    --gold-bright: #f5c542;
-    --danger: #ff6b6b;
-    --green: #34d399;
+    --bg: #0a0a0b;
+    --bg-2: #0f0f11;
+    --panel: #141417;
+    --panel-2: #1c1c20;
+    --line: #26262c;
+    --text: #f4f4f6;
+    --muted: #8b8b93;
+    --accent: #ff7a1a;        /* orange */
+    --accent-2: #ffb061;      /* amber */
+    --accent-dim: rgba(255,122,26,0.14);
+    --green: #35d07f;
     --red: #ff6b6b;
-    --accent: #4f8cff;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; background: var(--bg); }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: var(--text);
-    max-width: 820px;
-    margin: 0 auto;
-    padding: 14px 14px 60px;
-    line-height: 1.4;
-    min-height: 100vh;
+    color: var(--text); line-height: 1.45; min-height: 100vh;
   }
 
-  /* Lock screen (shared pattern with the other pages) */
-  #lock {
-    position: fixed; inset: 0; background: var(--bg); z-index: 500;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
-  }
-  #lock .lock-card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
-    padding: 28px 24px; width: 100%; max-width: 340px; text-align: center;
-  }
+  /* Lock screen */
+  #lock { position: fixed; inset: 0; background: var(--bg); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #lock .lock-card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px 24px; width: 100%; max-width: 340px; text-align: center; }
   #lock .lk-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
   #lock .lk-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
-  #lock input {
-    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px;
-  }
-  #lock input:focus { outline: none; border-color: var(--gold); }
-  #lock button {
-    width: 100%; background: var(--gold); color: #000; border: none; border-radius: 12px;
-    padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px;
-  }
-  #lock .lk-err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 16px; }
+  #lock input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px; }
+  #lock input:focus { outline: none; border-color: var(--accent); }
+  #lock button { width: 100%; background: var(--accent); color: #130a02; border: none; border-radius: 12px; padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px; }
+  #lock .lk-err { color: var(--red); font-size: 13px; margin-top: 12px; min-height: 16px; }
   body.locked { overflow: hidden; }
   #app.hidden { display: none; }
 
-  /* Header */
-  .hero { text-align: center; margin: 24px 0 28px; }
-  .hero .greet { color: var(--muted); font-size: 14px; }
-  .hero .title {
-    font-size: 26px; font-weight: 800; letter-spacing: .3px; margin-top: 4px;
-    background: linear-gradient(90deg, var(--gold-bright), var(--gold));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
+  /* Layout */
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; flex: 0 0 240px; background: var(--bg-2); border-right: 1px solid var(--line);
+    padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
   }
-  .hero .date { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; }
+  .brand .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: flex; align-items: center; justify-content: center; font-weight: 800; color: #130a02; font-size: 15px; }
+  .brand .bname { font-weight: 700; font-size: 15px; }
+  .nav-search { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 14px; }
+  .nav-search input { background: none; border: none; color: var(--text); font-size: 13px; width: 100%; outline: none; }
+  .nav-group { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin: 14px 8px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 11px; padding: 10px 11px; border-radius: 10px; color: var(--text); text-decoration: none; font-size: 14px; cursor: pointer; }
+  .nav-item .ni-ico { width: 20px; text-align: center; font-size: 15px; opacity: .9; }
+  .nav-item:hover { background: var(--panel); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent-2); box-shadow: inset 0 0 0 1px rgba(255,122,26,0.25); }
+  .nav-item.active .ni-ico { opacity: 1; }
 
-  /* App tiles */
-  .tiles { display: grid; grid-template-columns: 1fr; gap: 16px; }
-  @media (min-width: 560px) { .tiles { grid-template-columns: 1fr 1fr; } }
+  .main { flex: 1; min-width: 0; padding: 20px 26px 60px; }
+  .crumb { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .crumb b { color: var(--text); font-weight: 600; }
+  .welcome { font-size: 26px; font-weight: 800; letter-spacing: .2px; }
+  .subdate { color: var(--muted); font-size: 13px; margin-top: 2px; margin-bottom: 20px; }
 
-  .tile {
-    display: block; text-decoration: none; color: inherit;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
-    padding: 22px 20px; position: relative; overflow: hidden;
-    transition: transform .12s ease, border-color .12s ease;
+  /* Stat cards */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; position: relative; overflow: hidden; }
+  .stat .s-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .stat .s-label { color: var(--muted); font-size: 13px; }
+  .stat .s-val { font-size: 24px; font-weight: 800; margin-top: 8px; }
+  .stat .s-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .stat .spark { position: absolute; right: 12px; bottom: 10px; width: 92px; height: 34px; opacity: .9; }
+  .stat .s-ico { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; font-size: 17px; }
+
+  .grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 18px; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .card h3 { margin: 0 0 4px; font-size: 15px; }
+  .card .c-sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+
+  .quick a { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 10px; color: var(--text); text-decoration: none; border: 1px solid var(--line); margin-bottom: 8px; background: var(--panel-2); }
+  .quick a:hover { border-color: rgba(255,122,26,0.4); }
+  .quick a .q-ico { font-size: 16px; }
+  .quick a .q-arrow { margin-left: auto; color: var(--accent-2); }
+
+  /* Kanban snapshot */
+  .kb { display: flex; gap: 12px; overflow-x: auto; }
+  .kb-col { flex: 0 0 180px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+  .kb-col .kh { font-size: 13px; font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .kb-col .kh span { color: var(--muted); font-weight: 600; }
+  .kb-card { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 8px; padding: 8px 9px; font-size: 12.5px; margin-bottom: 7px; }
+  .kb-card.p-high { border-left-color: var(--red); }
+  .kb-card.p-med { border-left-color: var(--accent); }
+  .kb-card.p-low { border-left-color: var(--green); }
+  .kb-empty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
+
+  /* Mobile: collapse sidebar to top bar */
+  .menu-btn { display: none; }
+  @media (max-width: 720px) {
+    .shell { flex-direction: column; }
+    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 300; transform: translateX(-100%); transition: transform .2s ease; width: 250px; flex-basis: 250px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,.6); }
+    .scrim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 250; }
+    .scrim.show { display: block; }
+    .main { padding: 14px 14px 60px; }
+    .menu-btn { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); font-size: 18px; margin-bottom: 12px; cursor: pointer; }
   }
-  .tile:hover, .tile:active { transform: translateY(-2px); border-color: rgba(245,197,66,0.4); }
-  .tile .glyph {
-    width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center;
-    justify-content: center; font-size: 26px; margin-bottom: 14px;
-  }
-  .tile.crypto .glyph { background: linear-gradient(135deg, rgba(247,147,26,0.2), rgba(98,126,234,0.2)); }
-  .tile.salary .glyph { background: linear-gradient(135deg, rgba(52,211,153,0.2), rgba(245,197,66,0.2)); }
-  .tile.debt .glyph { background: linear-gradient(135deg, rgba(255,107,107,0.2), rgba(245,197,66,0.2)); }
-  .tile.receivables .glyph { background: linear-gradient(135deg, rgba(52,211,153,0.2), rgba(79,140,255,0.2)); }
-  .tile .t-name { font-size: 19px; font-weight: 700; }
-  .tile .t-desc { color: var(--muted); font-size: 13px; margin-top: 6px; line-height: 1.5; }
-  .tile .t-go { margin-top: 16px; color: var(--gold-bright); font-size: 13px; font-weight: 600; }
-  .tile .t-go .arrow { transition: transform .12s ease; display: inline-block; }
-  .tile:hover .t-go .arrow { transform: translateX(3px); }
 
-  .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 32px; }
+  .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 28px; }
 </style>
 </head>
 <body class="locked">
@@ -115,111 +134,90 @@
   </div>
 
   <div id="app" class="hidden">
-    <div class="hero">
-      <div class="greet" id="greet">Welcome back</div>
-      <div class="title">My Dashboard</div>
-      <div class="date" id="todayDate"></div>
+    <div class="scrim" id="scrim"></div>
+    <div class="shell">
+      <!-- SIDEBAR -->
+      <aside class="sidebar" id="sidebar">
+        <div class="brand"><div class="logo">D</div><div class="bname">My Dashboard</div></div>
+        <div class="nav-search"><span>&#128269;</span><input id="navSearch" placeholder="Search tools" /></div>
+
+        <div class="nav-group">Main</div>
+        <a class="nav-item active" href="home.html"><span class="ni-ico">&#9632;</span>Home</a>
+
+        <div class="nav-group">Tools</div>
+        <a class="nav-item" href="index.html" data-tool="crypto"><span class="ni-ico">&#128181;</span>Crypto Tracker</a>
+        <a class="nav-item" href="signals.html" data-tool="signals"><span class="ni-ico">&#128200;</span>Market Signals</a>
+        <a class="nav-item" href="salary.html" data-tool="salary"><span class="ni-ico">&#128176;</span>Salary</a>
+        <a class="nav-item" href="debt.html" data-tool="debt"><span class="ni-ico">&#129534;</span>Debt Tracker</a>
+        <a class="nav-item" href="receivables.html" data-tool="receivables"><span class="ni-ico">&#129309;</span>Receivables</a>
+        <a class="nav-item" href="soa.html" data-tool="soa"><span class="ni-ico">&#128196;</span>Statement of Account</a>
+        <a class="nav-item" href="itinerary.html" data-tool="itinerary"><span class="ni-ico">&#9992;&#65039;</span>Itinerary</a>
+        <a class="nav-item" href="kanban.html" data-tool="kanban"><span class="ni-ico">&#128203;</span>Kanban</a>
+
+        <div class="nav-group">Account</div>
+        <a class="nav-item" id="lockNav"><span class="ni-ico">&#128274;</span>Lock</a>
+      </aside>
+
+      <!-- MAIN -->
+      <main class="main">
+        <button class="menu-btn" id="menuBtn">&#9776;</button>
+        <div class="crumb">Main &rsaquo; <b>Home</b></div>
+        <div class="welcome" id="greet">Welcome back</div>
+        <div class="subdate" id="todayDate"></div>
+
+        <div class="stats" id="stats"></div>
+
+        <div class="grid2">
+          <div class="card">
+            <h3>Net worth snapshot</h3>
+            <div class="c-sub">Portfolio value minus what you owe, plus what's owed to you.</div>
+            <canvas id="netChart" height="150"></canvas>
+          </div>
+          <div class="card quick">
+            <h3>Quick open</h3>
+            <div class="c-sub">Jump straight into a tool.</div>
+            <a href="index.html"><span class="q-ico">&#128181;</span> Crypto Tracker <span class="q-arrow">&rarr;</span></a>
+            <a href="debt.html"><span class="q-ico">&#129534;</span> Debt Tracker <span class="q-arrow">&rarr;</span></a>
+            <a href="itinerary.html"><span class="q-ico">&#9992;&#65039;</span> Itinerary <span class="q-arrow">&rarr;</span></a>
+            <a href="kanban.html"><span class="q-ico">&#128203;</span> Kanban <span class="q-arrow">&rarr;</span></a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Task board</h3>
+          <div class="c-sub">Snapshot of your Kanban. <a href="kanban.html" style="color:var(--accent-2);text-decoration:none;">Open board &rarr;</a></div>
+          <div class="kb" id="kbSnapshot"></div>
+        </div>
+
+        <div class="foot">Personal use only &bull; data stays on your device</div>
+      </main>
     </div>
-
-    <div class="tiles">
-      <a class="tile crypto" href="index.html">
-        <div class="glyph">&#128181;</div>
-        <div class="t-name">Crypto Tracker</div>
-        <div class="t-desc">Live BTC/ETH prices, your holdings, profit/loss, charts, and buy/sell signals.</div>
-        <div class="t-go">Open <span class="arrow">&rarr;</span></div>
-      </a>
-
-      <a class="tile salary" href="salary.html">
-        <div class="glyph">&#128176;</div>
-        <div class="t-name">Salary</div>
-        <div class="t-desc">Compute your semi-monthly take-home pay from base salary + overtime hours, minus deductions.</div>
-        <div class="t-go">Open <span class="arrow">&rarr;</span></div>
-      </a>
-
-      <a class="tile debt" href="debt.html">
-        <div class="glyph">&#129534;</div>
-        <div class="t-name">Debt Tracker</div>
-        <div class="t-desc">Track your loans and balances, log payments, see payoff progress and what's due soon.</div>
-        <div class="t-go">Open <span class="arrow">&rarr;</span></div>
-      </a>
-
-      <a class="tile receivables" href="receivables.html">
-        <div class="glyph">&#129309;</div>
-        <div class="t-name">Receivables</div>
-        <div class="t-desc">Track money people owe you per person, mark collected, set deadlines, and send reminders.</div>
-        <div class="t-go">Open <span class="arrow">&rarr;</span></div>
-      </a>
-
-      <a class="tile debt" href="soa.html">
-        <div class="glyph">&#128196;</div>
-        <div class="t-name">Statement of Account</div>
-        <div class="t-desc">See what's due per payday (13 or 28). Groups your debts into a clean SOA you can copy or print.</div>
-        <div class="t-go">Open <span class="arrow">&rarr;</span></div>
-      </a>
-
-      <a class="tile crypto" href="itinerary.html">
-        <div class="glyph">&#9992;&#65039;</div>
-        <div class="t-name">Itinerary</div>
-        <div class="t-desc">Plan trips day-by-day: activities with times, locations, costs, and a running trip budget.</div>
-        <div class="t-go">Open <span class="arrow">&rarr;</span></div>
-      </a>
-
-      <a class="tile receivables" href="kanban.html">
-        <div class="glyph">&#128203;</div>
-        <div class="t-name">Kanban</div>
-        <div class="t-desc">Personal task board: columns, cards with priority and due dates, drag or move between stages.</div>
-        <div class="t-go">Open <span class="arrow">&rarr;</span></div>
-      </a>
-    </div>
-
-    <div class="foot">Personal use only &bull; data stays on your device</div>
   </div>
 
 <script>
-  // ---------- Passcode lock (same scheme as the other pages) ----------
-  // Casual privacy for a personal site, not strong security.
-  function simpleHash(s) {
-    let h = 5381;
-    for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; }
-    return h;
-  }
+  // ---------- Passcode lock ----------
+  function simpleHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; } return h; }
   const PASS_HASH = simpleHash("031171");
-
   function unlock() {
-    const input = document.getElementById("lockInput");
-    const err = document.getElementById("lockErr");
-    if (simpleHash(input.value) === PASS_HASH) {
-      sessionStorage.setItem("ctUnlocked", "1");
-      revealApp();
-    } else {
-      err.textContent = "Wrong passcode. Try again.";
-      input.value = "";
-      input.focus();
-    }
+    const input = document.getElementById("lockInput"), err = document.getElementById("lockErr");
+    if (simpleHash(input.value) === PASS_HASH) { sessionStorage.setItem("ctUnlocked", "1"); revealApp(); }
+    else { err.textContent = "Wrong passcode. Try again."; input.value = ""; input.focus(); }
   }
-
   function revealApp() {
     document.getElementById("lock").style.display = "none";
     document.body.classList.remove("locked");
     document.getElementById("app").classList.remove("hidden");
-    renderGreeting();
+    renderGreeting(); boot();
   }
-
   function renderGreeting() {
-    const now = new Date();
-    const h = now.getHours();
-    let g = "Good evening";
-    if (h < 12) g = "Good morning";
-    else if (h < 18) g = "Good afternoon";
-    document.getElementById("greet").textContent = g;
-    document.getElementById("todayDate").textContent =
-      now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const now = new Date(), h = now.getHours();
+    let g = "Good evening"; if (h < 12) g = "Good morning"; else if (h < 18) g = "Good afternoon";
+    document.getElementById("greet").textContent = g + " \uD83D\uDC4B";
+    document.getElementById("todayDate").textContent = now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   }
 
-  // ---------- Auto-update (fixes stale Home Screen cache) ----------
-  // This build's version. Must match version.json when published.
-  const APP_VERSION = 134;
-  // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
+  // ---------- Auto-update (manual banner only) ----------
+  const APP_VERSION = 135;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -233,34 +231,207 @@
     if (document.getElementById("updateBanner")) return;
     const bar = document.createElement("div");
     bar.id = "updateBanner";
-    bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:600;background:var(--gold);color:#000;" +
-      "font-size:13px;font-weight:700;text-align:center;padding:10px 14px;cursor:pointer;box-shadow:0 -2px 10px rgba(0,0,0,.4)";
+    bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:600;background:var(--accent);color:#130a02;font-size:13px;font-weight:700;text-align:center;padding:10px 14px;cursor:pointer;box-shadow:0 -2px 10px rgba(0,0,0,.4)";
     bar.textContent = "Update available (v" + ver + ") \u2014 tap to refresh";
     bar.onclick = async () => {
       bar.textContent = "Updating\u2026";
-      if (window.caches && caches.keys) {
-        try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
-      }
-      const u = new URL(location.href);
-      u.searchParams.set("v", String(ver) + "." + Date.now());
-      location.replace(u.toString());
+      if (window.caches && caches.keys) { try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {} }
+      const u = new URL(location.href); u.searchParams.set("v", String(ver) + "." + Date.now()); location.replace(u.toString());
     };
     document.body.appendChild(bar);
   }
 
-  // Wire up lock UI
-  document.getElementById("lockBtn").onclick = unlock;
-  document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+  // ---------- Firebase (read-only dashboard; reuses the tracker project) ----------
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyATaU8PnQwkMRvf6_j6Ccp1j0Qz8oeyELI",
+    authDomain: "crypto-tracker-bfefb.firebaseapp.com",
+    databaseURL: "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "crypto-tracker-bfefb",
+    storageBucket: "crypto-tracker-bfefb.firebasestorage.app",
+    messagingSenderId: "901782471631",
+    appId: "1:901782471631:web:5c7ec398e607b1777548ba"
+  };
+  let fbDb = null;
+  const DASH = { crypto: null, debt: null, receivables: null, salary: null, kanban: null };
 
-  // If already unlocked this session, skip the gate.
-  if (sessionStorage.getItem("ctUnlocked") === "1") {
-    revealApp();
-  } else {
-    document.getElementById("lockInput").focus();
+  function fbInit() {
+    try {
+      if (typeof firebase === "undefined") return;
+      if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      fbDb = firebase.database();
+      watch("tracker/state", "crypto", st => Array.isArray(st.rows) || Array.isArray(st.coins) || true);
+      watch("debt/state", "debt");
+      watch("receivables/state", "receivables");
+      watch("salary/state", "salary");
+      watch("kanban/state", "kanban");
+    } catch (e) { fbDb = null; }
+  }
+  function watch(path, key) {
+    try {
+      fbDb.ref(path).on("value", (snap) => {
+        const remote = snap.val();
+        let st = null;
+        if (remote && typeof remote.stateJson === "string") { try { st = JSON.parse(remote.stateJson); } catch (e) { st = null; } }
+        else if (remote && remote.state) st = remote.state;
+        DASH[key] = st;
+        renderDashboard();
+      }, () => {});
+    } catch (e) {}
   }
 
-  checkForUpdate();
-  setInterval(checkForUpdate, 60000);
+  // ---------- Local fallback (so numbers show even before cloud responds) ----------
+  function localState(lsKey) { try { const r = localStorage.getItem(lsKey); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+
+  // ---------- Compute headline numbers (robust; degrade to null) ----------
+  function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+  function fmtPeso(n) { return "\u20b1" + (Math.round(n)).toLocaleString(); }
+
+  function cryptoInvested() {
+    const st = DASH.crypto || localState("cryptoTrackerState");
+    if (!st) return null;
+    const rows = st.rows || st.coins || st.holdings || [];
+    let total = 0, found = false;
+    (Array.isArray(rows) ? rows : []).forEach(r => {
+      // sum any plausible "invested"/"amount in PHP" field
+      const v = num(r.invested != null ? r.invested : (r.valuePhp != null ? r.valuePhp : (r.php != null ? r.php : r.amount)));
+      if (v) { total += v; found = true; }
+      if (Array.isArray(r.entries)) r.entries.forEach(e => { const ev = num(e.invested != null ? e.invested : e.php); if (ev) { total += ev; found = true; } });
+    });
+    return found ? total : (Array.isArray(rows) && rows.length ? 0 : null);
+  }
+  function debtOutstanding() {
+    const st = DASH.debt || localState("debtTrackerV3");
+    if (!st || !Array.isArray(st.debts)) return null;
+    let total = 0;
+    st.debts.forEach(d => {
+      const amt = num(d.amount);
+      if (d.paid) return;             // one-time, fully paid
+      const paidOnce = num(d.paidOnce);
+      total += Math.max(0, amt - paidOnce);
+    });
+    return total;
+  }
+  function receivablesOutstanding() {
+    const st = DASH.receivables || localState("receivablesV1");
+    if (!st || !Array.isArray(st.debts)) return null;
+    let total = 0;
+    st.debts.forEach(d => { if (d.paid) return; total += Math.max(0, num(d.amount) - num(d.paidOnce)); });
+    return total;
+  }
+  function latestNet() {
+    let hist = null;
+    const st = DASH.salary;
+    if (st && Array.isArray(st.history)) hist = st.history;
+    if (!hist) hist = localState("salaryHistoryV1");
+    if (!Array.isArray(hist) || !hist.length) return null;
+    const sorted = hist.slice().sort((a, b) => {
+      const ka = (a.period || "") + (a.cutoff === "2nd" ? "1" : "0");
+      const kb = (b.period || "") + (b.cutoff === "2nd" ? "1" : "0");
+      return ka < kb ? -1 : (ka > kb ? 1 : 0);
+    });
+    const last = sorted[sorted.length - 1];
+    return { net: num(last.net), period: last.period, cutoff: last.cutoff };
+  }
+
+  // ---------- Sparkline (tiny inline SVG, synthetic trend for visual flair) ----------
+  function sparkline(seed, color) {
+    const pts = [];
+    let v = 50 + (seed % 20);
+    for (let i = 0; i < 12; i++) { v += ((seed * (i + 3)) % 17) - 8; v = Math.max(10, Math.min(90, v)); pts.push(v); }
+    const w = 92, h = 34;
+    const path = pts.map((p, i) => (i === 0 ? "M" : "L") + (i / (pts.length - 1) * w).toFixed(1) + "," + (h - (p / 100 * h)).toFixed(1)).join(" ");
+    return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' +
+      '<path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
+  // ---------- Render dashboard ----------
+  function renderDashboard() {
+    const inv = cryptoInvested(), debt = debtOutstanding(), recv = receivablesOutstanding(), sal = latestNet();
+    const cards = [
+      { label: "Crypto invested", ico: "\uD83D\uDCB5", val: inv == null ? "\u2014" : fmtPeso(inv), sub: inv == null ? "Open the tracker to sync" : "Total put in", seed: 7, color: "var(--accent-2)" },
+      { label: "Debt remaining", ico: "\uD83E\uDDFE", val: debt == null ? "\u2014" : fmtPeso(debt), sub: debt == null ? "No debt data yet" : "Across all debts", seed: 3, color: "var(--red)" },
+      { label: "Owed to you", ico: "\uD83E\uDD1D", val: recv == null ? "\u2014" : fmtPeso(recv), sub: recv == null ? "No receivables yet" : "Uncollected", seed: 11, color: "var(--green)" },
+      { label: "Last take-home", ico: "\uD83D\uDCB0", val: sal == null ? "\u2014" : fmtPeso(sal.net), sub: sal == null ? "Save a cutoff to see it" : (sal.period + " \u00b7 " + sal.cutoff), seed: 5, color: "var(--accent)" }
+    ];
+    document.getElementById("stats").innerHTML = cards.map(c =>
+      '<div class="stat">' +
+        '<div class="s-top"><div class="s-label">' + c.label + '</div><div class="s-ico">' + c.ico + '</div></div>' +
+        '<div class="s-val">' + c.val + '</div>' +
+        '<div class="s-sub">' + c.sub + '</div>' +
+        sparkline(c.seed, c.color) +
+      '</div>'
+    ).join("");
+
+    renderNetChart(inv, debt, recv);
+    renderKanbanSnapshot();
+  }
+
+  function renderNetChart(inv, debt, recv) {
+    // Simple horizontal bars (no external lib needed): Assets vs Liabilities.
+    const assets = (inv || 0) + (recv || 0);
+    const liab = debt || 0;
+    const net = assets - liab;
+    const max = Math.max(assets, liab, 1);
+    const canvas = document.getElementById("netChart");
+    const wrap = canvas.parentElement;
+    const bar = (label, val, color) => {
+      const pct = Math.round(Math.abs(val) / max * 100);
+      return '<div style="margin:10px 0;">' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;"><span>' + label + '</span><span style="color:var(--text);font-weight:700;">' + fmtPeso(val) + '</span></div>' +
+        '<div style="height:12px;border-radius:6px;background:var(--panel-2);overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + color + ';"></div></div>' +
+      '</div>';
+    };
+    canvas.style.display = "none";
+    let host = document.getElementById("netBars");
+    if (!host) { host = document.createElement("div"); host.id = "netBars"; wrap.appendChild(host); }
+    host.innerHTML =
+      bar("Assets (crypto + receivables)", assets, "linear-gradient(90deg,var(--accent),var(--accent-2))") +
+      bar("Liabilities (debt)", liab, "var(--red)") +
+      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:14px;">' +
+        '<span style="color:var(--muted);">Net</span><span style="font-weight:800;color:' + (net >= 0 ? "var(--green)" : "var(--red)") + ';">' + fmtPeso(net) + '</span></div>';
+  }
+
+  function renderKanbanSnapshot() {
+    const st = DASH.kanban || localState("kanbanV1");
+    const host = document.getElementById("kbSnapshot");
+    if (!st || !Array.isArray(st.columns) || !st.columns.length) {
+      host.innerHTML = '<div class="kb-empty">No board yet. <a href="kanban.html" style="color:var(--accent-2);text-decoration:none;">Create one &rarr;</a></div>';
+      return;
+    }
+    host.innerHTML = st.columns.slice(0, 4).map(col => {
+      const cards = (col.cards || []).slice(0, 4).map(cd =>
+        '<div class="kb-card p-' + (cd.prio || "none") + '">' + (cd.done ? "\u2713 " : "") + escapeHtml(cd.title || "Untitled") + '</div>'
+      ).join("") || '<div class="kb-empty">empty</div>';
+      const more = (col.cards || []).length > 4 ? '<div class="kb-empty">+' + ((col.cards.length) - 4) + ' more</div>' : "";
+      return '<div class="kb-col"><div class="kh">' + escapeHtml(col.name || "") + ' <span>' + (col.cards || []).length + '</span></div>' + cards + more + '</div>';
+    }).join("");
+  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  // ---------- Sidebar (mobile) + search ----------
+  function openSidebar() { document.getElementById("sidebar").classList.add("open"); document.getElementById("scrim").classList.add("show"); }
+  function closeSidebar() { document.getElementById("sidebar").classList.remove("open"); document.getElementById("scrim").classList.remove("show"); }
+
+  function boot() {
+    renderDashboard(); // from local first
+    fbInit();          // then cloud refines
+    checkForUpdate();
+    setInterval(checkForUpdate, 60000);
+  }
+
+  // Wire up
+  document.getElementById("lockBtn").onclick = unlock;
+  document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+  document.getElementById("menuBtn").onclick = openSidebar;
+  document.getElementById("scrim").onclick = closeSidebar;
+  document.getElementById("lockNav").onclick = () => { sessionStorage.removeItem("ctUnlocked"); location.reload(); };
+  document.getElementById("navSearch").addEventListener("input", (e) => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll('.nav-item[data-tool]').forEach(a => { a.style.display = a.textContent.toLowerCase().includes(q) ? "" : "none"; });
+  });
+
+  if (sessionStorage.getItem("ctUnlocked") === "1") revealApp();
+  else document.getElementById("lockInput").focus();
 </script>
 </body>
 </html>
