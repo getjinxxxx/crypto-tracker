@@ -167,6 +167,9 @@
 
   .cost-tag { color: var(--gold-bright); font-weight: 700; font-size: 12px; }
   .row.typed .cost-tag { color: #10100e; }
+  .icon-btn.pin { filter: grayscale(1) opacity(.4); }
+  .icon-btn.pin.on { filter: none; border-color: var(--gold); background: rgba(212,160,23,.18); }
+  .row.typed .icon-btn.pin.on { background: rgba(0,0,0,.18); border-color: rgba(0,0,0,.35); }
 
   .add-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
   .add-row .btn { flex: 1; min-width: 120px; }
@@ -456,7 +459,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 128;
+  const APP_VERSION = 129;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -546,6 +549,9 @@
           it.category = it.category || "Other";
           it.cost = Number(it.cost) || 0;
           it.done = !!it.done;
+          // Default Maps-route inclusion: real places ON, pitstops/activities OFF.
+          // Only set when missing so the user's manual choice is preserved.
+          if (typeof it.inRoute !== "boolean") it.inRoute = !NON_PLACE_RE.test((it.title || "").trim());
         } else {
           it.label = it.label || "Takbo";
           it.durationText = it.durationText || "";
@@ -823,10 +829,12 @@
     s = s.replace(/\s{2,}/g, " ").replace(/[\s:,\-]+$/, "").trim();
     return s;
   }
+  function routeStops(t, date) {
+    // Only the stops the user has flagged to include in the Maps route.
+    return dayEntries(t, date).filter(e => e.kind === "stop" && e.inRoute && placeQuery(e));
+  }
   function dayMapsUrl(t, date) {
-    const stops = dayEntries(t, date).filter(e => e.kind === "stop" && e.title && !NON_PLACE_RE.test(e.title.trim()));
-    const dest = t.destination || t.name || "";
-    const places = stops.map(placeQuery).filter(Boolean);
+    const places = routeStops(t, date).map(placeQuery).filter(Boolean);
     if (!places.length) return "";
     if (places.length === 1) return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(places[0]);
     return "https://www.google.com/maps/dir/" + places.map(p => encodeURIComponent(p)).join("/");
@@ -835,7 +843,9 @@
   function renderTimeline(t) {
     document.getElementById("dayTitle").textContent = dateLabel(state.ui.openDate);
     const mapsBtn = document.getElementById("mapsBtn");
+    const count = routeStops(t, state.ui.openDate).length;
     const url = dayMapsUrl(t, state.ui.openDate);
+    mapsBtn.innerHTML = "\uD83D\uDDFA\uFE0F Open in Maps" + (count ? " (" + count + ")" : "");
     if (url) { mapsBtn.href = url; mapsBtn.style.display = ""; mapsBtn.style.opacity = "1"; mapsBtn.style.pointerEvents = "auto"; }
     else { mapsBtn.removeAttribute("href"); mapsBtn.style.opacity = ".4"; mapsBtn.style.pointerEvents = "none"; }
     const entries = dayEntries(t, state.ui.openDate);
@@ -845,6 +855,12 @@
     wrap.querySelectorAll("[data-edit]").forEach(b => b.onclick = (e) => { e.stopPropagation(); openItemModal(t.id, b.getAttribute("data-edit")); });
     wrap.querySelectorAll("[data-del]").forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteItem(t.id, b.getAttribute("data-del")); });
     wrap.querySelectorAll("[data-done]").forEach(b => b.onclick = (e) => { e.stopPropagation(); toggleDone(t.id, b.getAttribute("data-done")); });
+    wrap.querySelectorAll("[data-pin]").forEach(b => b.onclick = (e) => { e.stopPropagation(); togglePin(t.id, b.getAttribute("data-pin")); });
+  }
+  function togglePin(tripId, itemId) {
+    const t = findTrip(tripId); if (!t) return;
+    const it = t.items.find(x => x.id === itemId); if (!it || it.kind !== "stop") return;
+    it.inRoute = !it.inRoute; persist(); renderTripDetail(t);
   }
 
   function stopRow(t, it) {
@@ -859,6 +875,7 @@
         '<div class="r-title">' + esc(it.title) + costStr + '</div>' +
         (it.note ? '<div class="r-note">' + esc(it.note) + '</div>' : '') +
         '<div class="r-actions">' +
+          '<button class="icon-btn pin' + (it.inRoute ? ' on' : '') + '" data-pin="' + it.id + '" title="' + (it.inRoute ? 'In Maps route (tap to remove)' : 'Not in route (tap to add)') + '">\uD83D\uDCCD</button>' +
           '<button class="icon-btn" data-done="' + it.id + '" title="Done">' + (it.done ? '\u21A9\uFE0F' : '\u2713') + '</button>' +
           '<button class="icon-btn" data-edit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
           '<button class="icon-btn" data-del="' + it.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
