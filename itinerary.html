@@ -435,7 +435,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 125;
+  const APP_VERSION = 126;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1107,8 +1107,9 @@
       const l = line.toLowerCase();
       // phone status bar: a clock plus odd symbols / battery (e.g. "6:324 oll = @» = ...")
       if (/@|\u00bb|\u00ab|\boll\b|\bal\b\s*\bl\b/.test(line) && /\d{1,2}:\d{2,}/.test(line)) return true;
-      // the screen's own title: "Day N: X -> Y", "... takbo ...", route-only header "cee"
-      if (/^day\s*\d*\s*[:#]/i.test(line) && /\u2192|->|>/.test(line)) return true;
+      // the screen's own title: "Day N: X -> Y" (OCR may drop the time and prefix "< / —").
+      if (/day\s*\d+\s*[:#]/i.test(line) && /\u2192|->|>|<|\bto\b/.test(line)) return true;
+      if (/^[<>\-\u2014\s]*day\s*\d+\s*[:#]/i.test(line)) return true;
       // the legend row baked into the screenshot
       if (/checkpoint\/?cutoff/i.test(l) && /welcome arch|litrato/i.test(l)) return true;
       if (/^legend\b/i.test(l) || /hinto\/tanawin/i.test(l) && l.length < 60 && !/\d/.test(l)) return true;
@@ -1173,9 +1174,14 @@
       const prev = out[out.length - 1];
       // A lone place name right after a leg with no "to" completes that leg.
       if (prev && prev.kind === "leg" && !prev.toText && looksLikePlaceOnly(line)) { prev.toText = line; return; }
-      // A continuation fragment (starts lowercase, or clearly mid-sentence) -> append to previous stop's note.
-      const isContinuation = /^[a-z]/.test(line) || /^(gas|cr|kape|litrato|dumaan|pigar)/i.test(line);
-      if (prev && prev.kind === "stop" && isContinuation && line.length <= 120) {
+      // A sentence fragment that trails off (e.g. "...dahil bawal ang") is almost
+      // certainly a wrapped continuation of the previous stop's note, even if it
+      // happens to start with a capital letter ("National road ang gamit...").
+      const looksUnfinished = /\b(ang|ng|sa|na|at|ni|kay|para|dahil)\s*$/i.test(line) || /,\s*$/.test(line);
+      const startsLower = /^[a-z]/.test(line);
+      const knownNoteStart = /^(gas|cr|kape|litrato|dumaan|pigar|national|seat|note)/i.test(line);
+      const isContinuation = startsLower || knownNoteStart || looksUnfinished;
+      if (prev && prev.kind === "stop" && isContinuation && line.length <= 120 && !/\d{1,2}:\d{2}/.test(line)) {
         prev.note = prev.note ? (prev.note + " " + line) : line; return;
       }
       // Otherwise a reasonably substantial line becomes a plain (untimed) stop.
