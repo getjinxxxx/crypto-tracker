@@ -1314,7 +1314,9 @@
       (cardIsPaid(cardsMap[k]) ? paidDebts : toPayDebts).push(...cardsMap[k]);
     });
 
-    const toPayTotal = toPayDebts.reduce((s, d) => s + remainingOf(d), 0);
+    // This-month remaining (plan-aware): this month's due minus what's paid this month.
+    // (remainingOf counts ALL future plan paydays, which would over-count the section.)
+    const toPayTotal = toPayDebts.reduce((s, d) => s + Math.max(0, perTermOf(d) - paidOfMonth(d)), 0);
     const paidTotal  = paidDebts.reduce((s, d) => s + perTermOf(d), 0);
 
     let html = "";
@@ -2735,7 +2737,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 122;
+  const APP_VERSION = 123;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
