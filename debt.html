@@ -145,6 +145,20 @@
   /* highlight a required field the scanner could not read */
   .need-fill { border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(255,107,107,0.25); }
 
+  /* Per-card "Detalye" modal */
+  .cd-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+  .cd-row { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .cd-row:first-child { border-top: none; }
+  .cd-row.cd-paid .cd-nm, .cd-row.cd-paid .cd-amt { color: var(--muted); }
+  .cd-nm { flex: 1; font-size: 14px; }
+  .cd-tag { display: inline-block; font-size: 11px; color: var(--gold-bright); background: rgba(245,197,66,0.12);
+    border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+  .cd-amt { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+  .cd-ok { color: var(--green); font-size: 11px; font-weight: 700; margin-left: 4px; }
+  .cd-total { display: flex; justify-content: space-between; align-items: center; font-size: 15px; padding: 2px 2px 4px; }
+  .cd-total b { color: var(--gold-bright); font-variant-numeric: tabular-nums; }
+  .cd-empty { padding: 18px 12px; text-align: center; color: var(--muted); font-size: 14px; }
+
   /* Monthly vs Per-payday toggle */
   .paymode { display: flex; gap: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
   .pm-btn { flex: 1; background: none; border: none; color: var(--muted); font-size: 13px; font-weight: 700;
@@ -157,7 +171,7 @@
   /* Easy view: hide technical clutter, keep name + due date + amount + checkbox */
   body.easy .card .hint { display: none; }          /* long explanation paragraphs */
   body.easy .detail-only { display: none !important; } /* term "1/3", cutoff label, full date, partial tag */
-  body.easy .bd-edit, body.easy .d-share { display: none; } /* per-row edit + share in easy */
+  body.easy .bd-edit { display: none; } /* hide per-row edit (pencil) in easy; keep share + detail */
   .d-split { display: none !important; } /* retired: payday split is now chosen in the Add form */
   body.easy .bd-del { display: inline-flex !important; } /* keep delete (x) in easy for mistakes */
   body.easy .sub-box { background: transparent; border: none; padding: 4px 0; margin-top: 4px; } /* flatten sub-category boxes */
@@ -1201,6 +1215,7 @@
         '<div class="d-name" data-cardtoggle="' + encodeURIComponent(cardKey) + '" style="cursor:pointer">' +
           '<span class="cat-chev" style="font-size:10px;color:var(--muted)">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + title + planTag + '</div>' +
         '<span class="d-badge ' + (paidOff ? "b-paid" : "b-ok") + '">' + (paidOff ? "Fully paid" : (items.length + " item" + (items.length === 1 ? "" : "s"))) + '</span>' +
+        '<button class="d-share d-detail" data-detail="' + encodeURIComponent(cardKey) + '" title="Detalye ng babayaran">\u2139\uFE0F</button>' +
         splitBtn +
         shareBtn +
       '</div>' +
@@ -1363,6 +1378,12 @@
     // wire split-into-paydays button
     el.querySelectorAll("[data-split]").forEach(btn => btn.addEventListener("click", () => {
       openSplitDialog(decodeURIComponent(btn.getAttribute("data-split")));
+    }));
+
+    // wire per-card "Detalye" button (full breakdown of what's due)
+    el.querySelectorAll("[data-detail]").forEach(btn => btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openCardDetail(decodeURIComponent(btn.getAttribute("data-detail")));
     }));
 
     // wire stop-recurring button
@@ -1537,6 +1558,64 @@
     });
     saveState();
     renderAll();
+  }
+
+  // Full breakdown of what's due this month for a card (used by the Easy-view "Detalye" button).
+  function openCardDetail(cardKey) {
+    const items = state.debts.filter(d => cardKeyOf(d) === cardKey && isActiveIn(d, viewMonth));
+    const title = items.length ? cardTitleOf(items[0]) : "Detalye";
+    let rowsHtml = "", total = 0;
+    items.forEach(d => {
+      const nm = (d.name && d.name.trim()) ? d.name : (d.person || catLabel(d.category));
+      if (hasPlan(d)) {
+        // show each payday portion that falls in this month
+        planEntriesFor(d, viewMonth).forEach(p => {
+          const which = d.plan.findIndex(x => x === p) + 1;
+          total += num(p.amount);
+          rowsHtml += '<div class="cd-row' + (p.paid ? " cd-paid" : "") + '">' +
+            '<div class="cd-nm">' + nm.replace(/</g, "&lt;") +
+              ' <span class="cd-tag">split ' + which + '/' + d.plan.length + ' &middot; ' +
+              monthLabel(p.key).split(" ")[0] + ' ' + p.payday + '</span></div>' +
+            '<div class="cd-amt">' + peso(num(p.amount)) + (p.paid ? ' <span class="cd-ok">paid</span>' : '') + '</div>' +
+            '</div>';
+        });
+      } else {
+        const amt = perTermOf(d);
+        total += amt;
+        const tags = [];
+        if (d.recurring) tags.push("Recurring");
+        else if (d.terms > 1) tags.push((termIndexFor(d, viewMonth) + 1) + "/" + d.terms);
+        if (d.dueDay >= 1 && d.dueDay <= 31) {
+          tags.push("due " + d.dueDay + " (" + (cutoffForDueDay(d.dueDay) === "1st" ? "1st cutoff" : "2nd cutoff") + ")");
+        }
+        const paid = isPaidThisMonth(d);
+        const part = partPaidThisMonth(d);
+        if (!paid && part > 0) tags.push(peso(part) + " paid");
+        rowsHtml += '<div class="cd-row' + (paid ? " cd-paid" : "") + '">' +
+          '<div class="cd-nm">' + nm.replace(/</g, "&lt;") +
+            (tags.length ? ' <span class="cd-tag">' + tags.join(" &middot; ") + '</span>' : '') + '</div>' +
+          '<div class="cd-amt">' + peso(amt) + (paid ? ' <span class="cd-ok">paid</span>' : '') + '</div>' +
+          '</div>';
+      }
+    });
+    if (!rowsHtml) rowsHtml = '<div class="cd-empty">Walang babayaran ngayong ' + monthLabel(viewMonth) + '.</div>';
+
+    const ov = document.createElement("div");
+    ov.className = "add-overlay open";
+    ov.innerHTML =
+      '<div class="card add-modal">' +
+        '<div class="add-modal-head">' +
+          '<h2 style="margin:0">' + title.replace(/</g, "&lt;") + ' &mdash; detalye</h2>' +
+          '<button class="add-close" title="Close">&times;</button>' +
+        '</div>' +
+        '<div class="hint">Mga babayaran ngayong ' + monthLabel(viewMonth) + '.</div>' +
+        '<div class="cd-list">' + rowsHtml + '</div>' +
+        '<div class="cd-total"><span>Kabuuan this month</span><b>' + peso(total) + '</b></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    const close = () => { if (ov.parentNode) document.body.removeChild(ov); };
+    ov.querySelector(".add-close").onclick = close;
+    ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
   }
 
   function openSplitDialog(cardKey) {
@@ -2634,7 +2713,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 119;
+  const APP_VERSION = 120;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
