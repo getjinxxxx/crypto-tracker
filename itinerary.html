@@ -489,7 +489,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 130;
+  const APP_VERSION = 131;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1393,7 +1393,29 @@
     const stops = [];       // { name, lat, lng }
     if (!url) return stops;
     let u = url.trim();
-    // Grab the segment after /dir/ up to the next "/data=" or "/@" or end.
+
+    // ---- Format 1: Directions API query link (?api=1&origin=..&waypoints=A|B&destination=..) ----
+    const qIdx = u.indexOf("?");
+    if (qIdx !== -1) {
+      let params;
+      try { params = new URLSearchParams(u.slice(qIdx + 1)); } catch (e) { params = null; }
+      if (params && (params.get("origin") || params.get("destination") || params.get("waypoints"))) {
+        const asStop = (raw) => {
+          const name = decodeName(raw);
+          if (!name) return null;
+          const cm = name.match(/^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$/);
+          if (cm) return { name: name, lat: parseFloat(cm[1]), lng: parseFloat(cm[2]) };
+          return { name: name, lat: null, lng: null };
+        };
+        const origin = params.get("origin"); if (origin) { const s = asStop(origin); if (s) stops.push(s); }
+        const wp = params.get("waypoints");
+        if (wp) decodeName(wp).split("|").forEach(w => { const s = asStop(w); if (s) stops.push(s); });
+        const dest = params.get("destination"); if (dest) { const s = asStop(dest); if (s) stops.push(s); }
+        if (stops.length) return stops;
+      }
+    }
+
+    // ---- Format 2: path link (/maps/dir/A/B/C) ----
     const dirIdx = u.search(/\/dir\//i);
     if (dirIdx === -1) {
       // maybe a /search/ or place link -> single stop
@@ -1402,6 +1424,7 @@
       return stops;
     }
     let seg = u.slice(dirIdx + 5);
+    seg = seg.split("?")[0];                   // drop query on path-style links
     seg = seg.split(/\/data=/i)[0];           // drop trailing data blob
     const parts = seg.split("/").filter(Boolean);
     parts.forEach(p => {
