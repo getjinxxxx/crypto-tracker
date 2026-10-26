@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<link rel="manifest" href="manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="Itinerary" />
+<title>Itinerary</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #16161a;
+    --panel-2: #232329;
+    --line: #2a2a30;
+    --text: #f2f2f7;
+    --muted: #8e8e93;
+    --gold: #d4a017;
+    --gold-bright: #f5c542;
+    --danger: #ff6b6b;
+    --green: #34d399;
+    --red: #ff6b6b;
+    --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 14px 14px 72px;
+    line-height: 1.4;
+    min-height: 100vh;
+  }
+
+  /* Lock screen (shared pattern with the other pages) */
+  #lock {
+    position: fixed; inset: 0; background: var(--bg); z-index: 500;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
+  }
+  #lock .lock-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 24px; width: 100%; max-width: 340px; text-align: center;
+  }
+  #lock .lk-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  #lock .lk-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  #lock input {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px;
+  }
+  #lock input:focus { outline: none; border-color: var(--gold); }
+  #lock button {
+    width: 100%; background: var(--gold); color: #000; border: none; border-radius: 12px;
+    padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px;
+  }
+  #lock .lk-err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 16px; }
+  body.locked { overflow: hidden; }
+  #app.hidden { display: none; }
+
+  /* Top bar */
+  .topbar { display: flex; align-items: center; gap: 10px; margin: 14px 0 18px; }
+  .topbar a.home { color: var(--muted); text-decoration: none; font-size: 13px; }
+  .topbar .title {
+    font-size: 24px; font-weight: 800; letter-spacing: .3px; margin: 0;
+    background: linear-gradient(90deg, var(--gold-bright), var(--gold));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .topbar .spacer { flex: 1; }
+
+  .btn {
+    background: var(--gold); color: #000; border: none; border-radius: 10px;
+    padding: 9px 14px; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .btn.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+  .btn.sm { padding: 6px 10px; font-size: 13px; }
+  .icon-btn {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 9px; width: 34px; height: 34px; font-size: 15px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Trip cards */
+  .trip-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 16px; margin-bottom: 12px; cursor: pointer; transition: border-color .12s ease;
+  }
+  .trip-card:hover { border-color: rgba(245,197,66,0.4); }
+  .trip-card .tc-top { display: flex; align-items: flex-start; gap: 10px; }
+  .trip-card .tc-name { font-size: 18px; font-weight: 700; }
+  .trip-card .tc-dest { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .trip-card .tc-dates { color: var(--gold-bright); font-size: 12px; margin-top: 6px; }
+  .trip-card .tc-actions { display: flex; gap: 6px; }
+  .bar { height: 8px; border-radius: 6px; background: var(--panel-2); overflow: hidden; margin-top: 10px; }
+  .bar > span { display: block; height: 100%; background: var(--green); }
+  .bar.over > span { background: var(--red); }
+  .mini-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  .empty { text-align: center; color: var(--muted); padding: 40px 16px; }
+
+  /* Trip detail */
+  .trip-head { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+  .trip-head .th-name { font-size: 20px; font-weight: 800; }
+  .trip-head .th-dest { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .trip-head .th-dates { color: var(--gold-bright); font-size: 12px; margin-top: 6px; }
+  .trip-head .th-actions { display: flex; gap: 6px; margin-top: 12px; }
+
+  .summary { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 14px; }
+  .summary .sum-row { display: flex; justify-content: space-between; font-size: 14px; margin: 4px 0; }
+  .summary .sum-row.big { font-size: 16px; font-weight: 700; }
+  .summary .over { color: var(--red); }
+  .summary .under { color: var(--green); }
+  .cat-list { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .cat-list .cat-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin: 3px 0; }
+
+  /* Day navigator */
+  .day-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .day-nav select { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 10px; font-size: 14px; }
+  .day-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
+  .day-chip {
+    flex: 0 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 8px 12px; cursor: pointer; text-align: center; min-width: 78px;
+  }
+  .day-chip.active { border-color: var(--gold); background: var(--panel-2); }
+  .day-chip .dc-dow { font-size: 11px; color: var(--muted); }
+  .day-chip .dc-date { font-size: 15px; font-weight: 700; }
+  .day-chip .dc-meta { font-size: 11px; color: var(--gold-bright); margin-top: 2px; }
+
+  /* Items */
+  .day-title { font-size: 15px; font-weight: 700; margin: 4px 0 10px; }
+  .item {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px; margin-bottom: 10px; display: flex; gap: 10px;
+  }
+  .item .it-time {
+    flex: 0 0 auto; background: var(--panel-2); border-radius: 9px; padding: 4px 8px;
+    font-size: 13px; font-weight: 700; color: var(--gold-bright); height: fit-content; min-width: 54px; text-align: center;
+  }
+  .item .it-time.untimed { color: var(--muted); font-weight: 500; }
+  .item .it-body { flex: 1; min-width: 0; }
+  .item .it-title { font-size: 15px; font-weight: 600; }
+  .item.done .it-title { text-decoration: line-through; color: var(--muted); }
+  .item .it-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .item .it-note { font-size: 12px; color: var(--muted); margin-top: 4px; font-style: italic; }
+  .chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--panel-2); color: var(--muted); margin-right: 6px; }
+  .it-cost { color: var(--gold-bright); font-weight: 700; font-size: 13px; }
+  .item .it-actions { flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px; }
+
+  /* Modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 20px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { margin: 0 0 14px; font-size: 18px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .field input, .field select, .field textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px 11px; font-size: 15px; font-family: inherit;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--gold); }
+  .field.two { display: flex; gap: 10px; }
+  .field.two > div { flex: 1; }
+  .modal-err { color: var(--danger); font-size: 13px; min-height: 16px; margin-bottom: 6px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .modal-actions .btn { flex: 1; }
+
+  .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 28px; }
+
+  @media print {
+    #lock, .topbar .btn, .btn, .icon-btn, .day-nav, .day-strip, .item .it-actions,
+    .trip-head .th-actions, .modal-bg, #updateBanner { display: none !important; }
+    body { color: #000; background: #fff; max-width: 100%; }
+    .trip-card, .trip-head, .summary, .item { border-color: #ccc; background: #fff; }
+  }
+</style>
+</head>
+<body class="locked">
+
+  <!-- LOCK SCREEN -->
+  <div id="lock">
+    <div class="lock-card">
+      <div class="lk-title">Itinerary</div>
+      <div class="lk-sub">Enter passcode to view</div>
+      <input id="lockInput" type="password" inputmode="numeric" maxlength="12" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="off" />
+      <button id="lockBtn">Unlock</button>
+      <div class="lk-err" id="lockErr"></div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="topbar">
+      <a class="home" href="home.html">&larr; Home</a>
+      <div class="spacer"></div>
+      <h1 class="title">Itinerary</h1>
+    </div>
+
+    <!-- VIEW A: trips list -->
+    <div id="viewTrips">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+        <button class="btn" id="newTripBtn">+ New trip</button>
+      </div>
+      <div id="tripsList"></div>
+    </div>
+
+    <!-- VIEW B: trip detail -->
+    <div id="viewTrip" style="display:none;">
+      <button class="btn ghost sm" id="backBtn" style="margin-bottom:12px;">&larr; All trips</button>
+      <div class="trip-head" id="tripHead"></div>
+      <div class="summary" id="tripSummary"></div>
+      <div class="day-nav">
+        <button class="icon-btn" id="prevDay">&lsaquo;</button>
+        <select id="daySelect"></select>
+        <button class="icon-btn" id="nextDay">&rsaquo;</button>
+      </div>
+      <div class="day-strip" id="dayStrip"></div>
+      <div class="day-title" id="dayTitle"></div>
+      <div id="itemsList"></div>
+      <div style="display:flex; gap:10px; margin-top:4px;">
+        <button class="btn" id="addItemBtn" style="flex:1;">+ Add activity</button>
+        <button class="btn ghost" id="copyBtn">Copy as text</button>
+      </div>
+    </div>
+
+    <div class="foot">Personal use only &bull; data stays on your device &amp; syncs to your cloud</div>
+  </div>
+
+  <!-- Trip modal -->
+  <div class="modal-bg" id="tripModalBg">
+    <div class="modal">
+      <h3 id="tripModalTitle">New trip</h3>
+      <div class="modal-err" id="tripModalErr"></div>
+      <div class="field"><label>Trip name</label><input id="tmName" placeholder="e.g. Japan 2026" /></div>
+      <div class="field"><label>Destination</label><input id="tmDest" placeholder="e.g. Tokyo & Kyoto" /></div>
+      <div class="field two">
+        <div><label>Start date</label><input id="tmStart" type="date" /></div>
+        <div><label>End date</label><input id="tmEnd" type="date" /></div>
+      </div>
+      <div class="field two">
+        <div><label>Budget (optional)</label><input id="tmBudget" type="number" inputmode="decimal" placeholder="0" /></div>
+        <div><label>Currency</label>
+          <select id="tmCurrency">
+            <option>PHP</option><option>USD</option><option>JPY</option><option>EUR</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="tmCancel">Cancel</button>
+        <button class="btn" id="tmSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Item modal -->
+  <div class="modal-bg" id="itemModalBg">
+    <div class="modal">
+      <h3 id="itemModalTitle">Add activity</h3>
+      <div class="modal-err" id="itemModalErr"></div>
+      <div class="field"><label>Day</label><select id="imDay"></select></div>
+      <div class="field two">
+        <div><label>Time (optional)</label><input id="imTime" type="time" /></div>
+        <div><label>Category</label>
+          <select id="imCat">
+            <option>Flight</option><option>Transport</option><option>Hotel</option><option>Food</option>
+            <option>Activity</option><option>Shopping</option><option>Meeting</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Title</label><input id="imTitle" placeholder="e.g. Check in at hotel" /></div>
+      <div class="field"><label>Location (optional)</label><input id="imLoc" placeholder="e.g. Shibuya" /></div>
+      <div class="field"><label>Cost (optional)</label><input id="imCost" type="number" inputmode="decimal" placeholder="0" /></div>
+      <div class="field"><label>Note (optional)</label><textarea id="imNote" rows="2" placeholder="Anything to remember"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="imCancel">Cancel</button>
+        <button class="btn" id="imSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ---------- Passcode lock (same scheme as the other pages) ----------
+  function simpleHash(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; }
+    return h;
+  }
+  const PASS_HASH = simpleHash("031171");
+
+  function unlock() {
+    const input = document.getElementById("lockInput");
+    const err = document.getElementById("lockErr");
+    if (simpleHash(input.value) === PASS_HASH) {
+      sessionStorage.setItem("ctUnlocked", "1");
+      revealApp();
+    } else {
+      err.textContent = "Wrong passcode. Try again.";
+      input.value = ""; input.focus();
+    }
+  }
+  function revealApp() {
+    document.getElementById("lock").style.display = "none";
+    document.body.classList.remove("locked");
+    document.getElementById("app").classList.remove("hidden");
+    boot();
+  }
+
+  // ---------- Auto-update (manual banner only; never auto-reload) ----------
+  const APP_VERSION = 122;
+  async function checkForUpdate() {
+    try {
+      const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      const j = await res.json();
+      if (!(j && typeof j.version === "number" && j.version > APP_VERSION)) return;
+      showUpdateBanner(j.version);
+    } catch (e) {}
+  }
+  function showUpdateBanner(ver) {
+    if (document.getElementById("updateBanner")) return;
+    const bar = document.createElement("div");
+    bar.id = "updateBanner";
+    bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:600;background:var(--gold);color:#000;" +
+      "font-size:13px;font-weight:700;text-align:center;padding:10px 14px;cursor:pointer;box-shadow:0 -2px 10px rgba(0,0,0,.4)";
+    bar.textContent = "Update available (v" + ver + ") \u2014 tap to refresh";
+    bar.onclick = async () => {
+      bar.textContent = "Updating\u2026";
+      if (window.caches && caches.keys) {
+        try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
+      }
+      const u = new URL(location.href);
+      u.searchParams.set("v", String(ver) + "." + Date.now());
+      location.replace(u.toString());
+    };
+    document.body.appendChild(bar);
+  }
+
+  // ---------- State ----------
+  const LS_KEY = "itineraryV1";
+  // state.trips[] = { id, name, destination, start, end, budget|null, currency, items[] }
+  // item = { id, date, time, title, location, category, cost, note, done }
+  let state = { version: 1, trips: [], ui: { openTripId: null, openDate: null } };
+
+  function uid(p) { return p + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3); }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && Array.isArray(s.trips)) state = s;
+      }
+    } catch (e) {}
+    sanitizeState();
+  }
+  function sanitizeState() {
+    if (!state || typeof state !== "object") state = { version: 1, trips: [], ui: {} };
+    if (!Array.isArray(state.trips)) state.trips = [];
+    if (!state.ui || typeof state.ui !== "object") state.ui = { openTripId: null, openDate: null };
+    state.version = 1;
+    state.trips.forEach(t => {
+      if (!t.id) t.id = uid("t_");
+      t.name = t.name || "Untitled trip";
+      t.destination = t.destination || "";
+      t.start = t.start || todayStr();
+      t.end = t.end || t.start;
+      if (cmpDate(t.end, t.start) < 0) t.end = t.start;
+      t.budget = (t.budget === 0 || typeof t.budget === "number") ? t.budget : (t.budget ? Number(t.budget) : null);
+      if (t.budget != null && isNaN(t.budget)) t.budget = null;
+      t.currency = t.currency || "PHP";
+      if (!Array.isArray(t.items)) t.items = [];
+      t.items.forEach(it => {
+        if (!it.id) it.id = uid("i_");
+        if (!it.date) it.date = t.start;
+        it.time = typeof it.time === "string" ? it.time : "";
+        it.title = it.title || "Untitled";
+        it.location = it.location || "";
+        it.category = it.category || "Other";
+        it.cost = Number(it.cost) || 0;
+        it.note = it.note || "";
+        it.done = !!it.done;
+      });
+    });
+  }
+  function persist() {
+    sanitizeState();
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+    cloudSaveState(false);
+  }
+
+  // ---------- Timezone-safe date utils (pure string / UTC) ----------
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function cmpDate(a, b) { return a < b ? -1 : (a > b ? 1 : 0); } // YYYY-MM-DD compares lexicographically
+  function addDays(dateStr, n) {
+    const p = dateStr.split("-").map(Number);
+    const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    dt.setUTCDate(dt.getUTCDate() + n);
+    return dt.toISOString().slice(0, 10);
+  }
+  function datesInRange(start, end) {
+    const out = [];
+    if (!start || !end || cmpDate(end, start) < 0) return start ? [start] : [];
+    let cur = start;
+    let guard = 0;
+    while (cmpDate(cur, end) <= 0 && guard < 3660) { out.push(cur); cur = addDays(cur, 1); guard++; }
+    return out;
+  }
+  const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function weekdayShort(dateStr) {
+    const p = dateStr.split("-").map(Number);
+    const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    return DOW[dt.getUTCDay()];
+  }
+  function dateLabel(dateStr) {
+    const p = dateStr.split("-").map(Number);
+    const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    return weekdayShort(dateStr) + ", " + MON[p[1] - 1] + " " + p[2] + ", " + p[0];
+  }
+  function shortDate(dateStr) { const p = dateStr.split("-").map(Number); return MON[p[1] - 1] + " " + p[2]; }
+
+  // ---------- Firebase (reuse the tracker project; separate 'itinerary' path) ----------
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyATaU8PnQwkMRvf6_j6Ccp1j0Qz8oeyELI",
+    authDomain: "crypto-tracker-bfefb.firebaseapp.com",
+    databaseURL: "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "crypto-tracker-bfefb",
+    storageBucket: "crypto-tracker-bfefb.firebasestorage.app",
+    messagingSenderId: "901782471631",
+    appId: "1:901782471631:web:5c7ec398e607b1777548ba"
+  };
+  let fbDb = null, fbStateRef = null, applyingRemote = false, saveTimer = null;
+  const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
+  let firstSnapshot = true;
+
+  function fbInit() {
+    try {
+      if (typeof firebase === "undefined") return;
+      if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      fbDb = firebase.database();
+      // Cloud is the single source of truth. The FIRST snapshot after load always wins.
+      fbStateRef = fbDb.ref("itinerary/state");
+      fbStateRef.on("value", (snap) => {
+        const remote = snap.val();
+        if (remote && typeof remote.stateJson === "string") {
+          try { remote.state = JSON.parse(remote.stateJson); } catch (e) { remote.state = null; }
+        }
+        if (remote && remote.state && Array.isArray(remote.state.trips)) {
+          if (remote.client === CLIENT_ID && !firstSnapshot) return; // ignore our own echo
+          firstSnapshot = false;
+          applyingRemote = true;
+          try {
+            state = remote.state;
+            sanitizeState();
+            localStorage.setItem(LS_KEY, JSON.stringify(state));
+            renderAll();
+          } catch (e) {
+            console.error("[itinerary] render after sync failed:", e);
+          } finally {
+            applyingRemote = false;
+          }
+        } else {
+          firstSnapshot = false;
+          if (state.trips && state.trips.length) cloudSaveState(true);
+        }
+      }, (err) => { console.warn("[itinerary] firebase listen error:", err); });
+    } catch (e) { fbDb = null; }
+  }
+  // Writes via Firebase REST PUT (SDK .set() can hang on some networks). Whole state = ONE JSON string.
+  function cloudSaveState(immediate) {
+    if (applyingRemote) return; // don't echo a remote-applied change straight back
+    clearTimeout(saveTimer);
+    const doSave = () => {
+      let stateJson;
+      try { stateJson = JSON.stringify(state); } catch (e) { stateJson = JSON.stringify({ version: 1, trips: [], ui: {} }); }
+      const payload = JSON.stringify({ stateJson: stateJson, updatedAt: Date.now(), client: CLIENT_ID });
+      const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/itinerary/state.json";
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+      fetch(url, { method: "PUT", body: payload, signal: ctrl ? ctrl.signal : undefined })
+        .then(() => { if (timer) clearTimeout(timer); })
+        .catch((err) => { if (timer) clearTimeout(timer); console.warn("[itinerary] cloud save failed:", err); });
+    };
+    if (immediate) doSave(); else saveTimer = setTimeout(doSave, 800);
+  }
+  function flushCloudSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; cloudSaveState(true); } }
+  window.addEventListener("pagehide", flushCloudSave);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushCloudSave(); });
+
+  // ---------- Derived helpers ----------
+  function findTrip(id) { return state.trips.find(t => t.id === id) || null; }
+  function tripTotal(t) { return t.items.reduce((s, it) => s + (Number(it.cost) || 0), 0); }
+  function dayTotal(t, date) { return t.items.filter(it => it.date === date).reduce((s, it) => s + (Number(it.cost) || 0), 0); }
+  function dayItems(t, date) {
+    return t.items.filter(it => it.date === date).sort((a, b) => {
+      const at = a.time || "99:99", bt = b.time || "99:99";
+      if (at !== bt) return at < bt ? -1 : 1;
+      return (a.title || "").localeCompare(b.title || "");
+    });
+  }
+  function categoryTotals(t) {
+    const m = {};
+    t.items.forEach(it => { const c = it.category || "Other"; m[c] = (m[c] || 0) + (Number(it.cost) || 0); });
+    return m;
+  }
+  function fmtMoney(n, cur) {
+    const v = (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    return (cur ? cur + " " : "") + v;
+  }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  // ---------- Render ----------
+  function renderAll() {
+    const t = findTrip(state.ui.openTripId);
+    if (t) { renderTripDetail(t); }
+    else { showTripsView(); renderTripsList(); }
+  }
+
+  function showTripsView() {
+    document.getElementById("viewTrips").style.display = "";
+    document.getElementById("viewTrip").style.display = "none";
+  }
+  function showTripView() {
+    document.getElementById("viewTrips").style.display = "none";
+    document.getElementById("viewTrip").style.display = "";
+  }
+
+  function renderTripsList() {
+    const wrap = document.getElementById("tripsList");
+    if (!state.trips.length) {
+      wrap.innerHTML = '<div class="empty">No trips yet.<br/>Tap <b>+ New trip</b> to plan your first journey.</div>';
+      return;
+    }
+    const sorted = state.trips.slice().sort((a, b) => cmpDate(a.start, b.start));
+    wrap.innerHTML = sorted.map(t => {
+      const days = datesInRange(t.start, t.end).length;
+      const total = tripTotal(t);
+      const hasBudget = t.budget != null;
+      const pct = hasBudget && t.budget > 0 ? Math.min(100, Math.round(total / t.budget * 100)) : 0;
+      const over = hasBudget && total > t.budget;
+      const budgetLine = hasBudget
+        ? fmtMoney(total, t.currency) + " / " + fmtMoney(t.budget, t.currency)
+        : fmtMoney(total, t.currency) + " planned";
+      return '<div class="trip-card" data-open="' + t.id + '">' +
+        '<div class="tc-top"><div style="flex:1;">' +
+          '<div class="tc-name">' + esc(t.name) + '</div>' +
+          (t.destination ? '<div class="tc-dest">' + esc(t.destination) + '</div>' : '') +
+          '<div class="tc-dates">' + shortDate(t.start) + ' \u2013 ' + shortDate(t.end) + ' \u00b7 ' + days + ' day' + (days > 1 ? 's' : '') + '</div>' +
+        '</div><div class="tc-actions">' +
+          '<button class="icon-btn" data-edit="' + t.id + '" title="Edit">\u270F\uFE0F</button>' +
+          '<button class="icon-btn" data-del="' + t.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
+        '</div></div>' +
+        (hasBudget ? '<div class="bar' + (over ? ' over' : '') + '"><span style="width:' + pct + '%"></span></div>' : '') +
+        '<div class="mini-meta"><span>' + budgetLine + '</span>' + (over ? '<span style="color:var(--red)">Over budget</span>' : '') + '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  function renderTripDetail(t) {
+    showTripView();
+    // clamp openDate into the range
+    const days = datesInRange(t.start, t.end);
+    if (!state.ui.openDate || days.indexOf(state.ui.openDate) === -1) state.ui.openDate = days[0] || t.start;
+    renderTripHead(t);
+    renderTripSummary(t);
+    renderDayNav(t, days);
+    renderDayStrip(t, days);
+    renderItems(t);
+  }
+
+  function renderTripHead(t) {
+    document.getElementById("tripHead").innerHTML =
+      '<div class="th-name">' + esc(t.name) + '</div>' +
+      (t.destination ? '<div class="th-dest">' + esc(t.destination) + '</div>' : '') +
+      '<div class="th-dates">' + dateLabel(t.start) + ' \u2013 ' + dateLabel(t.end) + '</div>' +
+      '<div class="th-actions">' +
+        '<button class="btn ghost sm" id="editTripBtn">Edit trip</button>' +
+        '<button class="btn ghost sm" id="delTripBtn">Delete trip</button>' +
+      '</div>';
+    document.getElementById("editTripBtn").onclick = () => openTripModal(t.id);
+    document.getElementById("delTripBtn").onclick = () => deleteTrip(t.id);
+  }
+
+  function renderTripSummary(t) {
+    const total = tripTotal(t);
+    const cats = categoryTotals(t);
+    let html = '<div class="sum-row big"><span>Total planned</span><span>' + fmtMoney(total, t.currency) + '</span></div>';
+    if (t.budget != null) {
+      const remaining = t.budget - total;
+      const over = remaining < 0;
+      const pct = t.budget > 0 ? Math.min(100, Math.round(total / t.budget * 100)) : 0;
+      html += '<div class="sum-row"><span>Budget</span><span>' + fmtMoney(t.budget, t.currency) + '</span></div>';
+      html += '<div class="sum-row"><span>' + (over ? 'Over by' : 'Remaining') + '</span><span class="' + (over ? 'over' : 'under') + '">' +
+        fmtMoney(Math.abs(remaining), t.currency) + '</span></div>';
+      html += '<div class="bar' + (over ? ' over' : '') + '"><span style="width:' + pct + '%"></span></div>';
+    }
+    const catKeys = Object.keys(cats).filter(k => cats[k] > 0).sort((a, b) => cats[b] - cats[a]);
+    if (catKeys.length) {
+      html += '<div class="cat-list">' + catKeys.map(k =>
+        '<div class="cat-row"><span>' + esc(k) + '</span><span>' + fmtMoney(cats[k], t.currency) + '</span></div>'
+      ).join("") + '</div>';
+    }
+    document.getElementById("tripSummary").innerHTML = html;
+  }
+
+  function renderDayNav(t, days) {
+    const sel = document.getElementById("daySelect");
+    sel.innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
+    sel.onchange = () => { state.ui.openDate = sel.value; persist(); renderTripDetail(t); };
+    document.getElementById("prevDay").onclick = () => {
+      const i = days.indexOf(state.ui.openDate);
+      if (i > 0) { state.ui.openDate = days[i - 1]; persist(); renderTripDetail(t); }
+    };
+    document.getElementById("nextDay").onclick = () => {
+      const i = days.indexOf(state.ui.openDate);
+      if (i < days.length - 1) { state.ui.openDate = days[i + 1]; persist(); renderTripDetail(t); }
+    };
+  }
+
+  function renderDayStrip(t, days) {
+    const strip = document.getElementById("dayStrip");
+    strip.innerHTML = days.map((d, i) => {
+      const cnt = t.items.filter(it => it.date === d).length;
+      const tot = dayTotal(t, d);
+      return '<div class="day-chip' + (d === state.ui.openDate ? ' active' : '') + '" data-day="' + d + '">' +
+        '<div class="dc-dow">' + weekdayShort(d) + ' \u00b7 D' + (i + 1) + '</div>' +
+        '<div class="dc-date">' + shortDate(d) + '</div>' +
+        '<div class="dc-meta">' + cnt + ' item' + (cnt === 1 ? '' : 's') + (tot ? ' \u00b7 ' + fmtMoney(tot, '') : '') + '</div>' +
+      '</div>';
+    }).join("");
+    strip.querySelectorAll(".day-chip").forEach(el => {
+      el.onclick = () => { state.ui.openDate = el.getAttribute("data-day"); persist(); renderTripDetail(t); };
+    });
+  }
+
+  function renderItems(t) {
+    document.getElementById("dayTitle").textContent = dateLabel(state.ui.openDate);
+    const items = dayItems(t, state.ui.openDate);
+    const wrap = document.getElementById("itemsList");
+    if (!items.length) {
+      wrap.innerHTML = '<div class="empty" style="padding:24px;">Nothing planned for this day yet.</div>';
+      return;
+    }
+    wrap.innerHTML = items.map(it => {
+      const timed = !!it.time;
+      return '<div class="item' + (it.done ? ' done' : '') + '">' +
+        '<div class="it-time' + (timed ? '' : ' untimed') + '">' + (timed ? esc(it.time) : '\u2014') + '</div>' +
+        '<div class="it-body">' +
+          '<div class="it-title">' + esc(it.title) + '</div>' +
+          '<div class="it-sub"><span class="chip">' + esc(it.category) + '</span>' +
+            (it.location ? '\uD83D\uDCCD ' + esc(it.location) : '') +
+            (it.cost ? ' <span class="it-cost">' + fmtMoney(it.cost, t.currency) + '</span>' : '') +
+          '</div>' +
+          (it.note ? '<div class="it-note">' + esc(it.note) + '</div>' : '') +
+        '</div>' +
+        '<div class="it-actions">' +
+          '<button class="icon-btn" data-itdone="' + it.id + '" title="Done">' + (it.done ? '\u21A9\uFE0F' : '\u2713') + '</button>' +
+          '<button class="icon-btn" data-itedit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
+          '<button class="icon-btn" data-itdel="' + it.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+    wrap.querySelectorAll("[data-itdone]").forEach(b => b.onclick = () => toggleDone(t.id, b.getAttribute("data-itdone")));
+    wrap.querySelectorAll("[data-itedit]").forEach(b => b.onclick = () => openItemModal(t.id, b.getAttribute("data-itedit")));
+    wrap.querySelectorAll("[data-itdel]").forEach(b => b.onclick = () => deleteItem(t.id, b.getAttribute("data-itdel")));
+  }
+
+  // ---------- Trip CRUD ----------
+  let editingTripId = null;
+  function openTripModal(id) {
+    editingTripId = id || null;
+    const t = id ? findTrip(id) : null;
+    document.getElementById("tripModalTitle").textContent = t ? "Edit trip" : "New trip";
+    document.getElementById("tmName").value = t ? t.name : "";
+    document.getElementById("tmDest").value = t ? t.destination : "";
+    document.getElementById("tmStart").value = t ? t.start : todayStr();
+    document.getElementById("tmEnd").value = t ? t.end : todayStr();
+    document.getElementById("tmBudget").value = (t && t.budget != null) ? t.budget : "";
+    document.getElementById("tmCurrency").value = t ? t.currency : "PHP";
+    document.getElementById("tripModalErr").textContent = "";
+    document.getElementById("tripModalBg").classList.add("show");
+  }
+  function closeTripModal() { document.getElementById("tripModalBg").classList.remove("show"); }
+  function saveTripModal() {
+    const name = document.getElementById("tmName").value.trim();
+    const dest = document.getElementById("tmDest").value.trim();
+    const start = document.getElementById("tmStart").value;
+    const end = document.getElementById("tmEnd").value;
+    const budgetRaw = document.getElementById("tmBudget").value;
+    const currency = document.getElementById("tmCurrency").value;
+    const err = document.getElementById("tripModalErr");
+    if (!name) { err.textContent = "Please enter a trip name."; return; }
+    if (!start || !end) { err.textContent = "Please set start and end dates."; return; }
+    if (cmpDate(end, start) < 0) { err.textContent = "End date can't be before the start date."; return; }
+    const budget = budgetRaw === "" ? null : (Number(budgetRaw) || 0);
+
+    if (editingTripId) {
+      const t = findTrip(editingTripId);
+      t.name = name; t.destination = dest; t.start = start; t.end = end; t.budget = budget; t.currency = currency;
+      // Clamp items that fell outside the new range.
+      let moved = 0;
+      t.items.forEach(it => {
+        if (cmpDate(it.date, start) < 0) { it.date = start; moved++; }
+        else if (cmpDate(it.date, end) > 0) { it.date = end; moved++; }
+      });
+      if (moved) err.textContent = "";
+      closeTripModal(); persist();
+      if (moved) setTimeout(() => alert(moved + " item(s) were outside the new dates and moved to the nearest day."), 50);
+      renderTripDetail(t);
+    } else {
+      const t = { id: uid("t_"), name: name, destination: dest, start: start, end: end, budget: budget, currency: currency, items: [] };
+      state.trips.push(t);
+      state.ui.openTripId = t.id;
+      state.ui.openDate = t.start;
+      closeTripModal(); persist(); renderTripDetail(t);
+    }
+  }
+  function deleteTrip(id) {
+    const t = findTrip(id); if (!t) return;
+    if (!confirm('Delete trip "' + t.name + '" and all its activities? This cannot be undone.')) return;
+    state.trips = state.trips.filter(x => x.id !== id);
+    if (state.ui.openTripId === id) { state.ui.openTripId = null; state.ui.openDate = null; }
+    persist(); showTripsView(); renderTripsList();
+  }
+
+  // ---------- Item CRUD ----------
+  let editingItem = { tripId: null, itemId: null };
+  function openItemModal(tripId, itemId) {
+    const t = findTrip(tripId); if (!t) return;
+    editingItem = { tripId: tripId, itemId: itemId || null };
+    const it = itemId ? t.items.find(x => x.id === itemId) : null;
+    document.getElementById("itemModalTitle").textContent = it ? "Edit activity" : "Add activity";
+    const days = datesInRange(t.start, t.end);
+    document.getElementById("imDay").innerHTML = days.map((d, i) => '<option value="' + d + '">Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
+    document.getElementById("imDay").value = it ? it.date : (state.ui.openDate || days[0]);
+    document.getElementById("imTime").value = it ? it.time : "";
+    document.getElementById("imCat").value = it ? it.category : "Activity";
+    document.getElementById("imTitle").value = it ? it.title : "";
+    document.getElementById("imLoc").value = it ? it.location : "";
+    document.getElementById("imCost").value = (it && it.cost) ? it.cost : "";
+    document.getElementById("imNote").value = it ? it.note : "";
+    document.getElementById("itemModalErr").textContent = "";
+    document.getElementById("itemModalBg").classList.add("show");
+  }
+  function closeItemModal() { document.getElementById("itemModalBg").classList.remove("show"); }
+  function saveItemModal() {
+    const t = findTrip(editingItem.tripId); if (!t) return;
+    const title = document.getElementById("imTitle").value.trim();
+    const err = document.getElementById("itemModalErr");
+    if (!title) { err.textContent = "Please enter a title."; return; }
+    const data = {
+      date: document.getElementById("imDay").value,
+      time: document.getElementById("imTime").value || "",
+      category: document.getElementById("imCat").value,
+      title: title,
+      location: document.getElementById("imLoc").value.trim(),
+      cost: Number(document.getElementById("imCost").value) || 0,
+      note: document.getElementById("imNote").value.trim()
+    };
+    if (editingItem.itemId) {
+      const it = t.items.find(x => x.id === editingItem.itemId);
+      Object.assign(it, data);
+    } else {
+      t.items.push(Object.assign({ id: uid("i_"), done: false }, data));
+    }
+    state.ui.openDate = data.date;
+    closeItemModal(); persist(); renderTripDetail(t);
+  }
+  function deleteItem(tripId, itemId) {
+    const t = findTrip(tripId); if (!t) return;
+    if (!confirm("Delete this activity?")) return;
+    t.items = t.items.filter(x => x.id !== itemId);
+    persist(); renderTripDetail(t);
+  }
+  function toggleDone(tripId, itemId) {
+    const t = findTrip(tripId); if (!t) return;
+    const it = t.items.find(x => x.id === itemId); if (!it) return;
+    it.done = !it.done; persist(); renderTripDetail(t);
+  }
+
+  // ---------- Copy as text ----------
+  function copyTripText(t) {
+    const days = datesInRange(t.start, t.end);
+    let out = t.name + (t.destination ? " \u2014 " + t.destination : "") + "\n";
+    out += shortDate(t.start) + " - " + shortDate(t.end) + "\n";
+    days.forEach((d, i) => {
+      const its = dayItems(t, d);
+      out += "\nDay " + (i + 1) + " \u2014 " + dateLabel(d) + "\n";
+      if (!its.length) { out += "  (nothing planned)\n"; return; }
+      its.forEach(it => {
+        out += "  " + (it.time ? it.time + "  " : "") + it.title +
+          (it.location ? " @ " + it.location : "") +
+          (it.cost ? "  (" + fmtMoney(it.cost, t.currency) + ")" : "") +
+          (it.done ? "  [done]" : "") + "\n";
+        if (it.note) out += "      - " + it.note + "\n";
+      });
+      const dt = dayTotal(t, d);
+      if (dt) out += "  Day total: " + fmtMoney(dt, t.currency) + "\n";
+    });
+    out += "\nTrip total: " + fmtMoney(tripTotal(t), t.currency);
+    if (t.budget != null) out += " / Budget " + fmtMoney(t.budget, t.currency);
+    const done = () => alert("Itinerary copied to clipboard.");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(out).then(done, () => fallbackCopy(out, done));
+    } else fallbackCopy(out, done);
+  }
+  function fallbackCopy(text, cb) {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta); if (cb) cb();
+  }
+
+  // ---------- Wire up ----------
+  function boot() {
+    loadState();
+    renderAll();
+    fbInit();
+    checkForUpdate();
+    setInterval(checkForUpdate, 60000);
+  }
+
+  document.getElementById("newTripBtn").onclick = () => openTripModal(null);
+  document.getElementById("backBtn").onclick = () => { state.ui.openTripId = null; state.ui.openDate = null; persist(); showTripsView(); renderTripsList(); };
+  document.getElementById("addItemBtn").onclick = () => openItemModal(state.ui.openTripId, null);
+  document.getElementById("copyBtn").onclick = () => { const t = findTrip(state.ui.openTripId); if (t) copyTripText(t); };
+
+  document.getElementById("tmCancel").onclick = closeTripModal;
+  document.getElementById("tmSave").onclick = saveTripModal;
+  document.getElementById("imCancel").onclick = closeItemModal;
+  document.getElementById("imSave").onclick = saveItemModal;
+  document.getElementById("tripModalBg").addEventListener("click", (e) => { if (e.target.id === "tripModalBg") closeTripModal(); });
+  document.getElementById("itemModalBg").addEventListener("click", (e) => { if (e.target.id === "itemModalBg") closeItemModal(); });
+
+  // Delegated clicks for trip cards (open/edit/delete)
+  document.getElementById("tripsList").addEventListener("click", (e) => {
+    const del = e.target.closest("[data-del]");
+    const edit = e.target.closest("[data-edit]");
+    const open = e.target.closest("[data-open]");
+    if (del) { e.stopPropagation(); deleteTrip(del.getAttribute("data-del")); return; }
+    if (edit) { e.stopPropagation(); openTripModal(edit.getAttribute("data-edit")); return; }
+    if (open) { state.ui.openTripId = open.getAttribute("data-open"); state.ui.openDate = null; persist(); renderAll(); }
+  });
+
+  // Wire lock UI
+  document.getElementById("lockBtn").onclick = unlock;
+  document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+  if (sessionStorage.getItem("ctUnlocked") === "1") { revealApp(); }
+  else { document.getElementById("lockInput").focus(); }
+</script>
+</body>
+</html>
