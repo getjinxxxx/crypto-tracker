@@ -119,6 +119,7 @@
 
   .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 28px; }
 </style>
+<link rel="stylesheet" href="theme.css" />
 </head>
 <body class="locked">
 
@@ -220,7 +221,7 @@
   }
 
   // ---------- Auto-update (manual banner only) ----------
-  const APP_VERSION = 137;
+  const APP_VERSION = 138;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -302,12 +303,12 @@
     });
     return found ? total : (Array.isArray(rows) && rows.length ? 0 : null);
   }
-  // Which cutoff is coming up? Day 1-15 of the month -> 1st cutoff (due days 1-15);
-  // day 16-end -> 2nd cutoff (due days 16-31). Shows whichever payday is next.
+  // Paydays: 1st cutoff = 13th, 2nd cutoff = 28th. On/before the 13th we show the 1st
+  // cutoff window (due days 1-13); after the 13th we show the 2nd (due days 14-end).
   function currentCutoff() {
     const d = new Date().getDate();
-    return d <= 15 ? { which: "1st", lo: 1, hi: 15, label: "Debt due (1st cutoff)", sub: "Due days 1\u201315" }
-                   : { which: "2nd", lo: 16, hi: 31, label: "Debt due (2nd cutoff)", sub: "Due days 16\u2013end" };
+    return d <= 13 ? { which: "1st", lo: 1, hi: 13, label: "Debt due (1st cutoff \u2013 13th)", sub: "Due days 1\u201313" }
+                   : { which: "2nd", lo: 14, hi: 31, label: "Debt due (2nd cutoff \u2013 28th)", sub: "Due days 14\u2013end" };
   }
   function debtOutstanding() {
     const st = DASH.debt || localState("debtTrackerV3");

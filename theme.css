@@ -1,0 +1,96 @@
+/* theme.css — app-wide soft neumorphic makeover.
+ * Loaded on every page (via shell.js). Overrides shared component styles so all
+ * modules get the same modern, soft-dark look. Easy on the eyes: low-contrast
+ * panels, soft shadows, gentle indigo/periwinkle accent (not harsh/neon).
+ * Only restyles common selectors; it never changes layout structure or logic.
+ */
+
+:root {
+  --bg: #0e0f13 !important;
+  --bg-2: #121319 !important;
+  --panel: #171922 !important;
+  --panel-2: #1e2130 !important;
+  --line: #262a3a !important;
+  --text: #e8eaf2 !important;
+  --muted: #8b90a6 !important;
+  /* soft accent — periwinkle/indigo, pleasant not neon */
+  --gold: #8b8cf0 !important;
+  --gold-bright: #a9a8ff !important;
+  --accent: #8b8cf0 !important;
+  --accent-2: #b98bf0 !important;
+
+  --soft-shadow: 6px 6px 16px rgba(0,0,0,.45), -5px -5px 14px rgba(255,255,255,.015);
+  --soft-inset: inset 3px 3px 7px rgba(0,0,0,.4), inset -3px -3px 7px rgba(255,255,255,.015);
+  --grad: linear-gradient(135deg, #8b8cf0, #b98bf0);
+}
+
+html, body { background: var(--bg) !important; }
+
+/* Soft panels — anything that looks like a card/box */
+.card, .panel, .stat, .trip-head, .summary, .timeline, .trip-card,
+.lock-card, .modal, .kb-col, .netpay, .scan-box, .column {
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--soft-shadow) !important;
+}
+
+/* Buttons — gradient primary, soft ghost */
+.btn, button.btn, .scan-btn {
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: .2px !important;
+  transition: transform .12s ease, filter .12s ease !important;
+}
+.btn:not(.ghost):not(.scan-btn) {
+  background: var(--grad) !important;
+  color: #0b0b12 !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(139,140,240,.35) !important;
+}
+.btn:active { transform: translateY(1px) !important; filter: brightness(.96) !important; }
+.btn.ghost {
+  background: var(--panel-2) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: none !important;
+}
+.scan-btn { border: 1px solid var(--accent) !important; color: var(--gold-bright) !important; background: transparent !important; }
+
+/* Inputs */
+input, select, textarea {
+  border-radius: 12px !important;
+  background: var(--panel-2) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+input:focus, select:focus, textarea:focus { outline: none !important; border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(139,140,240,.18) !important; }
+
+/* Small round icon buttons */
+.icon-btn { border-radius: 10px !important; background: var(--panel-2) !important; border: 1px solid var(--line) !important; }
+
+/* Pills / chips / tags */
+.chip, .pill, .col-count, .cost-tag { border-radius: 999px !important; }
+
+/* Gradient text for big headings/titles already using the accent clip */
+.title, .hero .title, .welcome, h1.title {
+  background: var(--grad) !important;
+  -webkit-background-clip: text !important; background-clip: text !important; color: transparent !important;
+}
+
+/* Timeline rows a touch softer */
+.row { border-color: var(--line) !important; }
+.day-chip, .tile, .trip-card { border-radius: 16px !important; }
+
+/* Tiles (home classic view, if present) get soft shadow + hover lift */
+.tile { box-shadow: var(--soft-shadow) !important; }
+
+/* Scrollbars (subtle) */
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: #2a2e40; border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* Shell sidebar accent to match */
+#shellNav .sh-logo { background: var(--grad) !important; }
+#shellNav a.sh-item.active { background: rgba(139,140,240,.16) !important; color: var(--gold-bright) !important; box-shadow: inset 0 0 0 1px rgba(139,140,240,.3) !important; }
+#shellBtn { color: var(--gold-bright) !important; }

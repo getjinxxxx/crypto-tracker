@@ -30,35 +30,36 @@
 
   // ---- 1) Theme override: gold -> orange. Injected LAST so it wins the cascade. ----
   var themeCss =
-    ":root{" +
-      "--gold:#ff7a1a !important;" +
-      "--gold-bright:#ffb061 !important;" +
-      "--accent:#ff7a1a !important;" +
-    "}" +
-    /* shell chrome */
-    "#shellBtn{position:fixed;top:10px;left:10px;z-index:9000;width:40px;height:40px;border-radius:11px;" +
-      "background:#1c1c20;border:1px solid #32323a;color:#ffb061;font-size:19px;cursor:pointer;" +
-      "display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.45);}" +
+    /* shell chrome (periwinkle accent to match theme.css) */
+    "#shellBtn{position:fixed;top:10px;left:10px;z-index:9000;width:40px;height:40px;border-radius:12px;" +
+      "background:#1e2130;border:1px solid #2a2e40;color:#a9a8ff;font-size:19px;cursor:pointer;" +
+      "display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,.5);}" +
     "#shellScrim{position:fixed;inset:0;z-index:8998;background:rgba(0,0,0,.55);display:none;}" +
     "#shellScrim.open{display:block;}" +
     "#shellNav{position:fixed;top:0;left:0;bottom:0;z-index:8999;width:255px;max-width:82vw;" +
-      "background:#0f0f11;border-right:1px solid #26262c;padding:16px 12px;overflow-y:auto;" +
+      "background:#121319;border-right:1px solid #262a3a;padding:16px 12px;overflow-y:auto;" +
       "transform:translateX(-102%);transition:transform .2s ease;" +
       "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}" +
     "#shellNav.open{transform:translateX(0);box-shadow:0 0 40px rgba(0,0,0,.6);}" +
-    "#shellNav .sh-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 14px;color:#f4f4f6;}" +
-    "#shellNav .sh-logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#ff7a1a,#ffb061);" +
-      "display:flex;align-items:center;justify-content:center;font-weight:800;color:#130a02;font-size:15px;}" +
+    "#shellNav .sh-brand{display:flex;align-items:center;gap:10px;padding:4px 8px 14px;color:#e8eaf2;}" +
+    "#shellNav .sh-logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#8b8cf0,#b98bf0);" +
+      "display:flex;align-items:center;justify-content:center;font-weight:800;color:#0b0b12;font-size:15px;}" +
     "#shellNav .sh-bname{font-weight:700;font-size:15px;}" +
-    "#shellNav .sh-grp{color:#8b8b93;font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin:14px 8px 6px;}" +
-    "#shellNav a.sh-item{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;" +
-      "color:#f4f4f6;text-decoration:none;font-size:14px;cursor:pointer;}" +
-    "#shellNav a.sh-item:hover{background:#1c1c20;}" +
-    "#shellNav a.sh-item.active{background:rgba(255,122,26,.14);color:#ffb061;box-shadow:inset 0 0 0 1px rgba(255,122,26,.25);}" +
+    "#shellNav .sh-grp{color:#8b90a6;font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin:14px 8px 6px;}" +
+    "#shellNav a.sh-item{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:11px;" +
+      "color:#e8eaf2;text-decoration:none;font-size:14px;cursor:pointer;}" +
+    "#shellNav a.sh-item:hover{background:#1e2130;}" +
+    "#shellNav a.sh-item.active{background:rgba(139,140,240,.16);color:#a9a8ff;box-shadow:inset 0 0 0 1px rgba(139,140,240,.3);}" +
     "#shellNav a.sh-item .sh-ico{width:20px;text-align:center;font-size:15px;}" +
-    "#shellNav .sh-close{position:absolute;top:12px;right:12px;background:none;border:none;color:#8b8b93;font-size:20px;cursor:pointer;}";
+    "#shellNav .sh-close{position:absolute;top:12px;right:12px;background:none;border:none;color:#8b90a6;font-size:20px;cursor:pointer;}";
 
   function injectTheme() {
+    // External stylesheet does the full component makeover (loaded last = wins cascade).
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "theme.css";
+    document.head.appendChild(link);
+    // Shell chrome styles (button/drawer) still injected inline.
     var s = document.createElement("style");
     s.id = "shellTheme";
     s.textContent = themeCss;
