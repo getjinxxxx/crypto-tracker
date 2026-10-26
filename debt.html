@@ -625,10 +625,6 @@
             <label class="si-radio"><input type="radio" name="siMode" value="separate" /> Separate debts (per item)</label>
           </div>
         </div>
-        <div class="field" id="siNameField">
-          <label>Name / label<span class="sub">for the combined debt</span></label>
-          <input type="text" class="name-in" id="siName" placeholder="e.g. Shopee haul, Lazada order" />
-        </div>
         <div class="field">
           <label>Category</label>
           <select id="siCategory" class="cat-sel">
@@ -640,6 +636,14 @@
             <option value="government">Government (SSS/Pag-IBIG/GSIS)</option>
             <option value="salaryloan">Salary / Company Loan</option>
           </select>
+        </div>
+        <div class="field" id="siPersonField" style="display:none">
+          <label>Person name<span class="sub">who you owe</span></label>
+          <input type="text" class="name-in" id="siPerson" placeholder="e.g. Angel, Mico" />
+        </div>
+        <div class="field" id="siNameField">
+          <label>Name / label<span class="sub">for the combined debt</span></label>
+          <input type="text" class="name-in" id="siName" placeholder="e.g. Shopee haul, Lazada order" />
         </div>
         <div class="field">
           <label>Due day (1-31)<span class="sub">required &mdash; wala sa litrato</span></label>
@@ -2221,8 +2225,13 @@
     return r ? r.value : "combined";
   }
   function syncSiMode() {
-    // Name field only matters for the combined mode.
-    document.getElementById("siNameField").style.display = (siMode() === "combined") ? "" : "none";
+    const isPerson = document.getElementById("siCategory").value === "person";
+    // Person name shows only when category = person.
+    document.getElementById("siPersonField").style.display = isPerson ? "" : "none";
+    // Combined mode needs a label. For a person, the person name doubles as the label,
+    // so the separate "Name/label" field is only needed for non-person combined debts.
+    const needName = (siMode() === "combined") && !isPerson;
+    document.getElementById("siNameField").style.display = needName ? "" : "none";
   }
 
   function addScannedItems() {
@@ -2238,10 +2247,17 @@
     }
     const terms = Math.max(1, Math.round(num(document.getElementById("siTerms").value) || 1));
     const category = document.getElementById("siCategory").value;
+    const person = category === "person" ? document.getElementById("siPerson").value.trim() : "";
+    if (category === "person" && !person) {
+      err.textContent = "Ilagay kung kanino ka may utang (Person name).";
+      document.getElementById("siPerson").classList.add("need-fill");
+      document.getElementById("siPerson").focus();
+      return;
+    }
     const mode = siMode();
     const today = new Date().toISOString().slice(0, 10);
     const base = {
-      category: category, person: "", subCat: usesSubCat(category) ? "other" : "",
+      category: category, person: person, subCat: usesSubCat(category) ? "other" : "",
       recurring: false, endMonth: "", dueDay: dueDay,
       startMonth: viewMonth, paidTerms: {}, paid: false, date: today
     };
@@ -2254,7 +2270,10 @@
       });
     } else {
       const total = chosen.reduce((s, x) => s + x.price, 0);
-      const name = document.getElementById("siName").value.trim() || "Scanned items";
+      // For a person, the person name is the label; otherwise use the typed name.
+      const name = (category === "person")
+        ? person
+        : (document.getElementById("siName").value.trim() || "Scanned items");
       state.debts.push(Object.assign({}, base, {
         id: uid(), name: name, amount: total, terms: terms, createdAt: Date.now()
       }));
@@ -2296,6 +2315,8 @@
     document.getElementById("siCancelBtn").addEventListener("click", closeScanItems);
     document.getElementById("siAddBtn").addEventListener("click", addScannedItems);
     document.querySelectorAll('input[name="siMode"]').forEach(r => r.addEventListener("change", syncSiMode));
+    document.getElementById("siCategory").addEventListener("change", syncSiMode);
+    document.getElementById("siPerson").addEventListener("input", () => document.getElementById("siPerson").classList.remove("need-fill"));
     document.getElementById("scanItemsOverlay").addEventListener("click", (e) => {
       if (e.target === document.getElementById("scanItemsOverlay")) closeScanItems();
     });
@@ -2368,7 +2389,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 114;
+  const APP_VERSION = 115;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
