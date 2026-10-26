@@ -77,13 +77,13 @@
 
   .btn {
     background: var(--gold); color: #000; border: none; border-radius: 10px;
-    padding: 9px 14px; font-size: 14px; font-weight: 700; cursor: pointer;
+    padding: 9px 14px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
   }
   .btn.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
   .btn.sm { padding: 6px 10px; font-size: 13px; }
   .icon-btn {
     background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 9px; width: 34px; height: 34px; font-size: 15px; cursor: pointer;
+    border-radius: 9px; width: 32px; height: 32px; font-size: 14px; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
   }
 
@@ -110,7 +110,7 @@
   .trip-head .th-name { font-size: 20px; font-weight: 800; }
   .trip-head .th-dest { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .trip-head .th-dates { color: var(--gold-bright); font-size: 12px; margin-top: 6px; }
-  .trip-head .th-actions { display: flex; gap: 6px; margin-top: 12px; }
+  .trip-head .th-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
 
   .summary { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 14px; }
   .summary .sum-row { display: flex; justify-content: space-between; font-size: 14px; margin: 4px 0; }
@@ -133,32 +133,50 @@
   .day-chip .dc-date { font-size: 15px; font-weight: 700; }
   .day-chip .dc-meta { font-size: 11px; color: var(--gold-bright); margin-top: 2px; }
 
-  /* Items */
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 2px 0 12px; }
+  .legend .lg-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend .lg-dot { width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
+  .legend .lg-edit { font-size: 12px; color: var(--gold-bright); cursor: pointer; background: none; border: none; }
+
+  /* Timeline */
   .day-title { font-size: 15px; font-weight: 700; margin: 4px 0 10px; }
-  .item {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-    padding: 12px; margin-bottom: 10px; display: flex; gap: 10px;
+  .timeline { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); margin-bottom: 14px; }
+  .row { display: flex; gap: 0; border-bottom: 1px solid var(--line); position: relative; }
+  .row:last-child { border-bottom: none; }
+  .row .r-time {
+    flex: 0 0 92px; padding: 12px 10px; font-size: 12px; font-weight: 700; color: var(--text);
+    border-right: 1px solid var(--line); word-break: break-word;
   }
-  .item .it-time {
-    flex: 0 0 auto; background: var(--panel-2); border-radius: 9px; padding: 4px 8px;
-    font-size: 13px; font-weight: 700; color: var(--gold-bright); height: fit-content; min-width: 54px; text-align: center;
-  }
-  .item .it-time.untimed { color: var(--muted); font-weight: 500; }
-  .item .it-body { flex: 1; min-width: 0; }
-  .item .it-title { font-size: 15px; font-weight: 600; }
-  .item.done .it-title { text-decoration: line-through; color: var(--muted); }
-  .item .it-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
-  .item .it-note { font-size: 12px; color: var(--muted); margin-top: 4px; font-style: italic; }
-  .chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--panel-2); color: var(--muted); margin-right: 6px; }
-  .it-cost { color: var(--gold-bright); font-weight: 700; font-size: 13px; }
-  .item .it-actions { flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px; }
+  .row .r-body { flex: 1; min-width: 0; padding: 12px; }
+  .row .r-title { font-size: 15px; font-weight: 600; }
+  .row .r-note { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .row .r-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 5px; opacity: .85; }
+  .row.done .r-title { text-decoration: line-through; color: var(--muted); }
+
+  /* Travel leg row */
+  .row.leg .r-time { color: var(--muted); font-weight: 600; }
+  .row.leg .r-title { font-size: 13.5px; color: var(--text); font-weight: 600; }
+  .row.leg .r-body .dur { color: var(--text); font-weight: 700; }
+  .row.leg .r-body .route { color: var(--muted); }
+
+  /* Typed (colored) stop rows — background + border tint injected inline */
+  .row.typed .r-time, .row.typed .r-body { color: #10100e; }
+  .row.typed .r-note { color: rgba(0,0,0,.72); }
+  .row.typed .r-time { border-right-color: rgba(0,0,0,.18); }
+
+  .cost-tag { color: var(--gold-bright); font-weight: 700; font-size: 12px; }
+  .row.typed .cost-tag { color: #10100e; }
+
+  .add-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+  .add-row .btn { flex: 1; min-width: 120px; }
 
   /* Modal */
   .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
   .modal-bg.show { display: flex; }
   .modal {
     background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
-    padding: 20px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+    padding: 20px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto;
   }
   .modal h3 { margin: 0 0 14px; font-size: 18px; }
   .field { margin-bottom: 12px; }
@@ -170,33 +188,45 @@
   .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--gold); }
   .field.two { display: flex; gap: 10px; }
   .field.two > div { flex: 1; }
+  .field.inline { display: flex; align-items: center; gap: 8px; }
+  .field.inline input[type=checkbox] { width: auto; }
+  .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+  .seg button { flex: 1; background: var(--panel-2); color: var(--muted); border: none; padding: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .seg button.active { background: var(--gold); color: #000; }
   .modal-err { color: var(--danger); font-size: 13px; min-height: 16px; margin-bottom: 6px; }
   .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
   .modal-actions .btn { flex: 1; }
 
-  /* Scan-to-fill (on-device OCR, same idea as debt.html) */
+  /* Legend editor */
+  .lg-edit-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .lg-edit-row input[type=color] { width: 40px; height: 38px; padding: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; }
+  .lg-edit-row input[type=text] { flex: 1; }
+
+  /* Scan preview */
   .scan-box { border: 1px dashed var(--line); border-radius: 12px; padding: 12px; margin-bottom: 14px; background: var(--panel-2); }
   .scan-btns { display: flex; gap: 8px; }
-  .scan-btn {
-    flex: 1; background: transparent; border: 1px solid var(--gold); color: var(--gold-bright);
-    border-radius: 10px; padding: 9px 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
-  }
+  .scan-btn { flex: 1; background: transparent; border: 1px solid var(--gold); color: var(--gold-bright); border-radius: 10px; padding: 9px 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
   .scan-note { color: var(--muted); font-size: 11px; margin-top: 8px; line-height: 1.4; }
   .scan-status { margin-top: 10px; }
   .scan-prog { height: 8px; border-radius: 6px; background: var(--panel); overflow: hidden; }
   .scan-bar { height: 100%; width: 0%; background: var(--gold); transition: width .2s ease; }
   .scan-msg { font-size: 12px; color: var(--muted); margin-top: 6px; }
-  .scan-result { display: none; align-items: center; gap: 10px; margin-top: 10px; }
+  .scan-head { display: flex; gap: 10px; align-items: center; margin: 10px 0; }
   .scan-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
-  .scan-found { font-size: 12px; color: var(--green); }
+  .scan-preview { max-height: 46vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .pv-row { display: flex; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .pv-row:last-child { border-bottom: none; }
+  .pv-row .pv-t { flex: 0 0 76px; color: var(--muted); font-weight: 700; }
+  .pv-row .pv-dot { width: 9px; height: 9px; border-radius: 3px; margin-top: 4px; flex: 0 0 auto; }
+  .pv-row.leg { font-style: italic; color: var(--muted); }
 
   .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 28px; }
 
   @media print {
-    #lock, .topbar .btn, .btn, .icon-btn, .day-nav, .day-strip, .item .it-actions,
-    .trip-head .th-actions, .modal-bg, #updateBanner { display: none !important; }
+    #lock, .topbar .btn, .btn, .icon-btn, .day-nav, .day-strip, .r-actions,
+    .trip-head .th-actions, .modal-bg, #updateBanner, .add-row, .lg-edit { display: none !important; }
     body { color: #000; background: #fff; max-width: 100%; }
-    .trip-card, .trip-head, .summary, .item { border-color: #ccc; background: #fff; }
+    .trip-card, .trip-head, .summary, .timeline { border-color: #ccc; background: #fff; }
   }
 </style>
 </head>
@@ -240,10 +270,13 @@
       </div>
       <div class="day-strip" id="dayStrip"></div>
       <div class="day-title" id="dayTitle"></div>
-      <div id="itemsList"></div>
-      <div style="display:flex; gap:10px; margin-top:4px;">
-        <button class="btn" id="addItemBtn" style="flex:1;">+ Add activity</button>
-        <button class="btn ghost" id="copyBtn">Copy as text</button>
+      <div class="legend" id="legendBar"></div>
+      <div class="timeline" id="timeline"></div>
+      <div class="add-row">
+        <button class="btn" id="addStopBtn">+ Add stop</button>
+        <button class="btn ghost" id="addLegBtn">+ Travel leg</button>
+        <button class="btn ghost" id="scanBtn">&#128247; Scan</button>
+        <button class="btn ghost" id="copyBtn">Copy text</button>
       </div>
     </div>
 
@@ -255,8 +288,8 @@
     <div class="modal">
       <h3 id="tripModalTitle">New trip</h3>
       <div class="modal-err" id="tripModalErr"></div>
-      <div class="field"><label>Trip name</label><input id="tmName" placeholder="e.g. Japan 2026" /></div>
-      <div class="field"><label>Destination</label><input id="tmDest" placeholder="e.g. Tokyo & Kyoto" /></div>
+      <div class="field"><label>Trip name</label><input id="tmName" placeholder="e.g. Taytay to Vigan" /></div>
+      <div class="field"><label>Route / destination</label><input id="tmDest" placeholder="e.g. Taytay &rarr; Vigan" /></div>
       <div class="field two">
         <div><label>Start date</label><input id="tmStart" type="date" /></div>
         <div><label>End date</label><input id="tmEnd" type="date" /></div>
@@ -276,48 +309,100 @@
     </div>
   </div>
 
-  <!-- Item modal -->
+  <!-- Entry modal (stop OR travel leg) -->
   <div class="modal-bg" id="itemModalBg">
     <div class="modal">
-      <h3 id="itemModalTitle">Add activity</h3>
+      <h3 id="itemModalTitle">Add entry</h3>
       <div class="modal-err" id="itemModalErr"></div>
+      <div class="seg">
+        <button type="button" id="segStop" class="active">Stop</button>
+        <button type="button" id="segLeg">Travel leg</button>
+      </div>
 
-      <!-- Scan a ticket / booking (on-device OCR, nothing uploaded) -->
+      <div class="field"><label>Day</label><select id="imDay"></select></div>
+
+      <!-- STOP fields -->
+      <div id="stopFields">
+        <div class="field two">
+          <div><label>Start time</label><input id="imTime" type="time" /></div>
+          <div><label>End time (optional)</label><input id="imEnd" type="time" /></div>
+        </div>
+        <div class="field inline"><input type="checkbox" id="imApprox" /><label for="imApprox" style="margin:0;">Approximate time (show as &ldquo;~&rdquo;)</label></div>
+        <div class="field"><label>Type / color</label><select id="imType"></select></div>
+        <div class="field"><label>Title</label><input id="imTitle" placeholder="e.g. Bulacan: Welcome Arch (3 min)" /></div>
+        <div class="field"><label>Note (optional)</label><textarea id="imNote" rows="2" placeholder="e.g. Litrato lang."></textarea></div>
+        <div class="field two">
+          <div><label>Category</label>
+            <select id="imCat">
+              <option>Flight</option><option>Transport</option><option>Hotel</option><option>Food</option>
+              <option>Activity</option><option>Shopping</option><option>Meeting</option><option>Other</option>
+            </select>
+          </div>
+          <div><label>Cost (optional)</label><input id="imCost" type="number" inputmode="decimal" placeholder="0" /></div>
+        </div>
+      </div>
+
+      <!-- LEG fields -->
+      <div id="legFields" style="display:none;">
+        <div class="field"><label>Label</label><input id="imLegLabel" placeholder="e.g. Takbo" value="Takbo" /></div>
+        <div class="field"><label>Duration</label><input id="imDur" placeholder="e.g. ~1 oras 10 min" /></div>
+        <div class="field two">
+          <div><label>From</label><input id="imFrom" placeholder="e.g. Taytay" /></div>
+          <div><label>To</label><input id="imTo" placeholder="e.g. hangganan ng Bulacan" /></div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn ghost" id="imCancel">Cancel</button>
+        <button class="btn" id="imSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend editor modal -->
+  <div class="modal-bg" id="legendModalBg">
+    <div class="modal">
+      <h3>Edit legend (colors)</h3>
+      <div id="legendEditList"></div>
+      <button class="btn ghost sm" id="legAdd" style="margin:4px 0 14px;">+ Add type</button>
+      <div class="modal-actions">
+        <button class="btn" id="legDone">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scan modal -->
+  <div class="modal-bg" id="scanModalBg">
+    <div class="modal">
+      <h3>Scan itinerary</h3>
+      <div class="modal-err" id="scanErr"></div>
       <div class="scan-box">
         <div class="scan-btns">
-          <button type="button" class="scan-btn" id="scanCamBtn">&#128247; Scan a ticket</button>
+          <button type="button" class="scan-btn" id="scanCamBtn">&#128247; Scan photo</button>
           <button type="button" class="scan-btn" id="scanUpBtn">&#128444;&#65039; Upload image</button>
         </div>
-        <div class="scan-note">Reads the photo on your device (offline). Nothing is uploaded. Check the fields after.</div>
+        <div class="scan-note">Reads the photo on your device (offline). Nothing is uploaded. Review the entries, then confirm to add.</div>
         <input type="file" id="scanCamInput" accept="image/*" capture="environment" style="display:none" />
         <input type="file" id="scanUpInput" accept="image/*" style="display:none" />
         <div class="scan-status" id="scanStatus" style="display:none">
           <div class="scan-prog"><div class="scan-bar" id="scanBar"></div></div>
-          <div class="scan-msg" id="scanMsg">Reading ticket&hellip;</div>
-        </div>
-        <div class="scan-result" id="scanResult">
-          <img id="scanThumb" class="scan-thumb" alt="ticket" />
-          <div class="scan-found" id="scanFound"></div>
+          <div class="scan-msg" id="scanMsg">Reading&hellip;</div>
         </div>
       </div>
-
-      <div class="field"><label>Day</label><select id="imDay"></select></div>
-      <div class="field two">
-        <div><label>Time (optional)</label><input id="imTime" type="time" /></div>
-        <div><label>Category</label>
-          <select id="imCat">
-            <option>Flight</option><option>Transport</option><option>Hotel</option><option>Food</option>
-            <option>Activity</option><option>Shopping</option><option>Meeting</option><option>Other</option>
-          </select>
+      <div id="scanResultWrap" style="display:none;">
+        <div class="scan-head">
+          <img id="scanThumb" class="scan-thumb" alt="scan" />
+          <div id="scanFound" style="font-size:12px;color:var(--green);"></div>
         </div>
+        <div class="field two">
+          <div><label>Target day</label><select id="scanDay"></select></div>
+          <div class="field inline" style="margin-top:22px;"><input type="checkbox" id="scanReplace" /><label for="scanReplace" style="margin:0;">Replace day's entries</label></div>
+        </div>
+        <div class="scan-preview" id="scanPreview"></div>
       </div>
-      <div class="field"><label>Title</label><input id="imTitle" placeholder="e.g. Check in at hotel" /></div>
-      <div class="field"><label>Location (optional)</label><input id="imLoc" placeholder="e.g. Shibuya" /></div>
-      <div class="field"><label>Cost (optional)</label><input id="imCost" type="number" inputmode="decimal" placeholder="0" /></div>
-      <div class="field"><label>Note (optional)</label><textarea id="imNote" rows="2" placeholder="Anything to remember"></textarea></div>
       <div class="modal-actions">
-        <button class="btn ghost" id="imCancel">Cancel</button>
-        <button class="btn" id="imSave">Save</button>
+        <button class="btn ghost" id="scanCancel">Cancel</button>
+        <button class="btn" id="scanAdd" style="display:none;">Add these entries</button>
       </div>
     </div>
   </div>
@@ -350,7 +435,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 123;
+  const APP_VERSION = 124;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -381,11 +466,21 @@
 
   // ---------- State ----------
   const LS_KEY = "itineraryV1";
-  // state.trips[] = { id, name, destination, start, end, budget|null, currency, items[] }
-  // item = { id, date, time, title, location, category, cost, note, done }
-  let state = { version: 1, trips: [], ui: { openTripId: null, openDate: null } };
+  // trip = { id, name, destination, start, end, budget|null, currency, legend[], items[] }
+  // legend type = { id, label, color }   (color "" = normal/plain)
+  // item (stop) = { id, date, kind:"stop", time, endTime, approx, typeId, title, note, category, cost, done }
+  // item (leg)  = { id, date, kind:"leg", label, durationText, fromText, toText }
+  let state = { version: 2, trips: [], ui: { openTripId: null, openDate: null } };
 
   function uid(p) { return p + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3); }
+
+  function defaultLegend() {
+    return [
+      { id: "t_check", label: "Checkpoint/cutoff", color: "#34d399" },
+      { id: "t_arch", label: "Welcome arch (litrato)", color: "#d4a017" },
+      { id: "t_sight", label: "Hinto/tanawin", color: "#6b7280" }
+    ];
+  }
 
   function loadState() {
     try {
@@ -398,10 +493,10 @@
     sanitizeState();
   }
   function sanitizeState() {
-    if (!state || typeof state !== "object") state = { version: 1, trips: [], ui: {} };
+    if (!state || typeof state !== "object") state = { version: 2, trips: [], ui: {} };
     if (!Array.isArray(state.trips)) state.trips = [];
     if (!state.ui || typeof state.ui !== "object") state.ui = { openTripId: null, openDate: null };
-    state.version = 1;
+    state.version = 2;
     state.trips.forEach(t => {
       if (!t.id) t.id = uid("t_");
       t.name = t.name || "Untitled trip";
@@ -409,20 +504,33 @@
       t.start = t.start || todayStr();
       t.end = t.end || t.start;
       if (cmpDate(t.end, t.start) < 0) t.end = t.start;
-      t.budget = (t.budget === 0 || typeof t.budget === "number") ? t.budget : (t.budget ? Number(t.budget) : null);
+      t.budget = (typeof t.budget === "number") ? t.budget : (t.budget != null && t.budget !== "" ? Number(t.budget) : null);
       if (t.budget != null && isNaN(t.budget)) t.budget = null;
       t.currency = t.currency || "PHP";
+      if (!Array.isArray(t.legend) || !t.legend.length) t.legend = defaultLegend();
+      t.legend.forEach(lg => { if (!lg.id) lg.id = uid("ty_"); lg.label = lg.label || "Type"; lg.color = lg.color || "#6b7280"; });
       if (!Array.isArray(t.items)) t.items = [];
       t.items.forEach(it => {
         if (!it.id) it.id = uid("i_");
         if (!it.date) it.date = t.start;
-        it.time = typeof it.time === "string" ? it.time : "";
-        it.title = it.title || "Untitled";
-        it.location = it.location || "";
-        it.category = it.category || "Other";
-        it.cost = Number(it.cost) || 0;
-        it.note = it.note || "";
-        it.done = !!it.done;
+        if (it.kind !== "leg") {
+          // migrate legacy items (no 'kind') -> stop
+          it.kind = "stop";
+          it.time = typeof it.time === "string" ? it.time : "";
+          it.endTime = typeof it.endTime === "string" ? it.endTime : "";
+          it.approx = !!it.approx;
+          it.typeId = it.typeId || "";
+          it.title = it.title || "Untitled";
+          it.note = it.note || "";
+          it.category = it.category || "Other";
+          it.cost = Number(it.cost) || 0;
+          it.done = !!it.done;
+        } else {
+          it.label = it.label || "Takbo";
+          it.durationText = it.durationText || "";
+          it.fromText = it.fromText || "";
+          it.toText = it.toText || "";
+        }
       });
     });
   }
@@ -437,7 +545,7 @@
     const d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
-  function cmpDate(a, b) { return a < b ? -1 : (a > b ? 1 : 0); } // YYYY-MM-DD compares lexicographically
+  function cmpDate(a, b) { return a < b ? -1 : (a > b ? 1 : 0); }
   function addDays(dateStr, n) {
     const p = dateStr.split("-").map(Number);
     const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
@@ -447,24 +555,28 @@
   function datesInRange(start, end) {
     const out = [];
     if (!start || !end || cmpDate(end, start) < 0) return start ? [start] : [];
-    let cur = start;
-    let guard = 0;
+    let cur = start, guard = 0;
     while (cmpDate(cur, end) <= 0 && guard < 3660) { out.push(cur); cur = addDays(cur, 1); guard++; }
     return out;
   }
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  function weekdayShort(dateStr) {
-    const p = dateStr.split("-").map(Number);
-    const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
-    return DOW[dt.getUTCDay()];
-  }
-  function dateLabel(dateStr) {
-    const p = dateStr.split("-").map(Number);
-    const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
-    return weekdayShort(dateStr) + ", " + MON[p[1] - 1] + " " + p[2] + ", " + p[0];
-  }
+  function weekdayShort(dateStr) { const p = dateStr.split("-").map(Number); return DOW[new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay()]; }
+  function dateLabel(dateStr) { const p = dateStr.split("-").map(Number); return weekdayShort(dateStr) + ", " + MON[p[1] - 1] + " " + p[2] + ", " + p[0]; }
   function shortDate(dateStr) { const p = dateStr.split("-").map(Number); return MON[p[1] - 1] + " " + p[2]; }
+  // "09:30" -> "9:30 AM"
+  function fmt12(t) {
+    if (!t) return "";
+    const p = t.split(":").map(Number); let h = p[0], m = p[1];
+    const ap = h >= 12 ? "PM" : "AM"; let hh = h % 12; if (hh === 0) hh = 12;
+    return hh + ":" + String(m).padStart(2, "0") + " " + ap;
+  }
+  function timeDisplay(it) {
+    if (!it.time && !it.endTime) return "";
+    let s = (it.approx ? "~" : "") + fmt12(it.time);
+    if (it.endTime) s += "\u2013" + fmt12(it.endTime);
+    return s;
+  }
 
   // ---------- Firebase (reuse the tracker project; separate 'itinerary' path) ----------
   const FIREBASE_CONFIG = {
@@ -485,7 +597,6 @@
       if (typeof firebase === "undefined") return;
       if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
       fbDb = firebase.database();
-      // Cloud is the single source of truth. The FIRST snapshot after load always wins.
       fbStateRef = fbDb.ref("itinerary/state");
       fbStateRef.on("value", (snap) => {
         const remote = snap.val();
@@ -493,7 +604,7 @@
           try { remote.state = JSON.parse(remote.stateJson); } catch (e) { remote.state = null; }
         }
         if (remote && remote.state && Array.isArray(remote.state.trips)) {
-          if (remote.client === CLIENT_ID && !firstSnapshot) return; // ignore our own echo
+          if (remote.client === CLIENT_ID && !firstSnapshot) return;
           firstSnapshot = false;
           applyingRemote = true;
           try {
@@ -513,13 +624,12 @@
       }, (err) => { console.warn("[itinerary] firebase listen error:", err); });
     } catch (e) { fbDb = null; }
   }
-  // Writes via Firebase REST PUT (SDK .set() can hang on some networks). Whole state = ONE JSON string.
   function cloudSaveState(immediate) {
-    if (applyingRemote) return; // don't echo a remote-applied change straight back
+    if (applyingRemote) return;
     clearTimeout(saveTimer);
     const doSave = () => {
       let stateJson;
-      try { stateJson = JSON.stringify(state); } catch (e) { stateJson = JSON.stringify({ version: 1, trips: [], ui: {} }); }
+      try { stateJson = JSON.stringify(state); } catch (e) { stateJson = JSON.stringify({ version: 2, trips: [], ui: {} }); }
       const payload = JSON.stringify({ stateJson: stateJson, updatedAt: Date.now(), client: CLIENT_ID });
       const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/itinerary/state.json";
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
@@ -536,18 +646,29 @@
 
   // ---------- Derived helpers ----------
   function findTrip(id) { return state.trips.find(t => t.id === id) || null; }
-  function tripTotal(t) { return t.items.reduce((s, it) => s + (Number(it.cost) || 0), 0); }
-  function dayTotal(t, date) { return t.items.filter(it => it.date === date).reduce((s, it) => s + (Number(it.cost) || 0), 0); }
-  function dayItems(t, date) {
-    return t.items.filter(it => it.date === date).sort((a, b) => {
-      const at = a.time || "99:99", bt = b.time || "99:99";
-      if (at !== bt) return at < bt ? -1 : 1;
-      return (a.title || "").localeCompare(b.title || "");
-    });
+  function tripTotal(t) { return t.items.reduce((s, it) => s + (it.kind === "stop" ? (Number(it.cost) || 0) : 0), 0); }
+  function dayTotal(t, date) { return t.items.filter(it => it.date === date && it.kind === "stop").reduce((s, it) => s + (Number(it.cost) || 0), 0); }
+  function sortKey(it) {
+    // stops with a time sort by time; legs/untimed keep insertion order via a stable index added at render
+    return it.kind === "stop" ? (it.time || "") : "";
   }
+  function dayEntries(t, date) {
+    // Keep manual order but float timed stops into chronological position among themselves.
+    // Simplest stable approach: sort by time when present, else preserve array order.
+    const arr = t.items.filter(it => it.date === date).map((it, i) => ({ it: it, i: i }));
+    arr.sort((a, b) => {
+      const at = sortKey(a.it), bt = sortKey(b.it);
+      if (at && bt) { if (at !== bt) return at < bt ? -1 : 1; return a.i - b.i; }
+      if (at && !bt) return 0; // don't yank legs around timed ones; keep relative order
+      return a.i - b.i;
+    });
+    return arr.map(x => x.it);
+  }
+  function legendColor(t, typeId) { const lg = t.legend.find(x => x.id === typeId); return lg ? lg.color : ""; }
+  function legendLabel(t, typeId) { const lg = t.legend.find(x => x.id === typeId); return lg ? lg.label : ""; }
   function categoryTotals(t) {
     const m = {};
-    t.items.forEach(it => { const c = it.category || "Other"; m[c] = (m[c] || 0) + (Number(it.cost) || 0); });
+    t.items.forEach(it => { if (it.kind === "stop" && it.cost) { const c = it.category || "Other"; m[c] = (m[c] || 0) + Number(it.cost); } });
     return m;
   }
   function fmtMoney(n, cur) {
@@ -559,23 +680,16 @@
   // ---------- Render ----------
   function renderAll() {
     const t = findTrip(state.ui.openTripId);
-    if (t) { renderTripDetail(t); }
+    if (t) renderTripDetail(t);
     else { showTripsView(); renderTripsList(); }
   }
-
-  function showTripsView() {
-    document.getElementById("viewTrips").style.display = "";
-    document.getElementById("viewTrip").style.display = "none";
-  }
-  function showTripView() {
-    document.getElementById("viewTrips").style.display = "none";
-    document.getElementById("viewTrip").style.display = "";
-  }
+  function showTripsView() { document.getElementById("viewTrips").style.display = ""; document.getElementById("viewTrip").style.display = "none"; }
+  function showTripView() { document.getElementById("viewTrips").style.display = "none"; document.getElementById("viewTrip").style.display = ""; }
 
   function renderTripsList() {
     const wrap = document.getElementById("tripsList");
     if (!state.trips.length) {
-      wrap.innerHTML = '<div class="empty">No trips yet.<br/>Tap <b>+ New trip</b> to plan your first journey.</div>';
+      wrap.innerHTML = '<div class="empty">No trips yet.<br/>Tap <b>+ New trip</b> to plan your first route.</div>';
       return;
     }
     const sorted = state.trips.slice().sort((a, b) => cmpDate(a.start, b.start));
@@ -585,9 +699,7 @@
       const hasBudget = t.budget != null;
       const pct = hasBudget && t.budget > 0 ? Math.min(100, Math.round(total / t.budget * 100)) : 0;
       const over = hasBudget && total > t.budget;
-      const budgetLine = hasBudget
-        ? fmtMoney(total, t.currency) + " / " + fmtMoney(t.budget, t.currency)
-        : fmtMoney(total, t.currency) + " planned";
+      const budgetLine = hasBudget ? fmtMoney(total, t.currency) + " / " + fmtMoney(t.budget, t.currency) : fmtMoney(total, t.currency) + " planned";
       return '<div class="trip-card" data-open="' + t.id + '">' +
         '<div class="tc-top"><div style="flex:1;">' +
           '<div class="tc-name">' + esc(t.name) + '</div>' +
@@ -605,20 +717,21 @@
 
   function renderTripDetail(t) {
     showTripView();
-    // clamp openDate into the range
     const days = datesInRange(t.start, t.end);
     if (!state.ui.openDate || days.indexOf(state.ui.openDate) === -1) state.ui.openDate = days[0] || t.start;
-    renderTripHead(t);
+    renderTripHead(t, days);
     renderTripSummary(t);
     renderDayNav(t, days);
     renderDayStrip(t, days);
-    renderItems(t);
+    renderLegend(t);
+    renderTimeline(t);
   }
 
-  function renderTripHead(t) {
+  function renderTripHead(t, days) {
+    const dayIdx = days.indexOf(state.ui.openDate);
     document.getElementById("tripHead").innerHTML =
-      '<div class="th-name">' + esc(t.name) + '</div>' +
-      (t.destination ? '<div class="th-dest">' + esc(t.destination) + '</div>' : '') +
+      '<div class="th-name">Day ' + (dayIdx + 1) + ': ' + esc(t.destination || t.name) + '</div>' +
+      '<div class="th-dest">' + esc(t.name) + '</div>' +
       '<div class="th-dates">' + dateLabel(t.start) + ' \u2013 ' + dateLabel(t.end) + '</div>' +
       '<div class="th-actions">' +
         '<button class="btn ghost sm" id="editTripBtn">Edit trip</button>' +
@@ -633,20 +746,14 @@
     const cats = categoryTotals(t);
     let html = '<div class="sum-row big"><span>Total planned</span><span>' + fmtMoney(total, t.currency) + '</span></div>';
     if (t.budget != null) {
-      const remaining = t.budget - total;
-      const over = remaining < 0;
+      const remaining = t.budget - total, over = remaining < 0;
       const pct = t.budget > 0 ? Math.min(100, Math.round(total / t.budget * 100)) : 0;
       html += '<div class="sum-row"><span>Budget</span><span>' + fmtMoney(t.budget, t.currency) + '</span></div>';
-      html += '<div class="sum-row"><span>' + (over ? 'Over by' : 'Remaining') + '</span><span class="' + (over ? 'over' : 'under') + '">' +
-        fmtMoney(Math.abs(remaining), t.currency) + '</span></div>';
+      html += '<div class="sum-row"><span>' + (over ? 'Over by' : 'Remaining') + '</span><span class="' + (over ? 'over' : 'under') + '">' + fmtMoney(Math.abs(remaining), t.currency) + '</span></div>';
       html += '<div class="bar' + (over ? ' over' : '') + '"><span style="width:' + pct + '%"></span></div>';
     }
     const catKeys = Object.keys(cats).filter(k => cats[k] > 0).sort((a, b) => cats[b] - cats[a]);
-    if (catKeys.length) {
-      html += '<div class="cat-list">' + catKeys.map(k =>
-        '<div class="cat-row"><span>' + esc(k) + '</span><span>' + fmtMoney(cats[k], t.currency) + '</span></div>'
-      ).join("") + '</div>';
-    }
+    if (catKeys.length) html += '<div class="cat-list">' + catKeys.map(k => '<div class="cat-row"><span>' + esc(k) + '</span><span>' + fmtMoney(cats[k], t.currency) + '</span></div>').join("") + '</div>';
     document.getElementById("tripSummary").innerHTML = html;
   }
 
@@ -654,14 +761,8 @@
     const sel = document.getElementById("daySelect");
     sel.innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
     sel.onchange = () => { state.ui.openDate = sel.value; persist(); renderTripDetail(t); };
-    document.getElementById("prevDay").onclick = () => {
-      const i = days.indexOf(state.ui.openDate);
-      if (i > 0) { state.ui.openDate = days[i - 1]; persist(); renderTripDetail(t); }
-    };
-    document.getElementById("nextDay").onclick = () => {
-      const i = days.indexOf(state.ui.openDate);
-      if (i < days.length - 1) { state.ui.openDate = days[i + 1]; persist(); renderTripDetail(t); }
-    };
+    document.getElementById("prevDay").onclick = () => { const i = days.indexOf(state.ui.openDate); if (i > 0) { state.ui.openDate = days[i - 1]; persist(); renderTripDetail(t); } };
+    document.getElementById("nextDay").onclick = () => { const i = days.indexOf(state.ui.openDate); if (i < days.length - 1) { state.ui.openDate = days[i + 1]; persist(); renderTripDetail(t); } };
   }
 
   function renderDayStrip(t, days) {
@@ -672,44 +773,62 @@
       return '<div class="day-chip' + (d === state.ui.openDate ? ' active' : '') + '" data-day="' + d + '">' +
         '<div class="dc-dow">' + weekdayShort(d) + ' \u00b7 D' + (i + 1) + '</div>' +
         '<div class="dc-date">' + shortDate(d) + '</div>' +
-        '<div class="dc-meta">' + cnt + ' item' + (cnt === 1 ? '' : 's') + (tot ? ' \u00b7 ' + fmtMoney(tot, '') : '') + '</div>' +
+        '<div class="dc-meta">' + cnt + ' entr' + (cnt === 1 ? 'y' : 'ies') + (tot ? ' \u00b7 ' + fmtMoney(tot, '') : '') + '</div>' +
       '</div>';
     }).join("");
-    strip.querySelectorAll(".day-chip").forEach(el => {
-      el.onclick = () => { state.ui.openDate = el.getAttribute("data-day"); persist(); renderTripDetail(t); };
-    });
+    strip.querySelectorAll(".day-chip").forEach(el => el.onclick = () => { state.ui.openDate = el.getAttribute("data-day"); persist(); renderTripDetail(t); });
   }
 
-  function renderItems(t) {
+  function renderLegend(t) {
+    const bar = document.getElementById("legendBar");
+    bar.innerHTML = t.legend.map(lg => '<span class="lg-item"><span class="lg-dot" style="background:' + esc(lg.color) + '"></span>' + esc(lg.label) + '</span>').join("") +
+      '<button class="lg-edit" id="editLegendBtn">+ edit legend</button>';
+    document.getElementById("editLegendBtn").onclick = () => openLegendModal(t.id);
+  }
+
+  function renderTimeline(t) {
     document.getElementById("dayTitle").textContent = dateLabel(state.ui.openDate);
-    const items = dayItems(t, state.ui.openDate);
-    const wrap = document.getElementById("itemsList");
-    if (!items.length) {
-      wrap.innerHTML = '<div class="empty" style="padding:24px;">Nothing planned for this day yet.</div>';
-      return;
-    }
-    wrap.innerHTML = items.map(it => {
-      const timed = !!it.time;
-      return '<div class="item' + (it.done ? ' done' : '') + '">' +
-        '<div class="it-time' + (timed ? '' : ' untimed') + '">' + (timed ? esc(it.time) : '\u2014') + '</div>' +
-        '<div class="it-body">' +
-          '<div class="it-title">' + esc(it.title) + '</div>' +
-          '<div class="it-sub"><span class="chip">' + esc(it.category) + '</span>' +
-            (it.location ? '\uD83D\uDCCD ' + esc(it.location) : '') +
-            (it.cost ? ' <span class="it-cost">' + fmtMoney(it.cost, t.currency) + '</span>' : '') +
-          '</div>' +
-          (it.note ? '<div class="it-note">' + esc(it.note) + '</div>' : '') +
+    const entries = dayEntries(t, state.ui.openDate);
+    const wrap = document.getElementById("timeline");
+    if (!entries.length) { wrap.innerHTML = '<div class="empty" style="padding:24px;">Nothing planned for this day yet.</div>'; return; }
+    wrap.innerHTML = entries.map(it => it.kind === "leg" ? legRow(t, it) : stopRow(t, it)).join("");
+    wrap.querySelectorAll("[data-edit]").forEach(b => b.onclick = (e) => { e.stopPropagation(); openItemModal(t.id, b.getAttribute("data-edit")); });
+    wrap.querySelectorAll("[data-del]").forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteItem(t.id, b.getAttribute("data-del")); });
+    wrap.querySelectorAll("[data-done]").forEach(b => b.onclick = (e) => { e.stopPropagation(); toggleDone(t.id, b.getAttribute("data-done")); });
+  }
+
+  function stopRow(t, it) {
+    const color = it.typeId ? legendColor(t, it.typeId) : "";
+    const typed = !!color;
+    const style = typed ? ' style="background:' + esc(color) + '"' : '';
+    const td = timeDisplay(it);
+    const costStr = it.cost ? ' <span class="cost-tag">' + fmtMoney(it.cost, t.currency) + '</span>' : '';
+    return '<div class="row' + (typed ? ' typed' : '') + (it.done ? ' done' : '') + '"' + style + '>' +
+      '<div class="r-time">' + (td ? esc(td) : '\u2014') + '</div>' +
+      '<div class="r-body">' +
+        '<div class="r-title">' + esc(it.title) + costStr + '</div>' +
+        (it.note ? '<div class="r-note">' + esc(it.note) + '</div>' : '') +
+        '<div class="r-actions">' +
+          '<button class="icon-btn" data-done="' + it.id + '" title="Done">' + (it.done ? '\u21A9\uFE0F' : '\u2713') + '</button>' +
+          '<button class="icon-btn" data-edit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
+          '<button class="icon-btn" data-del="' + it.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
         '</div>' +
-        '<div class="it-actions">' +
-          '<button class="icon-btn" data-itdone="' + it.id + '" title="Done">' + (it.done ? '\u21A9\uFE0F' : '\u2713') + '</button>' +
-          '<button class="icon-btn" data-itedit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
-          '<button class="icon-btn" data-itdel="' + it.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
+      '</div>' +
+    '</div>';
+  }
+  function legRow(t, it) {
+    const route = (it.fromText || it.toText) ? (esc(it.fromText) + ' \u2192 ' + esc(it.toText)) : '';
+    return '<div class="row leg">' +
+      '<div class="r-time">\uD83C\uDFC3 ' + esc(it.label || "Takbo") + '</div>' +
+      '<div class="r-body">' +
+        '<div class="r-title"><span class="dur">' + esc(it.durationText || "\u2014") + '</span></div>' +
+        (route ? '<div class="r-note route">' + route + '</div>' : '') +
+        '<div class="r-actions">' +
+          '<button class="icon-btn" data-edit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
+          '<button class="icon-btn" data-del="' + it.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
         '</div>' +
-      '</div>';
-    }).join("");
-    wrap.querySelectorAll("[data-itdone]").forEach(b => b.onclick = () => toggleDone(t.id, b.getAttribute("data-itdone")));
-    wrap.querySelectorAll("[data-itedit]").forEach(b => b.onclick = () => openItemModal(t.id, b.getAttribute("data-itedit")));
-    wrap.querySelectorAll("[data-itdel]").forEach(b => b.onclick = () => deleteItem(t.id, b.getAttribute("data-itdel")));
+      '</div>' +
+    '</div>';
   }
 
   // ---------- Trip CRUD ----------
@@ -731,104 +850,167 @@
   function saveTripModal() {
     const name = document.getElementById("tmName").value.trim();
     const dest = document.getElementById("tmDest").value.trim();
-    const start = document.getElementById("tmStart").value;
-    const end = document.getElementById("tmEnd").value;
-    const budgetRaw = document.getElementById("tmBudget").value;
-    const currency = document.getElementById("tmCurrency").value;
+    const start = document.getElementById("tmStart").value, end = document.getElementById("tmEnd").value;
+    const budgetRaw = document.getElementById("tmBudget").value, currency = document.getElementById("tmCurrency").value;
     const err = document.getElementById("tripModalErr");
     if (!name) { err.textContent = "Please enter a trip name."; return; }
     if (!start || !end) { err.textContent = "Please set start and end dates."; return; }
     if (cmpDate(end, start) < 0) { err.textContent = "End date can't be before the start date."; return; }
     const budget = budgetRaw === "" ? null : (Number(budgetRaw) || 0);
-
     if (editingTripId) {
       const t = findTrip(editingTripId);
       t.name = name; t.destination = dest; t.start = start; t.end = end; t.budget = budget; t.currency = currency;
-      // Clamp items that fell outside the new range.
       let moved = 0;
-      t.items.forEach(it => {
-        if (cmpDate(it.date, start) < 0) { it.date = start; moved++; }
-        else if (cmpDate(it.date, end) > 0) { it.date = end; moved++; }
-      });
-      if (moved) err.textContent = "";
+      t.items.forEach(it => { if (cmpDate(it.date, start) < 0) { it.date = start; moved++; } else if (cmpDate(it.date, end) > 0) { it.date = end; moved++; } });
       closeTripModal(); persist();
-      if (moved) setTimeout(() => alert(moved + " item(s) were outside the new dates and moved to the nearest day."), 50);
+      if (moved) setTimeout(() => alert(moved + " entr" + (moved === 1 ? "y was" : "ies were") + " outside the new dates and moved to the nearest day."), 50);
       renderTripDetail(t);
     } else {
-      const t = { id: uid("t_"), name: name, destination: dest, start: start, end: end, budget: budget, currency: currency, items: [] };
-      state.trips.push(t);
-      state.ui.openTripId = t.id;
-      state.ui.openDate = t.start;
+      const t = { id: uid("t_"), name: name, destination: dest, start: start, end: end, budget: budget, currency: currency, legend: defaultLegend(), items: [] };
+      state.trips.push(t); state.ui.openTripId = t.id; state.ui.openDate = t.start;
       closeTripModal(); persist(); renderTripDetail(t);
     }
   }
   function deleteTrip(id) {
     const t = findTrip(id); if (!t) return;
-    if (!confirm('Delete trip "' + t.name + '" and all its activities? This cannot be undone.')) return;
+    if (!confirm('Delete trip "' + t.name + '" and all its entries? This cannot be undone.')) return;
     state.trips = state.trips.filter(x => x.id !== id);
     if (state.ui.openTripId === id) { state.ui.openTripId = null; state.ui.openDate = null; }
     persist(); showTripsView(); renderTripsList();
   }
 
-  // ---------- Item CRUD ----------
+  // ---------- Entry modal (stop / leg) ----------
   let editingItem = { tripId: null, itemId: null };
+  let modalKind = "stop";
+  function setModalKind(k) {
+    modalKind = k;
+    document.getElementById("segStop").classList.toggle("active", k === "stop");
+    document.getElementById("segLeg").classList.toggle("active", k === "leg");
+    document.getElementById("stopFields").style.display = k === "stop" ? "" : "none";
+    document.getElementById("legFields").style.display = k === "leg" ? "" : "none";
+  }
+  function fillTypeOptions(t, selId) {
+    const sel = document.getElementById("imType");
+    sel.innerHTML = '<option value="">Normal (no color)</option>' + t.legend.map(lg => '<option value="' + lg.id + '"' + (lg.id === selId ? ' selected' : '') + '>' + esc(lg.label) + '</option>').join("");
+  }
   function openItemModal(tripId, itemId) {
     const t = findTrip(tripId); if (!t) return;
     editingItem = { tripId: tripId, itemId: itemId || null };
     const it = itemId ? t.items.find(x => x.id === itemId) : null;
-    document.getElementById("itemModalTitle").textContent = it ? "Edit activity" : "Add activity";
+    document.getElementById("itemModalTitle").textContent = it ? "Edit entry" : "Add entry";
     const days = datesInRange(t.start, t.end);
     document.getElementById("imDay").innerHTML = days.map((d, i) => '<option value="' + d + '">Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
     document.getElementById("imDay").value = it ? it.date : (state.ui.openDate || days[0]);
-    document.getElementById("imTime").value = it ? it.time : "";
-    document.getElementById("imCat").value = it ? it.category : "Activity";
-    document.getElementById("imTitle").value = it ? it.title : "";
-    document.getElementById("imLoc").value = it ? it.location : "";
-    document.getElementById("imCost").value = (it && it.cost) ? it.cost : "";
-    document.getElementById("imNote").value = it ? it.note : "";
+    fillTypeOptions(t, it && it.kind === "stop" ? it.typeId : "");
+    // stop fields
+    document.getElementById("imTime").value = (it && it.kind === "stop") ? it.time : "";
+    document.getElementById("imEnd").value = (it && it.kind === "stop") ? it.endTime : "";
+    document.getElementById("imApprox").checked = (it && it.kind === "stop") ? it.approx : false;
+    document.getElementById("imTitle").value = (it && it.kind === "stop") ? it.title : "";
+    document.getElementById("imNote").value = (it && it.kind === "stop") ? it.note : "";
+    document.getElementById("imCat").value = (it && it.kind === "stop") ? it.category : "Activity";
+    document.getElementById("imCost").value = (it && it.kind === "stop" && it.cost) ? it.cost : "";
+    // leg fields
+    document.getElementById("imLegLabel").value = (it && it.kind === "leg") ? it.label : "Takbo";
+    document.getElementById("imDur").value = (it && it.kind === "leg") ? it.durationText : "";
+    document.getElementById("imFrom").value = (it && it.kind === "leg") ? it.fromText : "";
+    document.getElementById("imTo").value = (it && it.kind === "leg") ? it.toText : "";
+    setModalKind(it ? it.kind : "stop");
     document.getElementById("itemModalErr").textContent = "";
-    resetScanUI();
     document.getElementById("itemModalBg").classList.add("show");
   }
   function closeItemModal() { document.getElementById("itemModalBg").classList.remove("show"); }
   function saveItemModal() {
     const t = findTrip(editingItem.tripId); if (!t) return;
-    const title = document.getElementById("imTitle").value.trim();
     const err = document.getElementById("itemModalErr");
-    if (!title) { err.textContent = "Please enter a title."; return; }
-    const data = {
-      date: document.getElementById("imDay").value,
-      time: document.getElementById("imTime").value || "",
-      category: document.getElementById("imCat").value,
-      title: title,
-      location: document.getElementById("imLoc").value.trim(),
-      cost: Number(document.getElementById("imCost").value) || 0,
-      note: document.getElementById("imNote").value.trim()
-    };
+    const date = document.getElementById("imDay").value;
+    let data;
+    if (modalKind === "stop") {
+      const title = document.getElementById("imTitle").value.trim();
+      if (!title) { err.textContent = "Please enter a title."; return; }
+      data = {
+        kind: "stop", date: date,
+        time: document.getElementById("imTime").value || "",
+        endTime: document.getElementById("imEnd").value || "",
+        approx: document.getElementById("imApprox").checked,
+        typeId: document.getElementById("imType").value || "",
+        title: title,
+        note: document.getElementById("imNote").value.trim(),
+        category: document.getElementById("imCat").value,
+        cost: Number(document.getElementById("imCost").value) || 0
+      };
+    } else {
+      const dur = document.getElementById("imDur").value.trim();
+      const from = document.getElementById("imFrom").value.trim(), to = document.getElementById("imTo").value.trim();
+      if (!dur && !from && !to) { err.textContent = "Add a duration or a from/to."; return; }
+      data = {
+        kind: "leg", date: date,
+        label: document.getElementById("imLegLabel").value.trim() || "Takbo",
+        durationText: dur, fromText: from, toText: to
+      };
+    }
     if (editingItem.itemId) {
       const it = t.items.find(x => x.id === editingItem.itemId);
-      Object.assign(it, data);
+      // if kind changed, wipe old-kind fields by replacing the object (keep id)
+      const fresh = Object.assign({ id: it.id }, data);
+      if (data.kind === "stop") fresh.done = it.done || false;
+      const idx = t.items.indexOf(it); t.items[idx] = fresh;
     } else {
-      t.items.push(Object.assign({ id: uid("i_"), done: false }, data));
+      const base = data.kind === "stop" ? { id: uid("i_"), done: false } : { id: uid("i_") };
+      t.items.push(Object.assign(base, data));
     }
-    state.ui.openDate = data.date;
+    state.ui.openDate = date;
     closeItemModal(); persist(); renderTripDetail(t);
   }
   function deleteItem(tripId, itemId) {
     const t = findTrip(tripId); if (!t) return;
-    if (!confirm("Delete this activity?")) return;
+    if (!confirm("Delete this entry?")) return;
     t.items = t.items.filter(x => x.id !== itemId);
     persist(); renderTripDetail(t);
   }
   function toggleDone(tripId, itemId) {
     const t = findTrip(tripId); if (!t) return;
-    const it = t.items.find(x => x.id === itemId); if (!it) return;
+    const it = t.items.find(x => x.id === itemId); if (!it || it.kind !== "stop") return;
     it.done = !it.done; persist(); renderTripDetail(t);
   }
 
-  // ---------- Scan a ticket -> fill fields (on-device OCR, same idea as debt.html) ----------
-  // The image is NEVER uploaded or stored. It's read locally by Tesseract.js, used to
-  // pre-fill the form, shown as a quick thumbnail, then discarded.
+  // ---------- Legend editor ----------
+  let legendTripId = null;
+  function openLegendModal(tripId) {
+    legendTripId = tripId;
+    renderLegendEditor();
+    document.getElementById("legendModalBg").classList.add("show");
+  }
+  function renderLegendEditor() {
+    const t = findTrip(legendTripId); if (!t) return;
+    const list = document.getElementById("legendEditList");
+    list.innerHTML = t.legend.map(lg =>
+      '<div class="lg-edit-row" data-ty="' + lg.id + '">' +
+        '<input type="color" value="' + esc(lg.color) + '" data-color />' +
+        '<input type="text" value="' + esc(lg.label) + '" data-label />' +
+        '<button class="icon-btn" data-remove title="Remove">\uD83D\uDDD1\uFE0F</button>' +
+      '</div>'
+    ).join("");
+    list.querySelectorAll(".lg-edit-row").forEach(row => {
+      const id = row.getAttribute("data-ty");
+      row.querySelector("[data-color]").oninput = (e) => { const lg = t.legend.find(x => x.id === id); if (lg) { lg.color = e.target.value; } };
+      row.querySelector("[data-label]").oninput = (e) => { const lg = t.legend.find(x => x.id === id); if (lg) { lg.label = e.target.value; } };
+      row.querySelector("[data-remove]").onclick = () => { t.legend = t.legend.filter(x => x.id !== id); renderLegendEditor(); };
+    });
+  }
+  function addLegendType() {
+    const t = findTrip(legendTripId); if (!t) return;
+    t.legend.push({ id: uid("ty_"), label: "New type", color: "#4f8cff" });
+    renderLegendEditor();
+  }
+  function closeLegendModal() {
+    const t = findTrip(legendTripId);
+    document.getElementById("legendModalBg").classList.remove("show");
+    persist();
+    if (t) renderTripDetail(t);
+  }
+
+  // ---------- Scan -> preview -> confirm insert (on-device OCR, nothing uploaded) ----------
   let tesseractLoading = null;
   function loadTesseract() {
     if (window.Tesseract) return Promise.resolve(window.Tesseract);
@@ -842,128 +1024,152 @@
     });
     return tesseractLoading;
   }
-  function resetScanUI() {
-    const status = document.getElementById("scanStatus");
-    const result = document.getElementById("scanResult");
-    if (status) status.style.display = "none";
-    if (result) result.style.display = "none";
-    const bar = document.getElementById("scanBar"); if (bar) bar.style.width = "0%";
-    const found = document.getElementById("scanFound"); if (found) found.textContent = "";
+  let scanParsed = [];   // array of {kind, time, endTime, approx, typeId, title, note, label, durationText, fromText, toText}
+  function openScanModal() {
+    const t = findTrip(state.ui.openTripId); if (!t) return;
+    scanParsed = [];
+    document.getElementById("scanErr").textContent = "";
+    document.getElementById("scanStatus").style.display = "none";
+    document.getElementById("scanBar").style.width = "0%";
+    document.getElementById("scanResultWrap").style.display = "none";
+    document.getElementById("scanAdd").style.display = "none";
+    const days = datesInRange(t.start, t.end);
+    document.getElementById("scanDay").innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
+    document.getElementById("scanReplace").checked = false;
+    document.getElementById("scanModalBg").classList.add("show");
   }
-  async function handleTicketImage(file) {
-    if (!file) return;
-    const status = document.getElementById("scanStatus");
-    const result = document.getElementById("scanResult");
-    const bar = document.getElementById("scanBar");
-    const msg = document.getElementById("scanMsg");
-    const err = document.getElementById("itemModalErr");
-    result.style.display = "none";
-    status.style.display = "block";
-    bar.style.width = "5%";
-    msg.textContent = "Loading scanner\u2026";
-    err.textContent = "";
+  function closeScanModal() { document.getElementById("scanModalBg").classList.remove("show"); }
 
-    // quick thumbnail of what was captured (object URL, revoked after)
+  async function handleScanImage(file) {
+    if (!file) return;
+    const t = findTrip(state.ui.openTripId); if (!t) return;
+    const status = document.getElementById("scanStatus"), bar = document.getElementById("scanBar"), msg = document.getElementById("scanMsg");
+    const err = document.getElementById("scanErr");
+    err.textContent = ""; status.style.display = "block"; bar.style.width = "5%"; msg.textContent = "Loading scanner\u2026";
     const thumbUrl = URL.createObjectURL(file);
     document.getElementById("scanThumb").src = thumbUrl;
-
     try {
       const Tesseract = await loadTesseract();
-      msg.textContent = "Reading ticket\u2026";
+      msg.textContent = "Reading itinerary\u2026";
       const { data } = await Tesseract.recognize(file, "eng", {
-        logger: (m) => {
-          if (m.status === "recognizing text" && typeof m.progress === "number") {
-            bar.style.width = Math.max(10, Math.round(m.progress * 100)) + "%";
-          }
-        }
+        logger: (m) => { if (m.status === "recognizing text" && typeof m.progress === "number") bar.style.width = Math.max(10, Math.round(m.progress * 100)) + "%"; }
       });
-      bar.style.width = "100%";
+      bar.style.width = "100%"; status.style.display = "none";
       const text = (data && data.text) ? data.text : "";
-      const found = parseTicketText(text);
-      status.style.display = "none";
-
-      // Pre-fill whatever we confidently found (never clobber with blanks).
-      if (found.time) document.getElementById("imTime").value = found.time;
-      if (found.title) document.getElementById("imTitle").value = found.title;
-      if (found.location) document.getElementById("imLoc").value = found.location;
-      if (found.cost) document.getElementById("imCost").value = found.cost;
-      if (found.category) document.getElementById("imCat").value = found.category;
-
-      const bits = [];
-      if (found.time) bits.push("time " + found.time);
-      if (found.cost) bits.push("cost " + found.cost);
-      if (found.title) bits.push('"' + found.title + '"');
-      document.getElementById("scanFound").textContent = bits.length
-        ? "Found: " + bits.join(" \u00b7 ") + ". Please review."
-        : "Couldn't read much \u2014 please fill the fields manually.";
-      result.style.display = "flex";
+      scanParsed = parseItineraryText(text, t);
+      document.getElementById("scanFound").textContent = scanParsed.length ? ("Read " + scanParsed.length + " entr" + (scanParsed.length === 1 ? "y" : "ies") + ". Review below.") : "Couldn't read any entries. Try a clearer photo.";
+      renderScanPreview(t);
+      document.getElementById("scanResultWrap").style.display = "block";
+      document.getElementById("scanAdd").style.display = scanParsed.length ? "block" : "none";
     } catch (e) {
       status.style.display = "none";
-      err.textContent = (e && e.message) ? e.message : "Sorry, could not read that image. Try a clearer photo.";
+      err.textContent = (e && e.message) ? e.message : "Sorry, could not read that image.";
       bar.style.width = "0%";
     } finally {
       setTimeout(() => { try { URL.revokeObjectURL(thumbUrl); } catch (e) {} }, 15000);
     }
   }
-  // Pull a time, a cost, a likely title, and a category hint out of raw OCR text.
-  function parseTicketText(text) {
-    const out = { time: "", cost: 0, title: "", location: "", category: "" };
-    if (!text) return out;
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const lower = text.toLowerCase();
-
-    // ---- Time: HH:MM, optional am/pm (e.g. "9:30 AM", "21:05") ----
-    const tm = text.match(/\b(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)?/i);
-    if (tm) {
-      let hh = parseInt(tm[1], 10), mm = parseInt(tm[2], 10);
-      const ap = (tm[3] || "").toLowerCase();
-      if (ap.startsWith("p") && hh < 12) hh += 12;
-      if (ap.startsWith("a") && hh === 12) hh = 0;
-      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
-        out.time = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+  function renderScanPreview(t) {
+    const wrap = document.getElementById("scanPreview");
+    if (!scanParsed.length) { wrap.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:12px;">No entries.</div>'; return; }
+    wrap.innerHTML = scanParsed.map(e => {
+      if (e.kind === "leg") {
+        return '<div class="pv-row leg"><div class="pv-t">\uD83C\uDFC3 ' + esc(e.label || "Takbo") + '</div><div>' + esc(e.durationText || "") + (e.fromText || e.toText ? '  (' + esc(e.fromText) + ' \u2192 ' + esc(e.toText) + ')' : '') + '</div></div>';
       }
-    }
+      const color = e.typeId ? legendColor(t, e.typeId) : "";
+      const dot = color ? '<span class="pv-dot" style="background:' + esc(color) + '"></span>' : '<span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span>';
+      const td = timeDisplay(e);
+      return '<div class="pv-row">' + dot + '<div class="pv-t">' + esc(td || "\u2014") + '</div><div>' + esc(e.title) + (e.note ? ' \u2014 ' + esc(e.note) : '') + '</div></div>';
+    }).join("");
+  }
+  function confirmScanInsert() {
+    const t = findTrip(state.ui.openTripId); if (!t || !scanParsed.length) return;
+    const day = document.getElementById("scanDay").value;
+    if (document.getElementById("scanReplace").checked) t.items = t.items.filter(it => it.date !== day);
+    scanParsed.forEach(e => {
+      const base = e.kind === "leg" ? { id: uid("i_"), date: day } : { id: uid("i_"), date: day, done: false };
+      t.items.push(Object.assign(base, e, { date: day }));
+    });
+    state.ui.openDate = day;
+    closeScanModal(); persist(); renderTripDetail(t);
+  }
 
-    // ---- Cost: a currency-ish amount (prefer the largest sensible number) ----
-    const nums = [];
-    const re = /(?:php|usd|\u20b1|\$|\u00a5|jpy|eur|\u20ac)\s*([\d,]+(?:\.\d{1,2})?)|([\d,]+\.\d{2})\b/gi;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      const raw = (m[1] || m[2] || "").replace(/,/g, "");
-      const v = parseFloat(raw);
-      if (!isNaN(v) && v > 0 && v < 100000000) nums.push(v);
-    }
-    if (nums.length) out.cost = Math.max.apply(null, nums);
-
-    // ---- Category hint from keywords ----
-    if (/\b(flight|airlines?|boarding|gate|departure|pnr|airport|terminal)\b/i.test(lower)) out.category = "Flight";
-    else if (/\b(hotel|check[\s-]?in|check[\s-]?out|reservation|room\s*no|booking)\b/i.test(lower)) out.category = "Hotel";
-    else if (/\b(train|bus|ferry|shuttle|transfer|taxi|grab|uber)\b/i.test(lower)) out.category = "Transport";
-    else if (/\b(restaurant|cafe|dinner|lunch|breakfast|menu)\b/i.test(lower)) out.category = "Food";
-    else if (/\b(ticket|admission|tour|museum|park|entry)\b/i.test(lower)) out.category = "Activity";
-
-    // ---- Title: first decent text line (skip pure numbers / short noise) ----
-    const titleLine = lines.find(l => /[a-z]/i.test(l) && l.replace(/[^a-z]/gi, "").length >= 4 && l.length <= 60);
-    if (titleLine) out.title = titleLine.replace(/\s{2,}/g, " ").trim();
-
+  // Parse the road-trip style text (matches the screenshots' format).
+  function parseItineraryText(text, t) {
+    const out = [];
+    if (!text) return out;
+    const lines = text.split(/\r?\n/).map(l => l.replace(/\s{2,}/g, " ").trim()).filter(Boolean);
+    const typeFor = (s) => {
+      const l = s.toLowerCase();
+      if (/welcome arch|litrato|arko|arch/.test(l)) return findType(t, /arch|welcome|litrato/i);
+      if (/checkpoint|cutoff|cut-off/.test(l)) return findType(t, /check|cutoff|cut-off/i);
+      if (/hinto|tanawin|sightsee|pahinga|gas|cr\b/.test(l)) return findType(t, /hinto|tanawin|sight/i);
+      return "";
+    };
+    lines.forEach(line => {
+      // Travel leg: starts with "Takbo" / "Drive" / "Travel", or has "min/oras" + "->"
+      if (/^(takbo|drive|travel|byahe|lakad)\b/i.test(line) || (/(\d+\s*(min|oras|hour|hr))/i.test(line) && /\u2192|->|to\b/i.test(line) && !/:\s*\d{1,2}:\d{2}/.test(line))) {
+        const labelMatch = line.match(/^(takbo|drive|travel|byahe|lakad)\b/i);
+        const label = labelMatch ? labelMatch[1] : "Takbo";
+        const rest = line.replace(/^(takbo|drive|travel|byahe|lakad)\b/i, "").trim();
+        const durMatch = rest.match(/~?\s*\d+\s*(?:oras|hour|hr|hrs)?\s*\d*\s*(?:min|mins|minuto)?/i);
+        const dur = durMatch ? durMatch[0].replace(/\s+/g, " ").trim() : "";
+        const rt = rest.split(/\u2192|->|\bto\b/i);
+        const from = rt.length > 1 ? rt[0].replace(dur, "").replace(/[,:-]+$/, "").trim() : "";
+        const to = rt.length > 1 ? rt.slice(1).join(" ").trim() : "";
+        out.push({ kind: "leg", label: label, durationText: dur, fromText: from, toText: to });
+        return;
+      }
+      // Stop with a time range: "8:00-8:30 AM Title"
+      let m = line.match(/^~?\s*(\d{1,2}:\d{2})\s*[\u2013\-]\s*(\d{1,2}:\d{2})\s*([ap]\.?m\.?)?\s+(.*)$/i);
+      if (m) {
+        const ap = m[3] || "";
+        out.push(makeStop(to24(m[1], ap), to24(m[2], ap), /^~/.test(line), m[4], typeFor(line)));
+        return;
+      }
+      // Stop with a single time: "~2:45 AM Title" or "1:00 AM Title"
+      m = line.match(/^(~?)\s*(\d{1,2}:\d{2})\s*([ap]\.?m\.?)?\s+(.*)$/i);
+      if (m) {
+        out.push(makeStop(to24(m[2], m[3] || ""), "", !!m[1], m[4], typeFor(line)));
+        return;
+      }
+      // Otherwise: treat a reasonably long line as a note on the previous stop, else a plain stop.
+      if (/[a-z]/i.test(line) && line.length >= 3) {
+        const prev = out[out.length - 1];
+        if (prev && prev.kind === "stop" && !prev.note && line.length <= 120 && !/^(day|cutoff|legend)\b/i.test(line)) { prev.note = line; }
+        else if (!/^(day|cutoff|legend|checkpoint\/)/i.test(line)) { out.push(makeStop("", "", false, line, typeFor(line))); }
+      }
+    });
     return out;
   }
+  function makeStop(time, endTime, approx, titleRaw, typeId) {
+    const title = (titleRaw || "").replace(/\s{2,}/g, " ").trim();
+    return { kind: "stop", time: time, endTime: endTime, approx: approx, typeId: typeId, title: title, note: "", category: "Activity", cost: 0 };
+  }
+  function to24(hm, ap) {
+    const p = hm.split(":").map(Number); let h = p[0], m = p[1]; const a = (ap || "").toLowerCase();
+    if (a.startsWith("p") && h < 12) h += 12;
+    if (a.startsWith("a") && h === 12) h = 0;
+    if (h < 0 || h > 23 || m < 0 || m > 59) return "";
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  }
+  function findType(t, re) { const lg = t.legend.find(x => re.test(x.label)); return lg ? lg.id : ""; }
 
   // ---------- Copy as text ----------
   function copyTripText(t) {
     const days = datesInRange(t.start, t.end);
-    let out = t.name + (t.destination ? " \u2014 " + t.destination : "") + "\n";
-    out += shortDate(t.start) + " - " + shortDate(t.end) + "\n";
+    let out = t.name + (t.destination ? " \u2014 " + t.destination : "") + "\n" + shortDate(t.start) + " - " + shortDate(t.end) + "\n";
     days.forEach((d, i) => {
-      const its = dayItems(t, d);
       out += "\nDay " + (i + 1) + " \u2014 " + dateLabel(d) + "\n";
-      if (!its.length) { out += "  (nothing planned)\n"; return; }
-      its.forEach(it => {
-        out += "  " + (it.time ? it.time + "  " : "") + it.title +
-          (it.location ? " @ " + it.location : "") +
-          (it.cost ? "  (" + fmtMoney(it.cost, t.currency) + ")" : "") +
-          (it.done ? "  [done]" : "") + "\n";
-        if (it.note) out += "      - " + it.note + "\n";
+      const es = dayEntries(t, d);
+      if (!es.length) { out += "  (nothing planned)\n"; return; }
+      es.forEach(e => {
+        if (e.kind === "leg") { out += "  " + (e.label || "Takbo") + "  " + (e.durationText || "") + (e.fromText || e.toText ? "  " + e.fromText + " -> " + e.toText : "") + "\n"; }
+        else {
+          const td = timeDisplay(e);
+          out += "  " + (td ? td + "  " : "") + e.title + (e.cost ? "  (" + fmtMoney(e.cost, t.currency) + ")" : "") + (e.done ? "  [done]" : "") + "\n";
+          if (e.note) out += "      - " + e.note + "\n";
+        }
       });
       const dt = dayTotal(t, d);
       if (dt) out += "  Day total: " + fmtMoney(dt, t.currency) + "\n";
@@ -971,60 +1177,58 @@
     out += "\nTrip total: " + fmtMoney(tripTotal(t), t.currency);
     if (t.budget != null) out += " / Budget " + fmtMoney(t.budget, t.currency);
     const done = () => alert("Itinerary copied to clipboard.");
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(out).then(done, () => fallbackCopy(out, done));
-    } else fallbackCopy(out, done);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(out).then(done, () => fallbackCopy(out, done));
+    else fallbackCopy(out, done);
   }
   function fallbackCopy(text, cb) {
-    const ta = document.createElement("textarea");
-    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
     document.body.appendChild(ta); ta.select();
     try { document.execCommand("copy"); } catch (e) {}
     document.body.removeChild(ta); if (cb) cb();
   }
 
   // ---------- Wire up ----------
-  function boot() {
-    loadState();
-    renderAll();
-    fbInit();
-    checkForUpdate();
-    setInterval(checkForUpdate, 60000);
-  }
+  function boot() { loadState(); renderAll(); fbInit(); checkForUpdate(); setInterval(checkForUpdate, 60000); }
 
   document.getElementById("newTripBtn").onclick = () => openTripModal(null);
   document.getElementById("backBtn").onclick = () => { state.ui.openTripId = null; state.ui.openDate = null; persist(); showTripsView(); renderTripsList(); };
-  document.getElementById("addItemBtn").onclick = () => openItemModal(state.ui.openTripId, null);
+  document.getElementById("addStopBtn").onclick = () => { openItemModal(state.ui.openTripId, null); setModalKind("stop"); };
+  document.getElementById("addLegBtn").onclick = () => { openItemModal(state.ui.openTripId, null); setModalKind("leg"); };
+  document.getElementById("scanBtn").onclick = openScanModal;
   document.getElementById("copyBtn").onclick = () => { const t = findTrip(state.ui.openTripId); if (t) copyTripText(t); };
 
   document.getElementById("tmCancel").onclick = closeTripModal;
   document.getElementById("tmSave").onclick = saveTripModal;
   document.getElementById("imCancel").onclick = closeItemModal;
   document.getElementById("imSave").onclick = saveItemModal;
+  document.getElementById("segStop").onclick = () => setModalKind("stop");
+  document.getElementById("segLeg").onclick = () => setModalKind("leg");
 
-  // Scan-to-fill wiring (camera + upload; both read on-device, nothing uploaded)
+  document.getElementById("legAdd").onclick = addLegendType;
+  document.getElementById("legDone").onclick = closeLegendModal;
+
+  document.getElementById("scanCancel").onclick = closeScanModal;
+  document.getElementById("scanAdd").onclick = confirmScanInsert;
   document.getElementById("scanCamBtn").onclick = () => document.getElementById("scanCamInput").click();
   document.getElementById("scanUpBtn").onclick = () => document.getElementById("scanUpInput").click();
-  document.getElementById("scanCamInput").addEventListener("change", (e) => { handleTicketImage(e.target.files[0]); e.target.value = ""; });
-  document.getElementById("scanUpInput").addEventListener("change", (e) => { handleTicketImage(e.target.files[0]); e.target.value = ""; });
-  document.getElementById("tripModalBg").addEventListener("click", (e) => { if (e.target.id === "tripModalBg") closeTripModal(); });
-  document.getElementById("itemModalBg").addEventListener("click", (e) => { if (e.target.id === "itemModalBg") closeItemModal(); });
+  document.getElementById("scanCamInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
+  document.getElementById("scanUpInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
 
-  // Delegated clicks for trip cards (open/edit/delete)
+  [["tripModalBg", closeTripModal], ["itemModalBg", closeItemModal], ["legendModalBg", closeLegendModal], ["scanModalBg", closeScanModal]].forEach(([id, fn]) => {
+    document.getElementById(id).addEventListener("click", (e) => { if (e.target.id === id) fn(); });
+  });
+
   document.getElementById("tripsList").addEventListener("click", (e) => {
-    const del = e.target.closest("[data-del]");
-    const edit = e.target.closest("[data-edit]");
-    const open = e.target.closest("[data-open]");
+    const del = e.target.closest("[data-del]"), edit = e.target.closest("[data-edit]"), open = e.target.closest("[data-open]");
     if (del) { e.stopPropagation(); deleteTrip(del.getAttribute("data-del")); return; }
     if (edit) { e.stopPropagation(); openTripModal(edit.getAttribute("data-edit")); return; }
     if (open) { state.ui.openTripId = open.getAttribute("data-open"); state.ui.openDate = null; persist(); renderAll(); }
   });
 
-  // Wire lock UI
   document.getElementById("lockBtn").onclick = unlock;
   document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
-  if (sessionStorage.getItem("ctUnlocked") === "1") { revealApp(); }
-  else { document.getElementById("lockInput").focus(); }
+  if (sessionStorage.getItem("ctUnlocked") === "1") revealApp();
+  else document.getElementById("lockInput").focus();
 </script>
 </body>
 </html>
