@@ -77,6 +77,7 @@
   body.easy .card .hint { display: none; }          /* long explanation paragraphs */
   body.easy .detail-only { display: none !important; } /* term "1/3", cutoff label, full date, partial tag */
   body.easy .bd-edit, body.easy .d-share { display: none; } /* per-row edit + share in easy */
+  body.easy .d-split { display: inline-flex !important; } /* keep the Split (paydays) button in easy */
   body.easy .sub-box { background: transparent; border: none; padding: 4px 0; margin-top: 4px; } /* flatten sub-category boxes */
   body.easy .sub-box-head { display: none; }        /* hide TRAVEL/OTHER headers in easy */
   body.easy .d-amounts .seg .k { font-size: 10px; } /* tighter */
@@ -361,6 +362,7 @@
     <div class="topbar">
       <a class="home-link" href="home.html">&larr; Home</a>
       <div class="page-title">Debt Tracker</div>
+      <a class="home-link" href="soa.html" style="margin-left:auto" title="Statement of Account per payday">&#128196; SOA</a>
     </div>
 
     <!-- EASY / DETAILED VIEW TOGGLE -->
@@ -956,7 +958,7 @@
     // Split-into-paydays button (any card with a this-month due and not fully paid).
     const anyPlanned = items.some(d => d.plan && d.plan.length);
     const splitBtn = (owed > 0.009)
-      ? '<button class="d-share" data-split="' + encodeURIComponent(cardKey) + '" title="Split into paydays" style="color:var(--gold-bright)">\uD83D\uDCC4</button>'
+      ? '<button class="d-share d-split" data-split="' + encodeURIComponent(cardKey) + '" title="Split into paydays" style="color:var(--gold-bright)">\uD83D\uDCC4</button>'
       : "";
     const planTag = anyPlanned
       ? ' <span class="part-tag" title="Split across paydays">Plan</span>'
@@ -1889,7 +1891,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 109;
+  const APP_VERSION = 110;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {

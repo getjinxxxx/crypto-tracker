@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<link rel="manifest" href="manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="SOA" />
+<title>Statement of Account</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #16161a;
+    --panel-2: #232329;
+    --line: #2a2a30;
+    --text: #f2f2f7;
+    --muted: #8e8e93;
+    --gold: #d4a017;
+    --gold-bright: #f5c542;
+    --danger: #ff6b6b;
+    --green: #34d399;
+    --red: #ff6b6b;
+    --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 14px 14px 60px;
+    line-height: 1.4;
+  }
+
+  /* Lock screen */
+  #lock {
+    position: fixed; inset: 0; background: var(--bg); z-index: 500;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
+  }
+  #lock .lock-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 24px; width: 100%; max-width: 340px; text-align: center;
+  }
+  #lock .lk-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  #lock .lk-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  #lock input {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px;
+  }
+  #lock input:focus { outline: none; border-color: var(--gold); }
+  #lock button {
+    width: 100%; background: var(--gold); color: #000; border: none; border-radius: 12px;
+    padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px;
+  }
+  #lock .lk-err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 16px; }
+  body.locked { overflow: hidden; }
+  #app.hidden { display: none; }
+
+  /* Top bar */
+  .topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .topbar a.back { color: var(--gold-bright); text-decoration: none; font-size: 14px; font-weight: 600;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; white-space: nowrap; }
+  .topbar h1 { font-size: 17px; font-weight: 700; margin: 0; letter-spacing: .3px; flex: 1; }
+
+  /* Month bar */
+  .monthbar { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 12px; }
+  .monthbar button { background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    width: 38px; height: 38px; border-radius: 12px; font-size: 18px; cursor: pointer; }
+  .monthbar .ml { font-size: 16px; font-weight: 700; min-width: 150px; text-align: center; }
+
+  /* Cutoff picker */
+  .cutpick { display: flex; justify-content: center; gap: 0; margin: 0 auto 16px; max-width: 320px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .cutpick button { flex: 1; background: none; border: none; color: var(--muted); font-size: 14px;
+    font-weight: 700; padding: 9px 10px; border-radius: 999px; cursor: pointer; }
+  .cutpick button.active { background: var(--gold); color: #000; }
+
+  /* SOA sheet */
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px 16px 10px; margin-bottom: 14px; }
+  .sheet-head { text-align: center; border-bottom: 1px dashed var(--line); padding-bottom: 12px; margin-bottom: 8px; }
+  .sheet-head .s-title { font-size: 15px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+  .sheet-head .s-sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+  .grp { margin-top: 12px; }
+  .grp-name { font-size: 13px; font-weight: 700; color: var(--gold-bright); text-transform: uppercase;
+    letter-spacing: .4px; margin-bottom: 4px; }
+  .soa-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; font-size: 14px; }
+  .soa-row.paid .soa-nm, .soa-row.paid .soa-amt { color: var(--muted); text-decoration: line-through; }
+  .soa-nm { flex: 1; }
+  .soa-tag { font-size: 10px; font-weight: 700; color: var(--muted); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; }
+  .soa-tag.ispaid { color: var(--green); border-color: rgba(52,211,153,0.4); }
+  .soa-amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .grp-sub { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--line);
+    margin-top: 4px; padding-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .grp-sub b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .totals { border-top: 2px solid var(--gold); margin-top: 14px; padding-top: 10px; }
+  .t-row { display: flex; justify-content: space-between; font-size: 14px; padding: 3px 0; }
+  .t-row.big { font-size: 17px; font-weight: 800; }
+  .t-row .v { font-variant-numeric: tabular-nums; }
+  .t-row.topay .v { color: var(--gold-bright); }
+  .t-row.paidv .v { color: var(--green); }
+
+  .actions { display: flex; gap: 10px; margin-top: 4px; }
+  .actions button { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .actions button.primary { background: var(--gold); color: #000; border-color: var(--gold); }
+
+  .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 30px 10px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--panel);
+    border: 1px solid var(--line); color: var(--text); padding: 10px 16px; border-radius: 12px; font-size: 13px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 400; }
+  .toast.show { opacity: 1; }
+
+  @media print {
+    body { background: #fff; color: #000; max-width: none; padding: 0; }
+    .topbar, .monthbar, .cutpick, .actions, #lock { display: none !important; }
+    .sheet { border: none; background: #fff; color: #000; }
+    .grp-name { color: #000; }
+    .soa-tag { color: #333; }
+    .totals { border-top: 2px solid #000; }
+    .t-row.topay .v, .t-row.paidv .v { color: #000; }
+  }
+</style>
+</head>
+<body class="locked">
+
+  <!-- Lock screen -->
+  <div id="lock">
+    <div class="lock-card">
+      <div class="lk-title">Statement of Account</div>
+      <div class="lk-sub">Enter passcode to view</div>
+      <input id="lockInput" type="password" inputmode="numeric" maxlength="12" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="off" />
+      <button id="lockBtn">Unlock</button>
+      <div class="lk-err" id="lockErr"></div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="topbar">
+      <a class="back" href="debt.html">&larr; Debt</a>
+      <h1>Statement of Account</h1>
+    </div>
+
+    <div class="monthbar">
+      <button id="prevMonth" title="Previous month">&#8249;</button>
+      <div class="ml" id="monthLabel">&mdash;</div>
+      <button id="nextMonth" title="Next month">&#8250;</button>
+    </div>
+
+    <div class="cutpick" id="cutPick">
+      <button data-cut="13">Payday 13</button>
+      <button data-cut="28">Payday 28</button>
+      <button data-cut="both">Both</button>
+    </div>
+
+    <div id="soaBody"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+  // ===== Shared constants (same scheme/data as debt.html) =====
+  const LS_KEY = "debtTrackerV3";
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyATaU8PnQwkMRvf6_j6Ccp1j0Qz8oeyELI",
+    authDomain: "crypto-tracker-bfefb.firebaseapp.com",
+    databaseURL: "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "crypto-tracker-bfefb",
+    storageBucket: "crypto-tracker-bfefb.firebasestorage.app",
+    messagingSenderId: "901782471631",
+    appId: "1:901782471631:web:5c7ec398e607b1777548ba"
+  };
+
+  let state = { debts: [], shareIds: {} };
+  let viewMonth = "";
+  let cutoff = "both"; // "13" | "28" | "both"
+
+  const CATEGORIES = {
+    person: "Debt to a person", creditcard: "Credit Card", bankloan: "Bank Loan",
+    onlineloan: "Online Loan", government: "Government", salaryloan: "Salary / Company Loan", other: "Other"
+  };
+  function catLabel(c) { return CATEGORIES[c] || "Other"; }
+
+  function num(v) {
+    if (v == null) return 0;
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+    return isNaN(n) ? 0 : n;
+  }
+  function peso(n) {
+    return "PHP " + (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // ---------- Month helpers (timezone-safe) ----------
+  const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  function monthKey(dateOrStr) {
+    if (dateOrStr instanceof Date) return dateOrStr.getFullYear() + "-" + String(dateOrStr.getMonth() + 1).padStart(2, "0");
+    return String(dateOrStr).slice(0, 7);
+  }
+  function parseKey(key) {
+    const y = parseInt((key || "").slice(0, 4), 10);
+    const m = parseInt((key || "").slice(5, 7), 10) - 1;
+    return [y, m];
+  }
+  function monthLabel(key) {
+    const [y, m] = parseKey(key);
+    if (isNaN(y) || isNaN(m) || m < 0 || m > 11) return key;
+    return MONTH_NAMES[m] + " " + y;
+  }
+  function addMonths(key, n) {
+    let [y, m] = parseKey(key);
+    const total = y * 12 + m + n;
+    return Math.floor(total / 12) + "-" + String((total % 12) + 1).padStart(2, "0");
+  }
+  function termIndexFor(d, key) {
+    const [sy, sm] = parseKey(d.startMonth);
+    const [cy, cm] = parseKey(key);
+    return (cy - sy) * 12 + (cm - sm);
+  }
+
+  // ---------- Plan / term logic (copied verbatim from debt.html so totals match) ----------
+  function hasPlan(d) { return Array.isArray(d.plan) && d.plan.length > 0; }
+  function planEntriesFor(d, key) {
+    if (!hasPlan(d)) return [];
+    return d.plan.filter(p => p.key === key).sort((a, b) => a.payday - b.payday);
+  }
+  function isActiveIn(d, key) {
+    if (hasPlan(d)) return planEntriesFor(d, key).length > 0;
+    const idx = termIndexFor(d, key);
+    if (idx < 0) return false;
+    if (d.recurring) return !d.endMonth || key <= d.endMonth;
+    return idx < d.terms;
+  }
+  function perTermOf(d) {
+    if (hasPlan(d)) return planEntriesFor(d, viewMonth).reduce((s, p) => s + num(p.amount), 0);
+    return (d.terms > 1 && !d.recurring) ? num(d.amount) / d.terms : num(d.amount);
+  }
+  function partPaidThisMonth(d) {
+    if (d.recurring || d.terms > 1) return num((d.paidAmt || {})[viewMonth]) || 0;
+    return num(d.paidOnce) || 0;
+  }
+  function isTermChecked(d) {
+    if (d.recurring || d.terms > 1) return !!(d.paidTerms && d.paidTerms[viewMonth]);
+    return !!d.paid;
+  }
+  function cutoffForDueDay(day) { return (day >= 1 && day <= 15) ? "1st" : "2nd"; }
+  // Which payday (13 or 28) does a non-plan due day belong to? 1-15 -> 13, 16-31 -> 28.
+  function paydayForDueDay(day) { return (day >= 1 && day <= 15) ? 13 : 28; }
+
+  function cardKeyOf(d) {
+    if (d.category === "person") return "person::" + (d.person || "").trim().toLowerCase();
+    return d.category + "::" + (d.name || "").trim().toLowerCase();
+  }
+  function cardTitleOf(d) {
+    return (d.category === "person" && d.person) ? d.person : (d.name || catLabel(d.category));
+  }
+  function itemName(d) { return (d.name && d.name.trim()) ? d.name : (d.person ? d.person : catLabel(d.category)); }
+
+  // ---------- Build SOA line items for the chosen payday ----------
+  // Returns [{ card, name, tag, amount, paid, payday }]
+  function soaLines() {
+    const lines = [];
+    const wants = (pd) => cutoff === "both" || parseInt(cutoff, 10) === pd;
+    state.debts.forEach(d => {
+      if (!isActiveIn(d, viewMonth)) return;
+      if (hasPlan(d)) {
+        // one line per plan entry this month whose payday is wanted
+        const entries = planEntriesFor(d, viewMonth);
+        const total = entries.length; // for "x/total" we use whole-plan index below
+        entries.forEach(p => {
+          if (!wants(p.payday)) return;
+          const which = d.plan.findIndex(x => x === p) + 1;
+          lines.push({
+            card: cardTitleOf(d),
+            name: itemName(d),
+            tag: "split " + which + "/" + d.plan.length,
+            amount: num(p.amount),
+            paid: !!p.paid,
+            payday: p.payday
+          });
+        });
+      } else {
+        // non-plan: assign to a payday via due day (no due day -> treat as 28/katapusan)
+        const pd = d.dueDay ? paydayForDueDay(d.dueDay) : 28;
+        if (!wants(pd)) return;
+        const amt = perTermOf(d);
+        if (amt <= 0) return;
+        let tag = "due " + (d.dueDay || "end");
+        if (d.recurring) tag = "monthly";
+        else if (d.terms > 1) {
+          const idx = termIndexFor(d, viewMonth);
+          tag = (idx + 1) + "/" + d.terms;
+        }
+        const paid = isTermChecked(d) || (perTermOf(d) > 0 && partPaidThisMonth(d) >= perTermOf(d) - 0.009);
+        lines.push({ card: cardTitleOf(d), name: itemName(d), tag: tag, amount: amt, paid: paid, payday: pd });
+      }
+    });
+    return lines;
+  }
+
+  function render() {
+    document.getElementById("monthLabel").textContent = monthLabel(viewMonth);
+    document.querySelectorAll("#cutPick button").forEach(b => b.classList.toggle("active", b.getAttribute("data-cut") === cutoff));
+
+    const lines = soaLines();
+    const body = document.getElementById("soaBody");
+
+    if (!lines.length) {
+      body.innerHTML = '<div class="sheet"><div class="empty">Walang due para sa ' +
+        (cutoff === "both" ? "paydays 13 &amp; 28" : "payday " + cutoff) + ' ngayong ' + monthLabel(viewMonth) + '.</div></div>';
+      return;
+    }
+
+    // group by card (person/label), preserving first-seen order
+    const groups = {}; const order = [];
+    lines.forEach(l => { if (!groups[l.card]) { groups[l.card] = []; order.push(l.card); } groups[l.card].push(l); });
+
+    const cutLabel = cutoff === "both" ? "Paydays 13 & 28" : "Payday " + cutoff;
+
+    let grandDue = 0, grandPaid = 0;
+    let html = '<div class="sheet">' +
+      '<div class="sheet-head">' +
+        '<div class="s-title">Statement of Account</div>' +
+        '<div class="s-sub">' + cutLabel + ' &bull; ' + monthLabel(viewMonth) + '</div>' +
+      '</div>';
+
+    order.forEach(card => {
+      const items = groups[card];
+      let sub = 0, subPaid = 0;
+      let rows = "";
+      items.forEach(l => {
+        grandDue += l.amount; sub += l.amount;
+        if (l.paid) { grandPaid += l.amount; subPaid += l.amount; }
+        rows += '<div class="soa-row' + (l.paid ? " paid" : "") + '">' +
+          '<span class="soa-nm">' + escapeHtml(l.name) + '</span>' +
+          '<span class="soa-tag' + (l.paid ? " ispaid" : "") + '">' + (l.paid ? "paid" : escapeHtml(l.tag)) + '</span>' +
+          '<span class="soa-amt">' + peso(l.amount) + '</span>' +
+          '</div>';
+      });
+      html += '<div class="grp">' +
+        '<div class="grp-name">' + escapeHtml(card) + '</div>' + rows +
+        '<div class="grp-sub"><span>subtotal</span><b>' + peso(sub) + '</b></div>' +
+        '</div>';
+    });
+
+    const stillToPay = Math.max(0, grandDue - grandPaid);
+    html += '<div class="totals">' +
+        '<div class="t-row"><span>Total due (' + cutLabel + ')</span><span class="v">' + peso(grandDue) + '</span></div>' +
+        '<div class="t-row paidv"><span>Already paid</span><span class="v">&minus; ' + peso(grandPaid) + '</span></div>' +
+        '<div class="t-row big topay"><span>Still to pay</span><span class="v">' + peso(stillToPay) + '</span></div>' +
+      '</div>';
+
+    html += '</div>'; // sheet
+
+    html += '<div class="actions">' +
+      '<button id="copyBtn">Copy as text</button>' +
+      '<button id="printBtn" class="primary">Print / Save PDF</button>' +
+      '</div>';
+
+    body.innerHTML = html;
+
+    document.getElementById("copyBtn").onclick = () => copyAsText(order, groups, cutLabel, grandDue, grandPaid, stillToPay);
+    document.getElementById("printBtn").onclick = () => window.print();
+  }
+
+  function copyAsText(order, groups, cutLabel, grandDue, grandPaid, stillToPay) {
+    let t = "STATEMENT OF ACCOUNT\n" + cutLabel + " - " + monthLabel(viewMonth) + "\n";
+    t += "========================================\n";
+    order.forEach(card => {
+      t += "\n" + card + "\n";
+      let sub = 0;
+      groups[card].forEach(l => {
+        sub += l.amount;
+        const nm = (l.name + (l.paid ? " (paid)" : " [" + l.tag + "]")).padEnd(26, " ").slice(0, 26);
+        t += "  " + nm + peso(l.amount) + "\n";
+      });
+      t += "  subtotal".padEnd(28, " ") + peso(sub) + "\n";
+    });
+    t += "========================================\n";
+    t += "Total due      " + peso(grandDue) + "\n";
+    t += "Already paid  -" + peso(grandPaid) + "\n";
+    t += "STILL TO PAY   " + peso(stillToPay) + "\n";
+    const done = () => showToast("Copied to clipboard");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(done, () => fallbackCopy(t, done));
+    } else fallbackCopy(t, done);
+  }
+  function fallbackCopy(t, done) {
+    const ta = document.createElement("textarea");
+    ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+  function showToast(msg) {
+    const el = document.getElementById("toast");
+    el.textContent = msg; el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 1600);
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // ---------- Load data (localStorage first, then Firebase cloud = source of truth) ----------
+  function sanitizeState() {
+    if (!state || !Array.isArray(state.debts)) state = { debts: [], shareIds: {} };
+    state.debts.forEach(d => {
+      if (!d.paidTerms) d.paidTerms = {};
+      if (!d.paidAmt) d.paidAmt = {};
+      if (d.terms == null) d.terms = 1;
+    });
+  }
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) { const s = JSON.parse(raw); if (s && Array.isArray(s.debts)) state = s; }
+    } catch (e) {}
+    sanitizeState();
+  }
+  function fbInit() {
+    try {
+      if (typeof firebase === "undefined") return;
+      if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      const db = firebase.database();
+      db.ref("debt/state").on("value", (snap) => {
+        const remote = snap.val();
+        if (remote && typeof remote.stateJson === "string") {
+          try { remote.state = JSON.parse(remote.stateJson); } catch (e) { remote.state = null; }
+        }
+        if (remote && remote.state && Array.isArray(remote.state.debts)) {
+          state = remote.state;
+          sanitizeState();
+          render();
+        }
+      }, (err) => { console.warn("[soa] firebase listen error:", err); });
+    } catch (e) {}
+  }
+
+  // ---------- Passcode lock (shared scheme) ----------
+  function simpleHash(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; }
+    return h;
+  }
+  const PASS_HASH = simpleHash("031171");
+  function unlock() {
+    const input = document.getElementById("lockInput");
+    const err = document.getElementById("lockErr");
+    if (simpleHash(input.value) === PASS_HASH) {
+      sessionStorage.setItem("ctUnlocked", "1");
+      revealApp();
+    } else {
+      err.textContent = "Wrong passcode. Try again.";
+      input.value = ""; input.focus();
+    }
+  }
+  function revealApp() {
+    document.getElementById("lock").style.display = "none";
+    document.body.classList.remove("locked");
+    document.getElementById("app").classList.remove("hidden");
+    startApp();
+  }
+
+  let appStarted = false;
+  function startApp() {
+    if (appStarted) return;
+    appStarted = true;
+    loadLocal();
+    viewMonth = monthKey(new Date());
+    render();
+    fbInit(); // cloud overrides once it arrives
+
+    document.getElementById("prevMonth").onclick = () => { viewMonth = addMonths(viewMonth, -1); render(); };
+    document.getElementById("nextMonth").onclick = () => { viewMonth = addMonths(viewMonth, 1); render(); };
+    document.querySelectorAll("#cutPick button").forEach(b => {
+      b.onclick = () => { cutoff = b.getAttribute("data-cut"); render(); };
+    });
+  }
+
+  (function init() {
+    document.getElementById("lockBtn").onclick = unlock;
+    document.getElementById("lockInput").addEventListener("keydown", e => { if (e.key === "Enter") unlock(); });
+    if (sessionStorage.getItem("ctUnlocked") === "1") {
+      revealApp();
+    } else {
+      document.getElementById("lockInput").focus();
+    }
+  })();
+</script>
+</body>
+</html>
