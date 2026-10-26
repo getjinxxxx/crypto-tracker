@@ -73,6 +73,17 @@
   .view-toggle button.active { background: var(--gold); color: #000; }
   body.easy .adv-only { display: none !important; }
 
+  /* Easy view: hide technical clutter, keep name + due date + amount + checkbox */
+  body.easy .card .hint { display: none; }          /* long explanation paragraphs */
+  body.easy .detail-only { display: none !important; } /* term "1/3", cutoff label, full date, partial tag */
+  body.easy .bd-edit, body.easy .d-share { display: none; } /* per-row edit + share in easy */
+  body.easy .sub-box { background: transparent; border: none; padding: 4px 0; margin-top: 4px; } /* flatten sub-category boxes */
+  body.easy .sub-box-head { display: none; }        /* hide TRAVEL/OTHER headers in easy */
+  body.easy .d-amounts .seg .k { font-size: 10px; } /* tighter */
+  .due-simple { display: none; }                    /* compact "due N" tag, only shown in easy */
+  body.easy .due-simple { display: inline-block; background: rgba(245,197,66,0.15); color: var(--gold-bright);
+    font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; }
+
   /* Top bar */
   .topbar { display: flex; align-items: center; gap: 10px; margin: 6px 0 14px; }
   .topbar .home-link {
@@ -871,10 +882,10 @@
     // Installment term indicator (1/3) or Recurring tag.
     let termTag = "";
     if (d.recurring) {
-      termTag = ' <span class="recur-tag">Recurring</span>';
+      termTag = ' <span class="recur-tag detail-only">Recurring</span>';
     } else if (d.terms > 1) {
       const idx = termIndexFor(d, viewMonth);
-      termTag = ' <span class="bd-term">' + (idx + 1) + '/' + d.terms + '</span>';
+      termTag = ' <span class="bd-term detail-only">' + (idx + 1) + '/' + d.terms + '</span>';
     }
     const stopBtn = d.recurring
       ? '<button class="bd-edit" data-stop="' + d.id + '" title="Stop recurring bill">\u23F9</button>'
@@ -884,17 +895,17 @@
     if (d.dueDay && d.dueDay >= 1 && d.dueDay <= 31) {
       const cut = cutoffForDueDay(d.dueDay) === "1st" ? "1st cutoff" : "2nd cutoff";
       const u = dueUrgency(d);
-      dueTag = ' <span class="due-tag ' + u.cls + '" title="Deadline">' + (u.icon ? u.icon + " " : "") + d.dueDay + ' (' + cut + ')</span>';
+      dueTag = ' <span class="due-tag ' + u.cls + ' detail-only" title="Deadline">' + (u.icon ? u.icon + " " : "") + d.dueDay + ' (' + cut + ')</span>';
     }
     // Partial-payment tag: show how much of this term is already paid (if not fully paid).
     const part = partPaidThisMonth(d);
     let partTag = "";
     if (!isTermChecked(d) && part > 0 && part < amtShown - 0.009) {
-      partTag = ' <span class="part-tag">\u20b1' + part.toLocaleString("en-US", { maximumFractionDigits: 2 }) + ' paid</span>';
+      partTag = ' <span class="part-tag detail-only">\u20b1' + part.toLocaleString("en-US", { maximumFractionDigits: 2 }) + ' paid</span>';
     }
     return '<div class="bd-row' + (paidNow ? " bd-paid" : "") + '">' +
       '<input type="checkbox" class="bd-check" data-item="' + d.id + '"' + (paidNow ? " checked" : "") + '>' +
-      '<span class="bd-label">' + label + termTag + dueTag + partTag + (dt ? ' <span class="bd-date">' + dt + '</span>' : '') + '</span>' +
+      '<span class="bd-label">' + label + termTag + dueTag + partTag + (dt ? ' <span class="bd-date detail-only">' + dt + '</span>' : '') + (d.dueDay ? ' <span class="due-simple">due ' + d.dueDay + '</span>' : '') + '</span>' +
       '<span class="bd-amt">' + peso(amtShown) + '</span>' +
       stopBtn +
       '<button class="bd-edit" data-edit="' + d.id + '" title="Edit / pay">\u270E</button>' +
@@ -1878,7 +1889,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 108;
+  const APP_VERSION = 109;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
