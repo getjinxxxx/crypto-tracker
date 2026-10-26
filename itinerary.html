@@ -284,6 +284,7 @@
         <button class="btn" id="addStopBtn">+ Add stop</button>
         <button class="btn ghost" id="addLegBtn">+ Travel leg</button>
         <button class="btn ghost" id="scanBtn">&#128247; Scan</button>
+        <button class="btn ghost" id="linkBtn">&#128279; From Maps link</button>
         <button class="btn ghost" id="copyBtn">Copy text</button>
       </div>
     </div>
@@ -431,6 +432,35 @@
     </div>
   </div>
 
+  <!-- Import from Maps link modal -->
+  <div class="modal-bg" id="linkModalBg">
+    <div class="modal">
+      <h3>Import from Maps link</h3>
+      <div class="modal-err" id="linkErr"></div>
+      <div class="field"><label>Paste Google Maps directions link</label>
+        <textarea id="linkInput" rows="3" placeholder="https://www.google.com/maps/dir/Taytay/Bulacan/..."></textarea>
+      </div>
+      <div class="field two">
+        <div><label>Target day</label><select id="linkDay"></select></div>
+        <div><label>Start time</label><input id="linkStart" type="time" value="08:00" /></div>
+      </div>
+      <div class="field two">
+        <div><label>Avg speed (km/h)</label><input id="linkSpeed" type="number" inputmode="decimal" value="50" /></div>
+        <div><label>Buffer per stop (min)</label><input id="linkBuffer" type="number" inputmode="decimal" value="15" /></div>
+      </div>
+      <div class="field inline"><input type="checkbox" id="linkReplace" /><label for="linkReplace" style="margin:0;">Replace day's entries</label></div>
+      <button class="btn ghost sm" id="linkParse" type="button" style="margin-bottom:12px;">Build preview</button>
+      <div id="linkResultWrap" style="display:none;">
+        <div id="linkFound" style="font-size:12px;color:var(--green);margin-bottom:8px;"></div>
+        <div class="scan-preview" id="linkPreview"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="linkCancel">Cancel</button>
+        <button class="btn" id="linkAdd" style="display:none;">Add these entries</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   // ---------- Passcode lock (same scheme as the other pages) ----------
   function simpleHash(s) {
@@ -459,7 +489,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 129;
+  const APP_VERSION = 130;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1339,6 +1369,128 @@
   }
   function findType(t, re) { const lg = t.legend.find(x => re.test(x.label)); return lg ? lg.id : ""; }
 
+  // ---------- Import from Google Maps directions link ----------
+  let linkParsed = [];   // scheduled entries, same shape as scanParsed
+  function openLinkModal() {
+    const t = findTrip(state.ui.openTripId); if (!t) return;
+    linkParsed = [];
+    document.getElementById("linkErr").textContent = "";
+    document.getElementById("linkResultWrap").style.display = "none";
+    document.getElementById("linkAdd").style.display = "none";
+    document.getElementById("linkInput").value = "";
+    document.getElementById("linkStart").value = "08:00";
+    document.getElementById("linkSpeed").value = "50";
+    document.getElementById("linkBuffer").value = "15";
+    document.getElementById("linkReplace").checked = false;
+    const days = datesInRange(t.start, t.end);
+    document.getElementById("linkDay").innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
+    document.getElementById("linkModalBg").classList.add("show");
+  }
+  function closeLinkModal() { document.getElementById("linkModalBg").classList.remove("show"); }
+
+  // Pull ordered waypoints (and coords if present) out of a /maps/dir/ link.
+  function parseMapsLink(url) {
+    const stops = [];       // { name, lat, lng }
+    if (!url) return stops;
+    let u = url.trim();
+    // Grab the segment after /dir/ up to the next "/data=" or "/@" or end.
+    const dirIdx = u.search(/\/dir\//i);
+    if (dirIdx === -1) {
+      // maybe a /search/ or place link -> single stop
+      const sm = u.match(/\/(?:search|place)\/([^/@?]+)/i);
+      if (sm) stops.push({ name: decodeName(sm[1]), lat: null, lng: null });
+      return stops;
+    }
+    let seg = u.slice(dirIdx + 5);
+    seg = seg.split(/\/data=/i)[0];           // drop trailing data blob
+    const parts = seg.split("/").filter(Boolean);
+    parts.forEach(p => {
+      if (/^@/.test(p)) return;               // viewport token, skip
+      // A waypoint can itself be "lat,lng" coordinates.
+      const cm = p.match(/^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$/);
+      if (cm) { stops.push({ name: cm[1] + "," + cm[2], lat: parseFloat(cm[1]), lng: parseFloat(cm[2]) }); return; }
+      const name = decodeName(p);
+      if (name) stops.push({ name: name, lat: null, lng: null });
+    });
+    // Some links append coordinates in /data= as !1d<lng>!2d<lat> per waypoint; try to backfill.
+    const coordMatches = [...u.matchAll(/!1d(-?\d+\.\d+)!2d(-?\d+\.\d+)/g)];
+    if (coordMatches.length && coordMatches.length <= stops.length) {
+      // data lng/lat are often destination-centric; only use if counts line up with stops lacking coords
+      let ci = 0;
+      stops.forEach(s => { if (s.lat == null && coordMatches[ci]) { s.lng = parseFloat(coordMatches[ci][1]); s.lat = parseFloat(coordMatches[ci][2]); ci++; } });
+    }
+    return stops;
+  }
+  function decodeName(s) {
+    try { s = decodeURIComponent(s); } catch (e) {}
+    return s.replace(/\+/g, " ").replace(/\s{2,}/g, " ").trim();
+  }
+  function haversineKm(a, b) {
+    if (a.lat == null || b.lat == null) return null;
+    const R = 6371, toRad = d => d * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)) * 1.3; // *1.3 road-factor over straight line
+  }
+  function minsToText(mins) {
+    mins = Math.max(1, Math.round(mins));
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return (h ? h + " hr " : "") + (m ? m + " min" : (h ? "" : "0 min")).trim();
+  }
+  function addMinutes(hm, mins) {
+    const p = hm.split(":").map(Number); let total = p[0] * 60 + p[1] + Math.round(mins);
+    total = ((total % 1440) + 1440) % 1440;
+    return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
+  }
+  function buildLinkPreview() {
+    const t = findTrip(state.ui.openTripId); if (!t) return;
+    const err = document.getElementById("linkErr"); err.textContent = "";
+    const stops = parseMapsLink(document.getElementById("linkInput").value);
+    if (stops.length < 1) { err.textContent = "Couldn't read any stops from that link. Paste a Google Maps directions link (it has /dir/ in it)."; return; }
+    const speed = Math.max(5, Number(document.getElementById("linkSpeed").value) || 50);
+    const buffer = Math.max(0, Number(document.getElementById("linkBuffer").value) || 0);
+    let clock = document.getElementById("linkStart").value || "08:00";
+    const anyCoords = stops.some(s => s.lat != null);
+    const DEFAULT_LEG_MIN = 45;
+
+    const out = [];
+    stops.forEach((s, i) => {
+      if (i > 0) {
+        const km = haversineKm(stops[i - 1], s);
+        const legMin = km != null ? (km / speed) * 60 : DEFAULT_LEG_MIN;
+        const durTxt = (km != null ? "~" + minsToText(legMin) + " (\u2248" + Math.round(km) + " km)" : "~" + minsToText(legMin) + " (est.)");
+        out.push({ kind: "leg", label: "Drive", durationText: durTxt, fromText: stops[i - 1].name, toText: s.name });
+        clock = addMinutes(clock, legMin);
+      }
+      out.push({ kind: "stop", time: clock, endTime: "", approx: true, typeId: "", title: s.name, note: "", category: "Transport", cost: 0, inRoute: true });
+      clock = addMinutes(clock, buffer); // leave buffer before departing to next
+    });
+    linkParsed = out;
+    const stopCount = out.filter(e => e.kind === "stop").length;
+    document.getElementById("linkFound").textContent = "Scheduled " + stopCount + " stop" + (stopCount === 1 ? "" : "s") + (anyCoords ? " using link coordinates." : " (no coords in link \u2014 using " + DEFAULT_LEG_MIN + " min/leg estimate; edit after).");
+    renderLinkPreview(t);
+    document.getElementById("linkResultWrap").style.display = "block";
+    document.getElementById("linkAdd").style.display = "block";
+  }
+  function renderLinkPreview(t) {
+    const wrap = document.getElementById("linkPreview");
+    wrap.innerHTML = linkParsed.map(e => {
+      if (e.kind === "leg") return '<div class="pv-row leg"><div class="pv-t">\uD83C\uDFC3 Drive</div><div>' + esc(e.durationText) + '  (' + esc(e.fromText) + ' \u2192 ' + esc(e.toText) + ')</div></div>';
+      return '<div class="pv-row"><span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span><div class="pv-t">' + esc(timeDisplay(e)) + '</div><div>' + esc(e.title) + '</div></div>';
+    }).join("");
+  }
+  function confirmLinkInsert() {
+    const t = findTrip(state.ui.openTripId); if (!t || !linkParsed.length) return;
+    const day = document.getElementById("linkDay").value;
+    if (document.getElementById("linkReplace").checked) t.items = t.items.filter(it => it.date !== day);
+    linkParsed.forEach(e => {
+      const base = e.kind === "leg" ? { id: uid("i_"), date: day } : { id: uid("i_"), date: day, done: false };
+      t.items.push(Object.assign(base, e, { date: day }));
+    });
+    state.ui.openDate = day;
+    closeLinkModal(); persist(); renderTripDetail(t);
+  }
+
   // ---------- Copy as text ----------
   function copyTripText(t) {
     const days = datesInRange(t.start, t.end);
@@ -1397,12 +1549,17 @@
 
   document.getElementById("scanCancel").onclick = closeScanModal;
   document.getElementById("scanAdd").onclick = confirmScanInsert;
+
+  document.getElementById("linkBtn").onclick = openLinkModal;
+  document.getElementById("linkCancel").onclick = closeLinkModal;
+  document.getElementById("linkParse").onclick = buildLinkPreview;
+  document.getElementById("linkAdd").onclick = confirmLinkInsert;
   document.getElementById("scanCamBtn").onclick = () => document.getElementById("scanCamInput").click();
   document.getElementById("scanUpBtn").onclick = () => document.getElementById("scanUpInput").click();
   document.getElementById("scanCamInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
   document.getElementById("scanUpInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
 
-  [["tripModalBg", closeTripModal], ["itemModalBg", closeItemModal], ["legendModalBg", closeLegendModal], ["scanModalBg", closeScanModal]].forEach(([id, fn]) => {
+  [["tripModalBg", closeTripModal], ["itemModalBg", closeItemModal], ["legendModalBg", closeLegendModal], ["scanModalBg", closeScanModal], ["linkModalBg", closeLinkModal]].forEach(([id, fn]) => {
     document.getElementById(id).addEventListener("click", (e) => { if (e.target.id === id) fn(); });
   });
 
