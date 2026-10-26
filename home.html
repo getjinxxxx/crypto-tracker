@@ -104,6 +104,12 @@
   .kb-card.p-med { border-left-color: var(--accent); }
   .kb-card.p-low { border-left-color: var(--green); }
   .kb-empty { color: var(--muted); font-size: 12px; padding: 6px 2px; }
+  .kb-card { display: flex; align-items: center; gap: 6px; }
+  .kb-card .kb-ct { flex: 1; min-width: 0; }
+  .kb-mvs { flex: 0 0 auto; display: flex; gap: 3px; }
+  .kb-mv { width: 22px; height: 22px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; padding: 0; }
+  .kb-mv:hover { color: var(--text); }
+  .kb-mv.ghost { background: none; border: none; cursor: default; }
 
   /* Mobile: collapse sidebar to top bar */
   .menu-btn { display: none; }
@@ -140,23 +146,23 @@
       <!-- SIDEBAR -->
       <aside class="sidebar" id="sidebar">
         <div class="brand"><div class="logo">D</div><div class="bname">My Dashboard</div></div>
-        <div class="nav-search"><span>&#128269;</span><input id="navSearch" placeholder="Search tools" /></div>
+        <div class="nav-search"><input id="navSearch" placeholder="Search tools" /></div>
 
         <div class="nav-group">Main</div>
-        <a class="nav-item active" href="home.html"><span class="ni-ico">&#9632;</span>Home</a>
+        <a class="nav-item active" href="home.html">Home</a>
 
         <div class="nav-group">Tools</div>
-        <a class="nav-item" href="index.html" data-tool="crypto"><span class="ni-ico">&#128181;</span>Crypto Tracker</a>
-        <a class="nav-item" href="signals.html" data-tool="signals"><span class="ni-ico">&#128200;</span>Market Signals</a>
-        <a class="nav-item" href="salary.html" data-tool="salary"><span class="ni-ico">&#128176;</span>Salary</a>
-        <a class="nav-item" href="debt.html" data-tool="debt"><span class="ni-ico">&#129534;</span>Debt Tracker</a>
-        <a class="nav-item" href="receivables.html" data-tool="receivables"><span class="ni-ico">&#129309;</span>Receivables</a>
-        <a class="nav-item" href="soa.html" data-tool="soa"><span class="ni-ico">&#128196;</span>Statement of Account</a>
-        <a class="nav-item" href="itinerary.html" data-tool="itinerary"><span class="ni-ico">&#9992;&#65039;</span>Itinerary</a>
-        <a class="nav-item" href="kanban.html" data-tool="kanban"><span class="ni-ico">&#128203;</span>Kanban</a>
+        <a class="nav-item" href="index.html" data-tool="crypto">Crypto Tracker</a>
+        <a class="nav-item" href="signals.html" data-tool="signals">Market Signals</a>
+        <a class="nav-item" href="salary.html" data-tool="salary">Salary</a>
+        <a class="nav-item" href="debt.html" data-tool="debt">Debt Tracker</a>
+        <a class="nav-item" href="receivables.html" data-tool="receivables">Receivables</a>
+        <a class="nav-item" href="soa.html" data-tool="soa">Statement of Account</a>
+        <a class="nav-item" href="itinerary.html" data-tool="itinerary">Itinerary</a>
+        <a class="nav-item" href="kanban.html" data-tool="kanban">Kanban</a>
 
         <div class="nav-group">Account</div>
-        <a class="nav-item" id="lockNav"><span class="ni-ico">&#128274;</span>Lock</a>
+        <a class="nav-item" id="lockNav">Lock</a>
       </aside>
 
       <!-- MAIN -->
@@ -167,7 +173,7 @@
         <div class="subdate" id="todayDate"></div>
 
         <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-          <button id="eyeBtn" style="display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 11px;font-size:14px;cursor:pointer;">&#128584; <span style="font-size:12px;font-weight:600;">Show amounts</span></button>
+          <button id="eyeBtn" style="display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 11px;font-size:13px;font-weight:600;cursor:pointer;">Show amounts</button>
         </div>
         <div class="stats" id="stats"></div>
 
@@ -180,10 +186,10 @@
           <div class="card quick">
             <h3>Quick open</h3>
             <div class="c-sub">Jump straight into a tool.</div>
-            <a href="index.html"><span class="q-ico">&#128181;</span> Crypto Tracker <span class="q-arrow">&rarr;</span></a>
-            <a href="debt.html"><span class="q-ico">&#129534;</span> Debt Tracker <span class="q-arrow">&rarr;</span></a>
-            <a href="itinerary.html"><span class="q-ico">&#9992;&#65039;</span> Itinerary <span class="q-arrow">&rarr;</span></a>
-            <a href="kanban.html"><span class="q-ico">&#128203;</span> Kanban <span class="q-arrow">&rarr;</span></a>
+            <a href="index.html">Crypto Tracker <span class="q-arrow">&rarr;</span></a>
+            <a href="debt.html">Debt Tracker <span class="q-arrow">&rarr;</span></a>
+            <a href="itinerary.html">Itinerary <span class="q-arrow">&rarr;</span></a>
+            <a href="kanban.html">Kanban <span class="q-arrow">&rarr;</span></a>
           </div>
         </div>
 
@@ -216,12 +222,12 @@
   function renderGreeting() {
     const now = new Date(), h = now.getHours();
     let g = "Good evening"; if (h < 12) g = "Good morning"; else if (h < 18) g = "Good afternoon";
-    document.getElementById("greet").textContent = g + " \uD83D\uDC4B";
+    document.getElementById("greet").textContent = g;
     document.getElementById("todayDate").textContent = now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   }
 
   // ---------- Auto-update (manual banner only) ----------
-  const APP_VERSION = 139;
+  const APP_VERSION = 141;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -388,14 +394,14 @@
     const mask = v => (v === "\u2014") ? v : "\u2022\u2022\u2022\u2022\u2022\u2022";
     document.getElementById("stats").innerHTML = cards.map(c =>
       '<div class="stat">' +
-        '<div class="s-top"><div class="s-label">' + c.label + '</div><div class="s-ico">' + c.ico + '</div></div>' +
+        '<div class="s-top"><div class="s-label">' + c.label + '</div></div>' +
         '<div class="s-val">' + (shown ? c.val : mask(c.val)) + '</div>' +
         '<div class="s-sub">' + c.sub + '</div>' +
         sparkline(c.seed, c.color) +
       '</div>'
     ).join("");
     const eye = document.getElementById("eyeBtn");
-    if (eye) eye.innerHTML = (shown ? "\uD83D\uDC41\uFE0F" : "\uD83D\uDE48") + " <span style='font-size:12px;font-weight:600;'>" + (shown ? "Hide" : "Show") + " amounts</span>";
+    if (eye) eye.textContent = (shown ? "Hide amounts" : "Show amounts");
 
     renderNetChart(cryptoHeadline, debt, recv, shown);
     renderKanbanSnapshot();
@@ -437,13 +443,44 @@
       host.innerHTML = '<div class="kb-empty">No board yet. <a href="kanban.html" style="color:var(--accent-2);text-decoration:none;">Create one &rarr;</a></div>';
       return;
     }
-    host.innerHTML = st.columns.slice(0, 4).map(col => {
-      const cards = (col.cards || []).slice(0, 4).map(cd =>
-        '<div class="kb-card p-' + (cd.prio || "none") + '">' + (cd.done ? "\u2713 " : "") + escapeHtml(cd.title || "Untitled") + '</div>'
-      ).join("") || '<div class="kb-empty">empty</div>';
-      const more = (col.cards || []).length > 4 ? '<div class="kb-empty">+' + ((col.cards.length) - 4) + ' more</div>' : "";
+    const nCols = st.columns.length;
+    host.innerHTML = st.columns.map((col, ci) => {
+      const cards = (col.cards || []).slice(0, 5).map((cd, idx) => {
+        const canLeft = ci > 0, canRight = ci < nCols - 1;
+        const left = canLeft ? '<button class="kb-mv" data-mv="' + ci + ':' + idx + ':-1" title="Move left">&lsaquo;</button>' : '<span class="kb-mv ghost"></span>';
+        const right = canRight ? '<button class="kb-mv" data-mv="' + ci + ':' + idx + ':1" title="Move right">&rsaquo;</button>' : '<span class="kb-mv ghost"></span>';
+        return '<div class="kb-card p-' + (cd.prio || "none") + '">' +
+          '<span class="kb-ct">' + (cd.done ? "(done) " : "") + escapeHtml(cd.title || "Untitled") + '</span>' +
+          '<span class="kb-mvs">' + left + right + '</span>' +
+        '</div>';
+      }).join("") || '<div class="kb-empty">empty</div>';
+      const more = (col.cards || []).length > 5 ? '<div class="kb-empty">+' + ((col.cards.length) - 5) + ' more</div>' : "";
       return '<div class="kb-col"><div class="kh">' + escapeHtml(col.name || "") + ' <span>' + (col.cards || []).length + '</span></div>' + cards + more + '</div>';
     }).join("");
+    host.querySelectorAll("[data-mv]").forEach(b => b.onclick = () => {
+      const p = b.getAttribute("data-mv").split(":");
+      moveSnapshotCard(parseInt(p[0], 10), parseInt(p[1], 10), parseInt(p[2], 10));
+    });
+  }
+  // Move a card to the adjacent column and persist to kanban state (local + cloud).
+  function moveSnapshotCard(colIdx, cardIdx, dir) {
+    const st = DASH.kanban || localState("kanbanV1");
+    if (!st || !Array.isArray(st.columns)) return;
+    const col = st.columns[colIdx], target = st.columns[colIdx + dir];
+    if (!col || !target || !col.cards || !col.cards[cardIdx]) return;
+    const [card] = col.cards.splice(cardIdx, 1);
+    target.cards.push(card);
+    DASH.kanban = st;
+    try { localStorage.setItem("kanbanV1", JSON.stringify(st)); } catch (e) {}
+    saveKanbanCloud(st);
+    renderKanbanSnapshot();
+  }
+  function saveKanbanCloud(st) {
+    try {
+      const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/kanban/state.json";
+      const payload = JSON.stringify({ stateJson: JSON.stringify(st), updatedAt: Date.now(), client: "dashboard" });
+      fetch(url, { method: "PUT", body: payload }).catch(function () {});
+    } catch (e) {}
   }
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 

@@ -222,7 +222,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 138;
+  const APP_VERSION = 141;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -377,7 +377,7 @@
         '<div class="col-actions">' +
           '<button class="icon-btn" data-colleft="' + col.id + '" title="Move left">\u2039</button>' +
           '<button class="icon-btn" data-colright="' + col.id + '" title="Move right">\u203A</button>' +
-          '<button class="icon-btn" data-coldel="' + col.id + '" title="Delete column">\uD83D\uDDD1\uFE0F</button>' +
+          '<button class="icon-btn" data-coldel="' + col.id + '" title="Delete column">&#215;</button>' +
         '</div>' +
       '</div>' +
       '<div class="cards" data-dropcol="' + col.id + '">' + (cards || '<div class="empty" style="padding:16px;font-size:12px;">No cards</div>') + '</div>' +
@@ -389,7 +389,7 @@
     if (cd.due) {
       const dd = diffDays(todayStr(), cd.due);
       const cls = dd < 0 ? " overdue" : (dd <= 3 ? " soon" : "");
-      dueHtml = '<span class="pill due' + cls + '">\uD83D\uDCC5 ' + dueLabel(cd.due) + '</span>';
+      dueHtml = '<span class="pill due' + cls + '">Due ' + dueLabel(cd.due) + '</span>';
     }
     const labelHtml = cd.label ? '<span class="pill label">' + esc(cd.label) + '</span>' : "";
     return '<div class="card prio-' + cd.prio + (cd.done ? ' done' : '') + '" draggable="true" data-card="' + cd.id + '">' +
@@ -397,7 +397,7 @@
         '<button data-mvleft="' + cd.id + '" title="Move left">\u2039</button>' +
         '<button data-mvright="' + cd.id + '" title="Move right">\u203A</button>' +
       '</div>' +
-      '<div class="c-title">' + (cd.done ? "\u2713 " : "") + esc(cd.title) + '</div>' +
+      '<div class="c-title">' + (cd.done ? "(done) " : "") + esc(cd.title) + '</div>' +
       ((dueHtml || labelHtml) ? '<div class="c-meta">' + dueHtml + labelHtml + '</div>' : '') +
     '</div>';
   }

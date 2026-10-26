@@ -83,8 +83,8 @@
   .btn.sm { padding: 6px 10px; font-size: 13px; }
   .icon-btn {
     background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 9px; width: 32px; height: 32px; font-size: 14px; cursor: pointer;
-    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 9px; min-width: 32px; height: 32px; padding: 0 9px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; font-family: inherit;
   }
 
   /* Trip cards */
@@ -156,8 +156,22 @@
   .row .r-body { flex: 1; min-width: 0; padding: 12px; }
   .row .r-title { font-size: 15px; font-weight: 600; }
   .row .r-note { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
-  .row .r-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 5px; opacity: .85; }
   .row.done .r-title { text-decoration: line-through; color: var(--muted); }
+
+  /* Route dot indicator (shown when a stop is in the Maps route) */
+  .route-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); margin-right: 7px; vertical-align: middle; }
+  .row.typed .route-dot { background: rgba(0,0,0,.6); }
+
+  /* Overflow (3-dot) menu */
+  .r-menu-wrap { flex: 0 0 auto; position: relative; display: flex; align-items: flex-start; padding: 8px 8px 0 0; }
+  .menu-btn { width: 34px; height: 34px; border-radius: 9px; background: transparent; border: 1px solid transparent; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .menu-btn:hover { background: var(--panel-2); color: var(--text); }
+  .row.typed .menu-btn { color: rgba(0,0,0,.6); }
+  .menu-pop { display: none; position: absolute; top: 40px; right: 6px; z-index: 50; min-width: 170px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.5); overflow: hidden; }
+  .menu-pop.open { display: block; }
+  .menu-item { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text); font-size: 14px; padding: 11px 14px; cursor: pointer; font-family: inherit; }
+  .menu-item:hover { background: var(--panel-2); }
+  .menu-item + .menu-item { border-top: 1px solid var(--line); }
 
   /* Travel leg row */
   .row.leg .r-time { color: var(--muted); font-weight: 600; }
@@ -198,6 +212,9 @@
   .field.two > div { flex: 1; }
   .field.inline { display: flex; align-items: center; gap: 8px; }
   .field.inline input[type=checkbox] { width: auto; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip-btn { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 7px 12px; font-size: 13px; cursor: pointer; font-family: inherit; }
+  .chip-btn.active { background: var(--gold); color: #10100e; border-color: var(--gold); font-weight: 700; }
   .field.inline label.rad { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--text); font-size: 13px; }
   .field.inline label.rad input[type=radio] { width: auto; }
   .seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
@@ -281,16 +298,16 @@
       <div class="day-strip" id="dayStrip"></div>
       <div class="day-title-row" style="display:flex; align-items:center; gap:10px; margin:4px 0 10px;">
         <div class="day-title" id="dayTitle" style="margin:0; flex:1;"></div>
-        <a id="mapsBtn" class="btn ghost sm" target="_blank" rel="noopener" style="text-decoration:none;">&#128506;&#65039; Open in Maps</a>
+        <a id="mapsBtn" class="btn ghost sm" target="_blank" rel="noopener" style="text-decoration:none;">Open in Maps</a>
       </div>
       <div class="legend" id="legendBar"></div>
       <div class="timeline" id="timeline"></div>
       <div class="add-row">
         <button class="btn" id="addStopBtn">+ Add stop</button>
         <button class="btn ghost" id="addLegBtn">+ Travel leg</button>
-        <button class="btn ghost" id="recalcBtn">&#8635; Recompute times</button>
-        <button class="btn ghost" id="scanBtn">&#128247; Scan</button>
-        <button class="btn ghost" id="linkBtn">&#128279; From Maps link</button>
+        <button class="btn ghost" id="recalcBtn">Recompute times</button>
+        <button class="btn ghost" id="scanBtn">Scan photo</button>
+        <button class="btn ghost" id="linkBtn">From Maps link</button>
         <button class="btn ghost" id="copyBtn">Copy text</button>
       </div>
       <div class="c-sub" style="font-size:11px;color:var(--muted);margin-top:2px;">Tip: drag the &#9775; handle (or use &#8963;/&#8964;) to reorder, then tap <b>Recompute times</b> to re-chain the schedule from the first stop.</div>
@@ -359,6 +376,19 @@
           <div><label>Start time</label><input id="imTime" type="time" /></div>
           <div><label>End time (optional)</label><input id="imEnd" type="time" /></div>
         </div>
+        <div class="field">
+          <label>Stay here (minutes)</label>
+          <div class="chip-row" id="stayChips">
+            <button type="button" class="chip-btn" data-stay="0">None</button>
+            <button type="button" class="chip-btn" data-stay="15">15 min</button>
+            <button type="button" class="chip-btn" data-stay="30">30 min</button>
+            <button type="button" class="chip-btn" data-stay="60">1 hr</button>
+            <button type="button" class="chip-btn" data-stay="120">2 hrs</button>
+            <button type="button" class="chip-btn" data-stay="180">3 hrs</button>
+          </div>
+          <input id="imStay" type="number" inputmode="numeric" min="0" placeholder="Custom minutes" style="margin-top:8px;" />
+          <div class="scan-note">Sets how long you stay. It fills the end time (start + stay) so the stop shows a time range.</div>
+        </div>
         <div class="field inline"><input type="checkbox" id="imApprox" /><label for="imApprox" style="margin:0;">Approximate time (show as &ldquo;~&rdquo;)</label></div>
         <div class="field"><label>Type / color</label><select id="imType"></select></div>
         <div class="field"><label>Title</label><input id="imTitle" placeholder="e.g. Bulacan: Welcome Arch (3 min)" /></div>
@@ -410,8 +440,8 @@
       <div class="modal-err" id="scanErr"></div>
       <div class="scan-box">
         <div class="scan-btns">
-          <button type="button" class="scan-btn" id="scanCamBtn">&#128247; Scan photo</button>
-          <button type="button" class="scan-btn" id="scanUpBtn">&#128444;&#65039; Upload image</button>
+          <button type="button" class="scan-btn" id="scanCamBtn">Take photo</button>
+          <button type="button" class="scan-btn" id="scanUpBtn">Upload image</button>
         </div>
         <div class="scan-note">Reads the photo on your device (offline). Nothing is uploaded. Review the entries, then confirm to add.</div>
         <input type="file" id="scanCamInput" accept="image/*" capture="environment" style="display:none" />
@@ -496,7 +526,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 138;
+  const APP_VERSION = 141;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -768,8 +798,8 @@
           (t.destination ? '<div class="tc-dest">' + esc(t.destination) + '</div>' : '') +
           '<div class="tc-dates">' + shortDate(t.start) + ' \u2013 ' + shortDate(t.end) + ' \u00b7 ' + days + ' day' + (days > 1 ? 's' : '') + '</div>' +
         '</div><div class="tc-actions">' +
-          '<button class="icon-btn" data-edit="' + t.id + '" title="Edit">\u270F\uFE0F</button>' +
-          '<button class="icon-btn" data-del="' + t.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
+          '<button class="icon-btn" data-edit="' + t.id + '" title="Edit">Edit</button>' +
+          '<button class="icon-btn" data-del="' + t.id + '" title="Delete">Del</button>' +
         '</div></div>' +
         (hasBudget ? '<div class="bar' + (over ? ' over' : '') + '"><span style="width:' + pct + '%"></span></div>' : '') +
         '<div class="mini-meta"><span>' + budgetLine + '</span>' + (over ? '<span style="color:var(--red)">Over budget</span>' : '') + '</div>' +
@@ -875,21 +905,37 @@
     const mapsBtn = document.getElementById("mapsBtn");
     const count = routeStops(t, state.ui.openDate).length;
     const url = dayMapsUrl(t, state.ui.openDate);
-    mapsBtn.innerHTML = "\uD83D\uDDFA\uFE0F Open in Maps" + (count ? " (" + count + ")" : "");
+    mapsBtn.innerHTML = "Open in Maps" + (count ? " (" + count + ")" : "");
     if (url) { mapsBtn.href = url; mapsBtn.style.display = ""; mapsBtn.style.opacity = "1"; mapsBtn.style.pointerEvents = "auto"; }
     else { mapsBtn.removeAttribute("href"); mapsBtn.style.opacity = ".4"; mapsBtn.style.pointerEvents = "none"; }
     const entries = dayEntries(t, state.ui.openDate);
     const wrap = document.getElementById("timeline");
     if (!entries.length) { wrap.innerHTML = '<div class="empty" style="padding:24px;">Nothing planned for this day yet.</div>'; return; }
     wrap.innerHTML = entries.map(it => it.kind === "leg" ? legRow(t, it) : stopRow(t, it)).join("");
-    wrap.querySelectorAll("[data-edit]").forEach(b => b.onclick = (e) => { e.stopPropagation(); openItemModal(t.id, b.getAttribute("data-edit")); });
-    wrap.querySelectorAll("[data-del]").forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteItem(t.id, b.getAttribute("data-del")); });
-    wrap.querySelectorAll("[data-done]").forEach(b => b.onclick = (e) => { e.stopPropagation(); toggleDone(t.id, b.getAttribute("data-done")); });
-    wrap.querySelectorAll("[data-pin]").forEach(b => b.onclick = (e) => { e.stopPropagation(); togglePin(t.id, b.getAttribute("data-pin")); });
-    wrap.querySelectorAll("[data-up]").forEach(b => b.onclick = (e) => { e.stopPropagation(); moveEntry(t.id, b.getAttribute("data-up"), -1); });
-    wrap.querySelectorAll("[data-down]").forEach(b => b.onclick = (e) => { e.stopPropagation(); moveEntry(t.id, b.getAttribute("data-down"), 1); });
+    // Overflow menu: open on tap, act on menu-item tap.
+    wrap.querySelectorAll("[data-menu]").forEach(b => b.onclick = (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-menu");
+      const pop = document.getElementById("menu-" + id);
+      const wasOpen = pop.classList.contains("open");
+      closeAllRowMenus();
+      if (!wasOpen) pop.classList.add("open");
+    });
+    wrap.querySelectorAll(".menu-item").forEach(mi => mi.onclick = (e) => {
+      e.stopPropagation();
+      const act = mi.getAttribute("data-act"), id = mi.getAttribute("data-id");
+      closeAllRowMenus();
+      if (act === "edit") openItemModal(t.id, id);
+      else if (act === "del") deleteItem(t.id, id);
+      else if (act === "done") toggleDone(t.id, id);
+      else if (act === "pin") togglePin(t.id, id);
+      else if (act === "up") moveEntry(t.id, id, -1);
+      else if (act === "down") moveEntry(t.id, id, 1);
+    });
     wireRowDrag(t, wrap);
   }
+  function closeAllRowMenus() { document.querySelectorAll(".menu-pop.open").forEach(p => p.classList.remove("open")); }
+  document.addEventListener("click", closeAllRowMenus);
   // ---------- Drag & drop reorder within a day ----------
   let dragRowId = null;
   function wireRowDrag(t, wrap) {
@@ -974,44 +1020,47 @@
     it.inRoute = !it.inRoute; persist(); renderTripDetail(t);
   }
 
+  // Single overflow (3-dot) menu per row — keeps rows clean and phone-friendly.
+  function rowMenu(it, isLeg) {
+    const mi = (act, label) => '<button class="menu-item" data-act="' + act + '" data-id="' + it.id + '">' + label + '</button>';
+    let items = mi("up", "Move up") + mi("down", "Move down");
+    if (!isLeg) {
+      items += mi("pin", it.inRoute ? "Remove from route" : "Add to route");
+      items += mi("done", it.done ? "Mark not done" : "Mark done");
+    }
+    items += mi("edit", "Edit") + mi("del", "Delete");
+    return '<div class="r-menu-wrap">' +
+      '<button class="menu-btn" data-menu="' + it.id + '" aria-label="Actions">\u22EF</button>' +
+      '<div class="menu-pop" id="menu-' + it.id + '">' + items + '</div>' +
+    '</div>';
+  }
   function stopRow(t, it) {
     const color = it.typeId ? legendColor(t, it.typeId) : "";
     const typed = !!color;
     const style = typed ? ' style="background:' + esc(color) + '"' : '';
     const td = timeDisplay(it);
     const costStr = it.cost ? ' <span class="cost-tag">' + fmtMoney(it.cost, t.currency) + '</span>' : '';
+    const routeDot = it.inRoute ? '<span class="route-dot" title="In Maps route"></span>' : '';
     return '<div class="row' + (typed ? ' typed' : '') + (it.done ? ' done' : '') + '" draggable="true" data-rowid="' + it.id + '"' + style + '>' +
-      '<span class="drag-h" title="Drag to reorder" data-handle="' + it.id + '">\u283F</span>' +
+      '<span class="drag-h" title="Drag to reorder" data-handle="' + it.id + '">\u2807</span>' +
       '<div class="r-time">' + (td ? esc(td) : '\u2014') + '</div>' +
       '<div class="r-body">' +
-        '<div class="r-title">' + esc(it.title) + costStr + '</div>' +
+        '<div class="r-title">' + routeDot + esc(it.title) + costStr + '</div>' +
         (it.note ? '<div class="r-note">' + esc(it.note) + '</div>' : '') +
-        '<div class="r-actions">' +
-          '<button class="icon-btn" data-up="' + it.id + '" title="Move up">\u2303</button>' +
-          '<button class="icon-btn" data-down="' + it.id + '" title="Move down">\u2304</button>' +
-          '<button class="icon-btn pin' + (it.inRoute ? ' on' : '') + '" data-pin="' + it.id + '" title="' + (it.inRoute ? 'In Maps route (tap to remove)' : 'Not in route (tap to add)') + '">\uD83D\uDCCD</button>' +
-          '<button class="icon-btn" data-done="' + it.id + '" title="Done">' + (it.done ? '\u21A9\uFE0F' : '\u2713') + '</button>' +
-          '<button class="icon-btn" data-edit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
-          '<button class="icon-btn" data-del="' + it.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
-        '</div>' +
       '</div>' +
+      rowMenu(it, false) +
     '</div>';
   }
   function legRow(t, it) {
     const route = (it.fromText || it.toText) ? (esc(it.fromText) + ' \u2192 ' + esc(it.toText)) : '';
     return '<div class="row leg" draggable="true" data-rowid="' + it.id + '">' +
-      '<span class="drag-h" title="Drag to reorder" data-handle="' + it.id + '">\u283F</span>' +
-      '<div class="r-time">\uD83C\uDFC3 ' + esc(it.label || "Takbo") + '</div>' +
+      '<span class="drag-h" title="Drag to reorder" data-handle="' + it.id + '">\u2807</span>' +
+      '<div class="r-time">' + esc(it.label || "Drive") + '</div>' +
       '<div class="r-body">' +
         '<div class="r-title"><span class="dur">' + esc(it.durationText || "\u2014") + '</span></div>' +
         (route ? '<div class="r-note route">' + route + '</div>' : '') +
-        '<div class="r-actions">' +
-          '<button class="icon-btn" data-up="' + it.id + '" title="Move up">\u2303</button>' +
-          '<button class="icon-btn" data-down="' + it.id + '" title="Move down">\u2304</button>' +
-          '<button class="icon-btn" data-edit="' + it.id + '" title="Edit">\u270F\uFE0F</button>' +
-          '<button class="icon-btn" data-del="' + it.id + '" title="Delete">\uD83D\uDDD1\uFE0F</button>' +
-        '</div>' +
       '</div>' +
+      rowMenu(it, true) +
     '</div>';
   }
 
@@ -1139,6 +1188,9 @@
     document.getElementById("stopFields").style.display = k === "stop" ? "" : "none";
     document.getElementById("legFields").style.display = k === "leg" ? "" : "none";
   }
+  function setStayChips(val) {
+    document.querySelectorAll("#stayChips .chip-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-stay") === String(val)));
+  }
   function fillTypeOptions(t, selId) {
     const sel = document.getElementById("imType");
     sel.innerHTML = '<option value="">Normal (no color)</option>' + t.legend.map(lg => '<option value="' + lg.id + '"' + (lg.id === selId ? ' selected' : '') + '>' + esc(lg.label) + '</option>').join("");
@@ -1155,6 +1207,11 @@
     // stop fields
     document.getElementById("imTime").value = (it && it.kind === "stop") ? it.time : "";
     document.getElementById("imEnd").value = (it && it.kind === "stop") ? it.endTime : "";
+    // Stay minutes: derive from an existing time range when editing.
+    let stayVal = "";
+    if (it && it.kind === "stop" && it.time && it.endTime) { const d = toMin(it.endTime) - toMin(it.time); if (d > 0) stayVal = String(d); }
+    document.getElementById("imStay").value = stayVal;
+    setStayChips(stayVal);
     document.getElementById("imApprox").checked = (it && it.kind === "stop") ? it.approx : false;
     document.getElementById("imTitle").value = (it && it.kind === "stop") ? it.title : "";
     document.getElementById("imNote").value = (it && it.kind === "stop") ? it.note : "";
@@ -1178,10 +1235,15 @@
     if (modalKind === "stop") {
       const title = document.getElementById("imTitle").value.trim();
       if (!title) { err.textContent = "Please enter a title."; return; }
+      const startT = document.getElementById("imTime").value || "";
+      let endT = document.getElementById("imEnd").value || "";
+      const stay = Math.max(0, Number(document.getElementById("imStay").value) || 0);
+      // If a stay is given and we have a start time, derive the end time from it.
+      if (stay > 0 && startT) endT = addMinutes(startT, stay);
       data = {
         kind: "stop", date: date,
-        time: document.getElementById("imTime").value || "",
-        endTime: document.getElementById("imEnd").value || "",
+        time: startT,
+        endTime: endT,
         approx: document.getElementById("imApprox").checked,
         typeId: document.getElementById("imType").value || "",
         title: title,
@@ -1238,7 +1300,7 @@
       '<div class="lg-edit-row" data-ty="' + lg.id + '">' +
         '<input type="color" value="' + esc(lg.color) + '" data-color />' +
         '<input type="text" value="' + esc(lg.label) + '" data-label />' +
-        '<button class="icon-btn" data-remove title="Remove">\uD83D\uDDD1\uFE0F</button>' +
+        '<button class="icon-btn" data-remove title="Remove">Remove</button>' +
       '</div>'
     ).join("");
     list.querySelectorAll(".lg-edit-row").forEach(row => {
@@ -1324,7 +1386,7 @@
     if (!scanParsed.length) { wrap.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:12px;">No entries.</div>'; return; }
     wrap.innerHTML = scanParsed.map(e => {
       if (e.kind === "leg") {
-        return '<div class="pv-row leg"><div class="pv-t">\uD83C\uDFC3 ' + esc(e.label || "Takbo") + '</div><div>' + esc(e.durationText || "") + (e.fromText || e.toText ? '  (' + esc(e.fromText) + ' \u2192 ' + esc(e.toText) + ')' : '') + '</div></div>';
+        return '<div class="pv-row leg"><div class="pv-t">' + esc(e.label || "Drive") + '</div><div>' + esc(e.durationText || "") + (e.fromText || e.toText ? '  (' + esc(e.fromText) + ' \u2192 ' + esc(e.toText) + ')' : '') + '</div></div>';
       }
       const color = e.typeId ? legendColor(t, e.typeId) : "";
       const dot = color ? '<span class="pv-dot" style="background:' + esc(color) + '"></span>' : '<span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span>';
@@ -1604,7 +1666,7 @@
     let html = "";
     linkStops.forEach((s, i) => {
       if (i > 0) {
-        html += '<div class="pv-row leg"><div class="pv-t">\uD83C\uDFC3 Drive</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+        html += '<div class="pv-row leg"><div class="pv-t">Drive</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
           '<input type="number" min="0" data-legmin="' + i + '" value="' + (Number(s.legMin) || 0) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 6px;font-size:12px;" /> min' +
           (s.km != null ? ' <span style="color:var(--muted)">\u2248' + s.km + ' km</span>' : ' <span style="color:var(--muted)">(est.)</span>') +
           '</div></div>';
@@ -1696,6 +1758,12 @@
   document.getElementById("imSave").onclick = saveItemModal;
   document.getElementById("segStop").onclick = () => setModalKind("stop");
   document.getElementById("segLeg").onclick = () => setModalKind("leg");
+  document.querySelectorAll("#stayChips .chip-btn").forEach(b => b.onclick = () => {
+    const v = b.getAttribute("data-stay");
+    document.getElementById("imStay").value = (v === "0") ? "" : v;
+    setStayChips(v);
+  });
+  document.getElementById("imStay").addEventListener("input", () => setStayChips(document.getElementById("imStay").value));
 
   document.getElementById("legAdd").onclick = addLegendType;
   document.getElementById("legDone").onclick = closeLegendModal;
