@@ -174,6 +174,22 @@
   .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
   .modal-actions .btn { flex: 1; }
 
+  /* Scan-to-fill (on-device OCR, same idea as debt.html) */
+  .scan-box { border: 1px dashed var(--line); border-radius: 12px; padding: 12px; margin-bottom: 14px; background: var(--panel-2); }
+  .scan-btns { display: flex; gap: 8px; }
+  .scan-btn {
+    flex: 1; background: transparent; border: 1px solid var(--gold); color: var(--gold-bright);
+    border-radius: 10px; padding: 9px 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  .scan-note { color: var(--muted); font-size: 11px; margin-top: 8px; line-height: 1.4; }
+  .scan-status { margin-top: 10px; }
+  .scan-prog { height: 8px; border-radius: 6px; background: var(--panel); overflow: hidden; }
+  .scan-bar { height: 100%; width: 0%; background: var(--gold); transition: width .2s ease; }
+  .scan-msg { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .scan-result { display: none; align-items: center; gap: 10px; margin-top: 10px; }
+  .scan-thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+  .scan-found { font-size: 12px; color: var(--green); }
+
   .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 28px; }
 
   @media print {
@@ -265,6 +281,26 @@
     <div class="modal">
       <h3 id="itemModalTitle">Add activity</h3>
       <div class="modal-err" id="itemModalErr"></div>
+
+      <!-- Scan a ticket / booking (on-device OCR, nothing uploaded) -->
+      <div class="scan-box">
+        <div class="scan-btns">
+          <button type="button" class="scan-btn" id="scanCamBtn">&#128247; Scan a ticket</button>
+          <button type="button" class="scan-btn" id="scanUpBtn">&#128444;&#65039; Upload image</button>
+        </div>
+        <div class="scan-note">Reads the photo on your device (offline). Nothing is uploaded. Check the fields after.</div>
+        <input type="file" id="scanCamInput" accept="image/*" capture="environment" style="display:none" />
+        <input type="file" id="scanUpInput" accept="image/*" style="display:none" />
+        <div class="scan-status" id="scanStatus" style="display:none">
+          <div class="scan-prog"><div class="scan-bar" id="scanBar"></div></div>
+          <div class="scan-msg" id="scanMsg">Reading ticket&hellip;</div>
+        </div>
+        <div class="scan-result" id="scanResult">
+          <img id="scanThumb" class="scan-thumb" alt="ticket" />
+          <div class="scan-found" id="scanFound"></div>
+        </div>
+      </div>
+
       <div class="field"><label>Day</label><select id="imDay"></select></div>
       <div class="field two">
         <div><label>Time (optional)</label><input id="imTime" type="time" /></div>
@@ -314,7 +350,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 122;
+  const APP_VERSION = 123;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -751,6 +787,7 @@
     document.getElementById("imCost").value = (it && it.cost) ? it.cost : "";
     document.getElementById("imNote").value = it ? it.note : "";
     document.getElementById("itemModalErr").textContent = "";
+    resetScanUI();
     document.getElementById("itemModalBg").classList.add("show");
   }
   function closeItemModal() { document.getElementById("itemModalBg").classList.remove("show"); }
@@ -787,6 +824,129 @@
     const t = findTrip(tripId); if (!t) return;
     const it = t.items.find(x => x.id === itemId); if (!it) return;
     it.done = !it.done; persist(); renderTripDetail(t);
+  }
+
+  // ---------- Scan a ticket -> fill fields (on-device OCR, same idea as debt.html) ----------
+  // The image is NEVER uploaded or stored. It's read locally by Tesseract.js, used to
+  // pre-fill the form, shown as a quick thumbnail, then discarded.
+  let tesseractLoading = null;
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (tesseractLoading) return tesseractLoading;
+    tesseractLoading = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.onload = () => resolve(window.Tesseract);
+      s.onerror = () => reject(new Error("Could not load the scanner. Check your connection and try again."));
+      document.head.appendChild(s);
+    });
+    return tesseractLoading;
+  }
+  function resetScanUI() {
+    const status = document.getElementById("scanStatus");
+    const result = document.getElementById("scanResult");
+    if (status) status.style.display = "none";
+    if (result) result.style.display = "none";
+    const bar = document.getElementById("scanBar"); if (bar) bar.style.width = "0%";
+    const found = document.getElementById("scanFound"); if (found) found.textContent = "";
+  }
+  async function handleTicketImage(file) {
+    if (!file) return;
+    const status = document.getElementById("scanStatus");
+    const result = document.getElementById("scanResult");
+    const bar = document.getElementById("scanBar");
+    const msg = document.getElementById("scanMsg");
+    const err = document.getElementById("itemModalErr");
+    result.style.display = "none";
+    status.style.display = "block";
+    bar.style.width = "5%";
+    msg.textContent = "Loading scanner\u2026";
+    err.textContent = "";
+
+    // quick thumbnail of what was captured (object URL, revoked after)
+    const thumbUrl = URL.createObjectURL(file);
+    document.getElementById("scanThumb").src = thumbUrl;
+
+    try {
+      const Tesseract = await loadTesseract();
+      msg.textContent = "Reading ticket\u2026";
+      const { data } = await Tesseract.recognize(file, "eng", {
+        logger: (m) => {
+          if (m.status === "recognizing text" && typeof m.progress === "number") {
+            bar.style.width = Math.max(10, Math.round(m.progress * 100)) + "%";
+          }
+        }
+      });
+      bar.style.width = "100%";
+      const text = (data && data.text) ? data.text : "";
+      const found = parseTicketText(text);
+      status.style.display = "none";
+
+      // Pre-fill whatever we confidently found (never clobber with blanks).
+      if (found.time) document.getElementById("imTime").value = found.time;
+      if (found.title) document.getElementById("imTitle").value = found.title;
+      if (found.location) document.getElementById("imLoc").value = found.location;
+      if (found.cost) document.getElementById("imCost").value = found.cost;
+      if (found.category) document.getElementById("imCat").value = found.category;
+
+      const bits = [];
+      if (found.time) bits.push("time " + found.time);
+      if (found.cost) bits.push("cost " + found.cost);
+      if (found.title) bits.push('"' + found.title + '"');
+      document.getElementById("scanFound").textContent = bits.length
+        ? "Found: " + bits.join(" \u00b7 ") + ". Please review."
+        : "Couldn't read much \u2014 please fill the fields manually.";
+      result.style.display = "flex";
+    } catch (e) {
+      status.style.display = "none";
+      err.textContent = (e && e.message) ? e.message : "Sorry, could not read that image. Try a clearer photo.";
+      bar.style.width = "0%";
+    } finally {
+      setTimeout(() => { try { URL.revokeObjectURL(thumbUrl); } catch (e) {} }, 15000);
+    }
+  }
+  // Pull a time, a cost, a likely title, and a category hint out of raw OCR text.
+  function parseTicketText(text) {
+    const out = { time: "", cost: 0, title: "", location: "", category: "" };
+    if (!text) return out;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const lower = text.toLowerCase();
+
+    // ---- Time: HH:MM, optional am/pm (e.g. "9:30 AM", "21:05") ----
+    const tm = text.match(/\b(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)?/i);
+    if (tm) {
+      let hh = parseInt(tm[1], 10), mm = parseInt(tm[2], 10);
+      const ap = (tm[3] || "").toLowerCase();
+      if (ap.startsWith("p") && hh < 12) hh += 12;
+      if (ap.startsWith("a") && hh === 12) hh = 0;
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+        out.time = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+      }
+    }
+
+    // ---- Cost: a currency-ish amount (prefer the largest sensible number) ----
+    const nums = [];
+    const re = /(?:php|usd|\u20b1|\$|\u00a5|jpy|eur|\u20ac)\s*([\d,]+(?:\.\d{1,2})?)|([\d,]+\.\d{2})\b/gi;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const raw = (m[1] || m[2] || "").replace(/,/g, "");
+      const v = parseFloat(raw);
+      if (!isNaN(v) && v > 0 && v < 100000000) nums.push(v);
+    }
+    if (nums.length) out.cost = Math.max.apply(null, nums);
+
+    // ---- Category hint from keywords ----
+    if (/\b(flight|airlines?|boarding|gate|departure|pnr|airport|terminal)\b/i.test(lower)) out.category = "Flight";
+    else if (/\b(hotel|check[\s-]?in|check[\s-]?out|reservation|room\s*no|booking)\b/i.test(lower)) out.category = "Hotel";
+    else if (/\b(train|bus|ferry|shuttle|transfer|taxi|grab|uber)\b/i.test(lower)) out.category = "Transport";
+    else if (/\b(restaurant|cafe|dinner|lunch|breakfast|menu)\b/i.test(lower)) out.category = "Food";
+    else if (/\b(ticket|admission|tour|museum|park|entry)\b/i.test(lower)) out.category = "Activity";
+
+    // ---- Title: first decent text line (skip pure numbers / short noise) ----
+    const titleLine = lines.find(l => /[a-z]/i.test(l) && l.replace(/[^a-z]/gi, "").length >= 4 && l.length <= 60);
+    if (titleLine) out.title = titleLine.replace(/\s{2,}/g, " ").trim();
+
+    return out;
   }
 
   // ---------- Copy as text ----------
@@ -841,6 +1001,12 @@
   document.getElementById("tmSave").onclick = saveTripModal;
   document.getElementById("imCancel").onclick = closeItemModal;
   document.getElementById("imSave").onclick = saveItemModal;
+
+  // Scan-to-fill wiring (camera + upload; both read on-device, nothing uploaded)
+  document.getElementById("scanCamBtn").onclick = () => document.getElementById("scanCamInput").click();
+  document.getElementById("scanUpBtn").onclick = () => document.getElementById("scanUpInput").click();
+  document.getElementById("scanCamInput").addEventListener("change", (e) => { handleTicketImage(e.target.files[0]); e.target.value = ""; });
+  document.getElementById("scanUpInput").addEventListener("change", (e) => { handleTicketImage(e.target.files[0]); e.target.value = ""; });
   document.getElementById("tripModalBg").addEventListener("click", (e) => { if (e.target.id === "tripModalBg") closeTripModal(); });
   document.getElementById("itemModalBg").addEventListener("click", (e) => { if (e.target.id === "itemModalBg") closeItemModal(); });
 
