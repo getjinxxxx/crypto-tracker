@@ -128,6 +128,13 @@
   .si-row .si-lbl { flex: 1; }
   .si-row .si-price { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
   .si-row.off { opacity: 0.45; }
+  .si-lbl-in { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 14px; }
+  .si-price-in { width: 90px; flex: 0 0 auto; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 14px; text-align: right; }
+  .si-del { flex: 0 0 auto; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+    width: 30px; height: 30px; border-radius: 8px; font-size: 18px; line-height: 1; cursor: pointer; }
+  .si-del:active { transform: scale(0.92); }
   .si-total { display: flex; justify-content: space-between; align-items: center; padding: 10px 2px 0; font-size: 15px; }
   .si-total b { color: var(--gold-bright); font-variant-numeric: tabular-nums; }
   .si-mode { display: flex; flex-direction: column; gap: 6px; }
@@ -651,6 +658,7 @@
           <div class="scan-found" id="scanItemsCount"></div>
         </div>
         <div id="scanItemsList" class="si-list"></div>
+        <button type="button" class="btn" id="siAddRow" style="margin-top:8px;font-size:13px;padding:8px 12px">+ Add row</button>
         <div class="si-total"><span>Selected total</span><b id="scanItemsTotal">PHP 0.00</b></div>
 
         <div class="field" style="margin-top:12px">
@@ -2152,10 +2160,24 @@
       });
       bar.style.width = "100%";
       const text = (data && data.text) ? data.text : "";
+      const confidence = (data && typeof data.confidence === "number") ? data.confidence : 100;
       const found = parseBillText(text);
       status.style.display = "none";
-      if (found.items && found.items.length >= 2) {
-        // bulk / itemized receipt -> open the multi-item picker
+
+      // --- D: decide the best path based on what we could read ---
+      const hasMoneyNumbers = /\b\d{2,}\b/.test(text);
+      const looksMessy = confidence < 70;          // Tesseract not confident (often handwriting)
+      const fewCleanItems = (found.items ? found.items.length : 0) < 2;
+
+      if (found.items && found.items.length >= 2 && !looksMessy) {
+        // clean multi-item receipt -> editable picker (prefilled)
+        result.style.display = "none";
+        openScanItems(found, thumbUrl);
+      } else if (looksMessy || (fewCleanItems && hasMoneyNumbers && found.amount <= 0)) {
+        // handwritten / messy / couldn't parse cleanly -> manual-assist grid (OCR guesses prefilled)
+        result.style.display = "none";
+        openManualAssist(found, thumbUrl);
+      } else if (found.items && found.items.length >= 2) {
         result.style.display = "none";
         openScanItems(found, thumbUrl);
       } else {
@@ -2184,11 +2206,15 @@
     const items = [];
     lines.forEach(line => {
       // skip obvious totals/subtotals so they don't become a line item
-      if (/subtotal|total|amount due|balance|shipping|voucher|discount|grand total/i.test(line)) return;
-      const m = line.match(/^(.*?[a-z].*?)\s+([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]+\.[0-9]{2})\s*$/i);
+      if (/subtotal|grand total|amount due|balance due|statement balance/i.test(line)) return;
+      // label + trailing price. Accept decimals (1,234.56) OR plain integers (1800, 250)
+      // so column / handwritten receipts also match.
+      const m = line.match(/^(.*?[a-z].*?)[\s\.:]+([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]{2,7})\s*$/i);
       if (m) {
         const label = m[1].replace(/\s{2,}/g, " ").trim();
         const price = parseFloat(m[2].replace(/,/g, ""));
+        // ignore a line that is itself a "total" label
+        if (/^total\b/i.test(label)) return;
         if (label.replace(/[^a-z]/gi, "").length >= 2 && isFinite(price) && price > 0) {
           items.push({ label: label.slice(0, 40), price: price });
         }
@@ -2239,6 +2265,18 @@
       if (dplain) day = parseInt(dplain[1], 10);
     }
     if (day >= 1 && day <= 31) out.dueDay = day;
+
+    // Fallback: a "DATE 10-25" / "10/25/26" anywhere -> use the day part as a hint.
+    if (!out.dueDay) {
+      const dateLine = lines.find(l => /date/i.test(l)) || text;
+      const gd = dateLine.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+      if (gd) {
+        const a = parseInt(gd[1], 10), b = parseInt(gd[2], 10);
+        // "10-25": a=month(10), b=day(25). Guard to a valid day.
+        const guess = (b >= 1 && b <= 31) ? b : ((a >= 1 && a <= 31) ? a : 0);
+        if (guess >= 1 && guess <= 31) out.dueDay = guess;
+      }
+    }
 
     // ---- Biller / name ----
     // Known billers (also flag as recurring) take priority, else first strong text line.
@@ -2313,25 +2351,73 @@
   }
   function closeScanItems() { document.getElementById("scanItemsOverlay").classList.remove("open"); }
 
+  // D fallback: handwritten / messy receipt -> open the SAME picker but as an
+  // editable grid, seeded with whatever OCR guessed (often just the numbers).
+  function openManualAssist(found, thumbUrl) {
+    let seed = (found.items && found.items.length) ? found.items.slice() : [];
+    // if we have no clean item lines, try seeding rows from any stray numbers found
+    if (seed.length < 1 && found.raw) {
+      const nums = [];
+      (found.raw.match(/\b\d{2,3}(?:,\d{3})*(?:\.\d{2})?\b|\b\d{2,7}\b/g) || []).forEach(t => {
+        const v = parseFloat(t.replace(/,/g, ""));
+        if (isFinite(v) && v >= 10) nums.push(v);
+      });
+      nums.slice(0, 8).forEach(v => seed.push({ label: "", price: v }));
+    }
+    if (!seed.length) seed = [{ label: "", price: 0 }, { label: "", price: 0 }, { label: "", price: 0 }];
+    scanItemsData = seed.map(it => ({ label: it.label || "", price: it.price || 0, on: true }));
+
+    document.getElementById("scanItemsThumb").src = thumbUrl;
+    document.getElementById("scanItemsCount").innerHTML =
+      "<b>Mahirap basahin (sulat-kamay?).</b> I-type/itama ang <b>item</b> at <b>presyo</b> gamit ang litrato bilang gabay.";
+    document.getElementById("siName").value = found.name || "";
+    document.getElementById("siDueDay").value = (found.dueDay >= 1 && found.dueDay <= 31) ? found.dueDay : "";
+    document.getElementById("siTerms").value = "1";
+    document.getElementById("siPaydays").value = "";
+    document.getElementById("siErr").textContent = "";
+    setSiPayMode("monthly");
+    renderScanItems();
+    syncSiMode();
+    document.getElementById("scanItemsOverlay").classList.add("open");
+  }
+
   function renderScanItems() {
     const box = document.getElementById("scanItemsList");
     box.innerHTML = scanItemsData.map((it, i) =>
-      '<label class="si-row' + (it.on ? "" : " off") + '">' +
-        '<input type="checkbox" data-si="' + i + '"' + (it.on ? " checked" : "") + '>' +
-        '<span class="si-lbl">' + it.label.replace(/</g, "&lt;") + '</span>' +
-        '<span class="si-price">' + peso(it.price) + '</span>' +
-      '</label>'
+      '<div class="si-row' + (it.on ? "" : " off") + '">' +
+        '<input type="checkbox" data-sichk="' + i + '"' + (it.on ? " checked" : "") + '>' +
+        '<input type="text" class="si-lbl-in" data-silbl="' + i + '" value="' + String(it.label).replace(/"/g, "&quot;") + '" placeholder="Item">' +
+        '<input type="text" inputmode="decimal" class="si-price-in" data-siprc="' + i + '" value="' + (it.price ? it.price : "") + '" placeholder="0.00">' +
+        '<button type="button" class="si-del" data-sidel="' + i + '" title="Remove">&times;</button>' +
+      '</div>'
     ).join("");
-    box.querySelectorAll("[data-si]").forEach(chk => chk.addEventListener("change", () => {
-      const i = parseInt(chk.getAttribute("data-si"), 10);
+    box.querySelectorAll("[data-sichk]").forEach(chk => chk.addEventListener("change", () => {
+      const i = parseInt(chk.getAttribute("data-sichk"), 10);
       scanItemsData[i].on = chk.checked;
       chk.closest(".si-row").classList.toggle("off", !chk.checked);
       updateScanItemsTotal();
     }));
+    box.querySelectorAll("[data-silbl]").forEach(inp => inp.addEventListener("input", () => {
+      scanItemsData[parseInt(inp.getAttribute("data-silbl"), 10)].label = inp.value;
+    }));
+    box.querySelectorAll("[data-siprc]").forEach(inp => inp.addEventListener("input", () => {
+      scanItemsData[parseInt(inp.getAttribute("data-siprc"), 10)].price = num(inp.value);
+      updateScanItemsTotal();
+    }));
+    box.querySelectorAll("[data-sidel]").forEach(btn => btn.addEventListener("click", () => {
+      const i = parseInt(btn.getAttribute("data-sidel"), 10);
+      scanItemsData.splice(i, 1);
+      if (!scanItemsData.length) scanItemsData.push({ label: "", price: 0, on: true });
+      renderScanItems();
+    }));
     updateScanItemsTotal();
   }
+  function addScanItemRow() {
+    scanItemsData.push({ label: "", price: 0, on: true });
+    renderScanItems();
+  }
   function updateScanItemsTotal() {
-    const t = scanItemsData.filter(x => x.on).reduce((s, x) => s + x.price, 0);
+    const t = scanItemsData.filter(x => x.on).reduce((s, x) => s + num(x.price), 0);
     document.getElementById("scanItemsTotal").textContent = peso(t);
   }
   function siMode() {
@@ -2359,9 +2445,10 @@
   }
 
   function addScannedItems() {
-    const chosen = scanItemsData.filter(x => x.on);
+    const chosen = scanItemsData.filter(x => x.on && num(x.price) > 0)
+      .map(x => ({ label: (String(x.label).trim() || "Item"), price: num(x.price) }));
     const err = document.getElementById("siErr");
-    if (!chosen.length) { err.textContent = "Pumili ng kahit isang item."; return; }
+    if (!chosen.length) { err.textContent = "Pumili/maglagay ng kahit isang item na may presyo."; return; }
     let dueDay = Math.round(num(document.getElementById("siDueDay").value));
     if (!(dueDay >= 1 && dueDay <= 31)) {
       err.textContent = "Ilagay ang Due day (1-31) \u2014 wala ito sa litrato.";
@@ -2467,6 +2554,7 @@
     document.getElementById("siPmMonthly").addEventListener("click", () => setSiPayMode("monthly"));
     document.getElementById("siPmPayday").addEventListener("click", () => setSiPayMode("payday"));
     document.getElementById("siPaydays").addEventListener("input", () => document.getElementById("siPaydays").classList.remove("need-fill"));
+    document.getElementById("siAddRow").addEventListener("click", addScanItemRow);
     document.getElementById("scanItemsOverlay").addEventListener("click", (e) => {
       if (e.target === document.getElementById("scanItemsOverlay")) closeScanItems();
     });
@@ -2539,7 +2627,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 116;
+  const APP_VERSION = 117;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
