@@ -87,6 +87,18 @@
     display: inline-flex; align-items: center; justify-content: center; font-family: inherit;
   }
 
+  /* Trip detail: info (left) + schedule (right) on wide screens */
+  .trip-grid { display: block; }
+  @media (min-width: 980px) {
+    .trip-grid { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+    .trip-left { position: sticky; top: 16px; }
+  }
+  /* Trips list as a 2-up card grid on wide screens */
+  @media (min-width: 760px) {
+    #tripsList { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+    #tripsList .trip-card { margin-bottom: 0; }
+  }
+
   /* Trip cards */
   .trip-card {
     background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
@@ -288,29 +300,37 @@
     <!-- VIEW B: trip detail -->
     <div id="viewTrip" style="display:none;">
       <button class="btn ghost sm" id="backBtn" style="margin-bottom:12px;">&larr; All trips</button>
-      <div class="trip-head" id="tripHead"></div>
-      <div class="summary" id="tripSummary"></div>
-      <div class="day-nav">
-        <button class="icon-btn" id="prevDay">&lsaquo;</button>
-        <select id="daySelect"></select>
-        <button class="icon-btn" id="nextDay">&rsaquo;</button>
+      <div class="trip-grid">
+        <!-- LEFT: trip info + budget + day navigator + legend -->
+        <aside class="trip-left">
+          <div class="trip-head" id="tripHead"></div>
+          <div class="summary" id="tripSummary"></div>
+          <div class="day-nav">
+            <button class="icon-btn" id="prevDay">&lsaquo;</button>
+            <select id="daySelect"></select>
+            <button class="icon-btn" id="nextDay">&rsaquo;</button>
+          </div>
+          <div class="day-strip" id="dayStrip"></div>
+          <div class="legend" id="legendBar"></div>
+        </aside>
+        <!-- RIGHT: the day's schedule/timeline + actions -->
+        <section class="trip-right">
+          <div class="day-title-row" style="display:flex; align-items:center; gap:10px; margin:0 0 10px;">
+            <div class="day-title" id="dayTitle" style="margin:0; flex:1;"></div>
+            <a id="mapsBtn" class="btn ghost sm" target="_blank" rel="noopener" style="text-decoration:none;">Open in Maps</a>
+          </div>
+          <div class="timeline" id="timeline"></div>
+          <div class="add-row">
+            <button class="btn" id="addStopBtn">+ Add stop</button>
+            <button class="btn ghost" id="addLegBtn">+ Travel leg</button>
+            <button class="btn ghost" id="recalcBtn">Recompute times</button>
+            <button class="btn ghost" id="scanBtn">Scan photo</button>
+            <button class="btn ghost" id="linkBtn">From Maps link</button>
+            <button class="btn ghost" id="copyBtn">Copy text</button>
+          </div>
+          <div class="c-sub" style="font-size:11px;color:var(--muted);margin-top:2px;">Tip: drag the &#9775; handle (or use &#8963;/&#8964;) to reorder, then tap <b>Recompute times</b> to re-chain the schedule from the first stop.</div>
+        </section>
       </div>
-      <div class="day-strip" id="dayStrip"></div>
-      <div class="day-title-row" style="display:flex; align-items:center; gap:10px; margin:4px 0 10px;">
-        <div class="day-title" id="dayTitle" style="margin:0; flex:1;"></div>
-        <a id="mapsBtn" class="btn ghost sm" target="_blank" rel="noopener" style="text-decoration:none;">Open in Maps</a>
-      </div>
-      <div class="legend" id="legendBar"></div>
-      <div class="timeline" id="timeline"></div>
-      <div class="add-row">
-        <button class="btn" id="addStopBtn">+ Add stop</button>
-        <button class="btn ghost" id="addLegBtn">+ Travel leg</button>
-        <button class="btn ghost" id="recalcBtn">Recompute times</button>
-        <button class="btn ghost" id="scanBtn">Scan photo</button>
-        <button class="btn ghost" id="linkBtn">From Maps link</button>
-        <button class="btn ghost" id="copyBtn">Copy text</button>
-      </div>
-      <div class="c-sub" style="font-size:11px;color:var(--muted);margin-top:2px;">Tip: drag the &#9775; handle (or use &#8963;/&#8964;) to reorder, then tap <b>Recompute times</b> to re-chain the schedule from the first stop.</div>
     </div>
 
     <div class="foot">Personal use only &bull; data stays on your device &amp; syncs to your cloud</div>
@@ -526,7 +546,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 143;
+  const APP_VERSION = 144;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
