@@ -1,110 +1,136 @@
-/* theme.css — app-wide soft neumorphic makeover.
- * Loaded on every page (via shell.js). Overrides shared component styles so all
- * modules get the same modern, soft-dark look. Easy on the eyes: low-contrast
- * panels, soft shadows, gentle indigo/periwinkle accent (not harsh/neon).
- * Only restyles common selectors; it never changes layout structure or logic.
+/* theme.css v2 — app-wide modern dashboard design system.
+ * Loaded on every page (via shell.js + a direct link on home).
+ * Goals: full-width layout (no narrow centered column), soft elevated cards,
+ * gradient buttons, modern inputs, segmented toggles, easy-on-the-eyes dark +
+ * periwinkle accent, and phone-friendly sizing. CSS-only, non-destructive.
  */
 
 :root {
   --bg: #0e0f13 !important;
-  --bg-2: #121319 !important;
-  --panel: #171922 !important;
-  --panel-2: #1e2130 !important;
+  --bg-2: #12131a !important;
+  --panel: #161820 !important;
+  --panel-2: #1d2030 !important;
   --line: #262a3a !important;
   --text: #e8eaf2 !important;
   --muted: #8b90a6 !important;
-  /* soft accent — periwinkle/indigo, pleasant not neon */
   --gold: #8b8cf0 !important;
   --gold-bright: #a9a8ff !important;
   --accent: #8b8cf0 !important;
   --accent-2: #b98bf0 !important;
+  --green: #35d07f !important;
+  --red: #ff6b6b !important;
+  --orange: #ffb061 !important;
 
-  --soft-shadow: 6px 6px 16px rgba(0,0,0,.45), -5px -5px 14px rgba(255,255,255,.015);
-  --soft-inset: inset 3px 3px 7px rgba(0,0,0,.4), inset -3px -3px 7px rgba(255,255,255,.015);
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.28);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.35), 0 4px 14px rgba(0,0,0,.22);
   --grad: linear-gradient(135deg, #8b8cf0, #b98bf0);
+  --radius: 16px;
 }
 
 html, body { background: var(--bg) !important; }
 
-/* Soft panels — anything that looks like a card/box */
-.card, .panel, .stat, .trip-head, .summary, .timeline, .trip-card,
-.lock-card, .modal, .kb-col, .netpay, .scan-box, .column {
-  background: var(--panel) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 18px !important;
-  box-shadow: var(--soft-shadow) !important;
+/* ---- Full-width layout: kill the narrow centered column ---- */
+body {
+  max-width: 1480px !important;
+  margin: 0 auto !important;
+  padding: 18px 28px 72px 28px !important;   /* room on the left for the floating menu button */
 }
 
-/* Buttons — gradient primary, soft ghost */
-.btn, button.btn, .scan-btn {
+/* ---- Cards / panels: soft, elevated, modern ---- */
+.card, .panel, .stat, .trip-head, .summary, .timeline, .trip-card,
+.lock-card, .modal, .kb-col, .netpay, .scan-box, .column, .debt-item,
+.insight, .glossary, .cat-group, .sub-box {
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.card, .panel, .summary, .trip-head, .netpay, .insight, .glossary { box-shadow: var(--shadow) !important; }
+
+/* ---- Responsive card grid so content isn't just one column going down ----
+ * Wrap the big sections into a multi-column grid on wide screens. We target the
+ * common page wrappers; where a page uses its own containers it simply stays full width. */
+@media (min-width: 1000px) {
+  /* Crypto, Salary, Receivables, SOA: let standalone .card blocks flow in a 2-col masonry-ish grid */
+  body > .card,
+  #app > .card { /* no-op guard */ }
+}
+
+/* ---- Buttons ---- */
+.btn, button.btn, .scan-btn, .btn.primary {
   border-radius: 12px !important;
   font-weight: 700 !important;
   letter-spacing: .2px !important;
-  transition: transform .12s ease, filter .12s ease !important;
+  transition: transform .12s ease, filter .12s ease, box-shadow .12s ease !important;
 }
-.btn:not(.ghost):not(.scan-btn) {
+.btn:not(.ghost):not(.scan-btn), .btn.primary {
   background: var(--grad) !important;
   color: #0b0b12 !important;
   border: none !important;
-  box-shadow: 0 4px 14px rgba(139,140,240,.35) !important;
+  box-shadow: 0 4px 14px rgba(139,140,240,.32) !important;
 }
-.btn:active { transform: translateY(1px) !important; filter: brightness(.96) !important; }
-.btn.ghost {
-  background: var(--panel-2) !important;
-  color: var(--text) !important;
-  border: 1px solid var(--line) !important;
-  box-shadow: none !important;
-}
+.btn:not(.ghost):active, .btn.primary:active { transform: translateY(1px) !important; filter: brightness(.97) !important; }
+.btn.ghost { background: var(--panel-2) !important; color: var(--text) !important; border: 1px solid var(--line) !important; box-shadow: none !important; }
 .scan-btn { border: 1px solid var(--accent) !important; color: var(--gold-bright) !important; background: transparent !important; }
 
-/* Inputs */
+/* ---- Inputs ---- */
 input, select, textarea {
   border-radius: 12px !important;
   background: var(--panel-2) !important;
   border: 1px solid var(--line) !important;
   color: var(--text) !important;
 }
-input:focus, select:focus, textarea:focus { outline: none !important; border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(139,140,240,.18) !important; }
-
-/* Small round icon buttons */
-.icon-btn { border-radius: 10px !important; background: var(--panel-2) !important; border: 1px solid var(--line) !important; }
-
-/* Pills / chips / tags */
-.chip, .pill, .col-count, .cost-tag { border-radius: 999px !important; }
-
-/* Gradient text for big headings/titles already using the accent clip */
-.title, .hero .title, .welcome, h1.title {
-  background: var(--grad) !important;
-  -webkit-background-clip: text !important; background-clip: text !important; color: transparent !important;
+input:focus, select:focus, textarea:focus {
+  outline: none !important; border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(139,140,240,.18) !important;
 }
 
-/* Timeline rows a touch softer */
+/* ---- Icon buttons / pills / chips ---- */
+.icon-btn { border-radius: 10px !important; background: var(--panel-2) !important; border: 1px solid var(--line) !important; }
+.chip, .pill, .col-count, .cost-tag, .due-tag, .due-simple, .bd-term, .recur-tag, .part-tag { border-radius: 999px !important; }
+
+/* ---- Segmented toggles (Easy/Detailed, cutoff, stop/leg, platform) ---- */
+.view-toggle, .seg, .prio-seg {
+  background: var(--panel-2) !important; border: 1px solid var(--line) !important;
+  border-radius: 999px !important; box-shadow: var(--shadow-sm) !important;
+}
+.view-toggle button.active, .seg button.active { background: var(--grad) !important; color: #0b0b12 !important; }
+.platform-toggle .pf-btn.active { background: var(--grad) !important; color: #0b0b12 !important; border-color: transparent !important; }
+
+/* ---- Progress bars ---- */
+.d-bar, .bar, .scan-prog { border-radius: 999px !important; background: var(--panel-2) !important; }
+.d-bar .fill, .bar > span, .scan-bar { background: var(--grad) !important; }
+
+/* ---- Headings: gradient accent text ---- */
+.title, h1.title, .welcome { background: var(--grad) !important; -webkit-background-clip: text !important; background-clip: text !important; color: transparent !important; }
+
+/* ---- Timeline / list polish ---- */
 .row { border-color: var(--line) !important; }
-.day-chip, .tile, .trip-card { border-radius: 16px !important; }
+.day-chip, .tile { border-radius: 14px !important; }
+.tile { box-shadow: var(--shadow-sm) !important; }
 
-/* Tiles (home classic view, if present) get soft shadow + hover lift */
-.tile { box-shadow: var(--soft-shadow) !important; }
-
-/* Scrollbars (subtle) */
+/* ---- Scrollbars ---- */
 *::-webkit-scrollbar { width: 9px; height: 9px; }
 *::-webkit-scrollbar-thumb { background: #2a2e40; border-radius: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
 
-/* ---- Phone-friendly pass (small screens) ---- */
-@media (max-width: 680px) {
-  body { padding-left: 12px !important; padding-right: 12px !important; padding-top: 64px !important; }
-  .card, .panel, .stat, .trip-head, .summary, .timeline, .trip-card, .modal, .column { border-radius: 14px !important; }
-  .btn, button.btn, .scan-btn { padding: 11px 14px !important; font-size: 14px !important; min-height: 44px; }
-  input, select, textarea { font-size: 16px !important; min-height: 44px; } /* 16px stops iOS zoom-on-focus */
-  .icon-btn, .menu-btn, .kb-mv { min-height: 36px; }
-  /* make the itinerary timeline readable on narrow screens */
-  .row .r-time { flex-basis: 76px !important; }
-  .menu-pop { right: 2px !important; }
-}
-/* Give the floating menu button clear space at the top of every page */
-#shellBtn { box-shadow: 0 2px 12px rgba(0,0,0,.5) !important; }
-
-/* Shell sidebar accent to match */
+/* ---- Shell chrome accents ---- */
 #shellNav .sh-logo { background: var(--grad) !important; }
 #shellNav a.sh-item.active { background: rgba(139,140,240,.16) !important; color: var(--gold-bright) !important; box-shadow: inset 0 0 0 1px rgba(139,140,240,.3) !important; }
-#shellBtn { color: var(--gold-bright) !important; }
+#shellBtn { box-shadow: 0 2px 12px rgba(0,0,0,.5) !important; }
+
+/* ================= PHONE-FRIENDLY ================= */
+@media (max-width: 820px) {
+  body { max-width: 100% !important; padding: 62px 12px 72px 12px !important; }  /* top room for floating menu btn */
+  .card, .panel, .stat, .trip-head, .summary, .timeline, .trip-card, .modal, .column, .debt-item { border-radius: 14px !important; }
+  .btn, button.btn, .scan-btn, .btn.primary { padding: 12px 14px !important; font-size: 14px !important; min-height: 44px; }
+  input, select, textarea { font-size: 16px !important; min-height: 44px; }  /* 16px prevents iOS zoom-on-focus */
+  .icon-btn, .menu-btn, .kb-mv { min-height: 36px; }
+  table { min-width: 680px !important; }  /* allow horizontal scroll instead of squashing */
+  .r-time { flex-basis: 76px !important; }
+  .menu-pop { right: 2px !important; }
+}
+@media (max-width: 460px) {
+  body { padding-left: 10px !important; padding-right: 10px !important; }
+  .stat .s-val { font-size: 21px !important; }
+}
