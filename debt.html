@@ -442,6 +442,15 @@
   .due-tag.u-over { background: rgba(255,107,107,0.18); color: #ff8a8a; }
   .due-tag.u-soon { background: rgba(255,159,107,0.18); color: #ffb48a; }
   .due-tag.u-up   { background: rgba(52,211,153,0.15); color: #4fd1a5; }
+
+  /* 2-column dashboard grid on wide screens: advanced cards tile side by side,
+     while the toggles, summary and the main debt list stay full width. */
+  @media (min-width: 900px) {
+    #app:not(.hidden) { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    #app > .topbar, #app > .view-toggle, #app > #cutoffToggle, #app > .month-bar,
+    #app > .summary, #app > #debtList { grid-column: 1 / -1; }
+    #app > .card { margin-bottom: 0; }
+  }
 </style>
 </head>
 <body class="locked">
@@ -2756,7 +2765,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 142;
+  const APP_VERSION = 143;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {

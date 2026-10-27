@@ -189,6 +189,13 @@
   select.period-sel:focus { outline: none; border-color: var(--gold); }
 
   .note { color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 2px; }
+
+  /* 2-column dashboard grid on wide screens (cards tile side by side) */
+  @media (min-width: 900px) {
+    #app:not(.hidden) { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    #app > .topbar, #app > .netpay, #app > .foot, #app > .view-toggle { grid-column: 1 / -1; }
+    #app > .card { margin-bottom: 0; }
+  }
 </style>
 </head>
 <body class="locked">
@@ -1293,7 +1300,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 142;
+  const APP_VERSION = 143;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {

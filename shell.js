@@ -12,7 +12,7 @@
   window.__shellLoaded = true;
 
   var FILE = (location.pathname.split("/").pop() || "home.html").toLowerCase();
-  var APP_VERSION = 142; // keep in sync with version.json
+  var APP_VERSION = 143; // keep in sync with version.json
 
   var NAV = [
     { group: "Main" },
