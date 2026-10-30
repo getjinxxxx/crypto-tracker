@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>Shared Itinerary</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --bg: #000000; --panel: #16161a; --panel-2: #232329; --line: #2a2a30;
+    --text: #f2f2f7; --muted: #8e8e93; --gold: #d4a017; --gold-bright: #f5c542;
+    --danger: #ff6b6b; --green: #34d399; --red: #ff6b6b;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); max-width: 820px; margin: 0 auto; padding: 14px 14px 72px; line-height: 1.4; min-height: 100vh;
+  }
+  .topbar { display: flex; align-items: center; gap: 10px; margin: 10px 0 18px; }
+  .topbar .title {
+    font-size: 22px; font-weight: 800; letter-spacing: .3px; margin: 0; flex: 1;
+    background: linear-gradient(90deg, var(--gold-bright), var(--gold));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+
+  .trip-head { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+  .trip-head .th-name { font-size: 20px; font-weight: 800; }
+  .trip-head .th-dest { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .trip-head .th-dates { color: var(--gold-bright); font-size: 12px; margin-top: 6px; }
+
+  .summary { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 14px; }
+  .summary .sum-row { display: flex; justify-content: space-between; font-size: 14px; margin: 4px 0; }
+  .summary .sum-row.big { font-size: 16px; font-weight: 700; }
+  .summary .over { color: var(--red); } .summary .under { color: var(--green); }
+  .bar { height: 8px; border-radius: 6px; background: var(--panel-2); overflow: hidden; margin-top: 10px; }
+  .bar > span { display: block; height: 100%; background: var(--green); }
+  .bar.over > span { background: var(--red); }
+  .cat-list { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .cat-list .cat-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin: 3px 0; }
+
+  .day-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
+  .day-chip { flex: 0 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; cursor: pointer; text-align: center; min-width: 78px; }
+  .day-chip.active { border-color: var(--gold); background: var(--panel-2); }
+  .day-chip .dc-dow { font-size: 11px; color: var(--muted); }
+  .day-chip .dc-date { font-size: 15px; font-weight: 700; }
+  .day-chip .dc-meta { font-size: 11px; color: var(--gold-bright); margin-top: 2px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 2px 0 12px; }
+  .legend .lg-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend .lg-dot { width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
+
+  .day-title { font-size: 15px; font-weight: 700; margin: 4px 0 10px; }
+  .timeline { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); margin-bottom: 14px; }
+  .row { display: flex; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: none; }
+  .row .r-time { flex: 0 0 92px; padding: 12px 10px; font-size: 12px; font-weight: 700; color: var(--text); border-right: 1px solid var(--line); word-break: break-word; }
+  .row .r-body { flex: 1; min-width: 0; padding: 12px; }
+  .row .r-title { font-size: 15px; font-weight: 600; }
+  .row .r-note { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .row.done .r-title { text-decoration: line-through; color: var(--muted); }
+  .row.typed .r-time, .row.typed .r-body { color: #10100e; }
+  .row.typed .r-note { color: rgba(0,0,0,.72); }
+  .row.typed .r-time { border-right-color: rgba(0,0,0,.18); }
+  .row.leg .r-time { color: var(--muted); font-weight: 600; }
+  .row.leg .r-title { font-size: 13.5px; font-weight: 600; }
+  .row.leg .r-body .dur { font-weight: 700; } .row.leg .r-body .route { color: var(--muted); }
+  .cost-tag { color: var(--gold-bright); font-weight: 700; font-size: 12px; }
+  .row.typed .cost-tag { color: #10100e; }
+  .done-tag { color: var(--green); font-size: 11px; font-weight: 700; margin-left: 6px; }
+  .row.typed .done-tag { color: #0a5a3a; }
+
+  /* Checklists (read-only) */
+  .cl-wrap { margin-top: 6px; }
+  .cl-title { font-size: 15px; font-weight: 700; margin: 18px 0 10px; }
+  .cl-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; }
+  .cl-row { display: flex; align-items: center; gap: 8px; }
+  .cl-name { flex: 1; font-size: 15px; font-weight: 600; }
+  .cl-count { font-size: 12px; color: var(--gold-bright); font-weight: 700; }
+  .cl-bar { height: 6px; border-radius: 6px; background: var(--panel-2); overflow: hidden; margin-top: 8px; }
+  .cl-bar > span { display: block; height: 100%; background: var(--green); }
+  .cl-items { margin-top: 10px; }
+  .cl-item { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); font-size: 14px; }
+  .cl-item:first-child { border-top: none; }
+  .cl-box { width: 16px; height: 16px; flex: 0 0 auto; border-radius: 4px; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: #000; }
+  .cl-box.on { background: var(--gold); border-color: var(--gold); }
+  .cl-item.done .cl-text { text-decoration: line-through; color: var(--muted); }
+
+  .err { text-align: center; color: var(--muted); padding: 48px 16px; }
+  .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 28px; }
+
+  @media print {
+    .day-strip, .legend .noprint { display: none !important; }
+    body { color: #000; background: #fff; max-width: 100%; }
+    .trip-head, .summary, .timeline, .cl-card { border-color: #ccc; background: #fff; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1 class="title">Shared Itinerary</h1>
+    <span class="badge">read-only</span>
+  </div>
+  <div id="app"><div class="err">Loading&hellip;</div></div>
+  <div class="foot">Shared view &bull; read-only</div>
+
+<script>
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyATaU8PnQwkMRvf6_j6Ccp1j0Qz8oeyELI",
+    authDomain: "crypto-tracker-bfefb.firebaseapp.com",
+    databaseURL: "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "crypto-tracker-bfefb",
+    storageBucket: "crypto-tracker-bfefb.firebasestorage.app",
+    messagingSenderId: "901782471631",
+    appId: "1:901782471631:web:5c7ec398e607b1777548ba"
+  };
+  let fbDb = null;
+  try {
+    if (typeof firebase !== "undefined") {
+      if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      fbDb = firebase.database();
+    }
+  } catch (e) { fbDb = null; }
+
+  // ---------- Date utils (timezone-safe) ----------
+  function cmpDate(a, b) { return a < b ? -1 : (a > b ? 1 : 0); }
+  function addDays(dateStr, n) {
+    const p = dateStr.split("-").map(Number);
+    const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    dt.setUTCDate(dt.getUTCDate() + n);
+    return dt.toISOString().slice(0, 10);
+  }
+  function datesInRange(start, end) {
+    const out = [];
+    if (!start || !end || cmpDate(end, start) < 0) return start ? [start] : [];
+    let cur = start, guard = 0;
+    while (cmpDate(cur, end) <= 0 && guard < 3660) { out.push(cur); cur = addDays(cur, 1); guard++; }
+    return out;
+  }
+  const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function weekdayShort(dateStr) { const p = dateStr.split("-").map(Number); return DOW[new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay()]; }
+  function dateLabel(dateStr) { const p = dateStr.split("-").map(Number); return weekdayShort(dateStr) + ", " + MON[p[1] - 1] + " " + p[2] + ", " + p[0]; }
+  function shortDate(dateStr) { const p = dateStr.split("-").map(Number); return MON[p[1] - 1] + " " + p[2]; }
+  function fmt12(t) {
+    if (!t) return "";
+    const p = t.split(":").map(Number); let h = p[0];
+    const ap = h >= 12 ? "PM" : "AM"; let hh = h % 12; if (hh === 0) hh = 12;
+    return hh + ":" + String(p[1]).padStart(2, "0") + " " + ap;
+  }
+  function timeDisplay(it) {
+    if (!it.time && !it.endTime) return "";
+    let s = (it.approx ? "~" : "") + fmt12(it.time);
+    if (it.endTime) s += "\u2013" + fmt12(it.endTime);
+    return s;
+  }
+  function fmtMoney(n, cur) {
+    const v = (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    return (cur ? cur + " " : "") + v;
+  }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  let data = null;
+  let openDate = null;
+
+  function legendColor(t, typeId) { const lg = (t.legend || []).find(x => x.id === typeId); return lg ? lg.color : ""; }
+  function dayItems(t, date) { return (t.items || []).filter(it => it.date === date); }
+  function dayTotal(t, date) { return (t.items || []).filter(it => it.date === date && it.kind === "stop").reduce((s, it) => s + (Number(it.cost) || 0), 0); }
+  function tripTotal(t) { return (t.items || []).reduce((s, it) => s + (it.kind === "stop" ? (Number(it.cost) || 0) : 0), 0); }
+  function categoryTotals(t) {
+    const m = {};
+    (t.items || []).forEach(it => { if (it.kind === "stop" && it.cost) { const c = it.category || "Other"; m[c] = (m[c] || 0) + Number(it.cost); } });
+    return m;
+  }
+
+  function render() {
+    const app = document.getElementById("app");
+    if (!data) { app.innerHTML = '<div class="err">This shared itinerary isn\u2019t available.<br/>The link may be wrong or the owner removed it.</div>'; return; }
+    const t = data;
+    const days = datesInRange(t.start, t.end);
+    if (!openDate || days.indexOf(openDate) === -1) openDate = days[0] || t.start;
+
+    let html = "";
+    // Head
+    html += '<div class="trip-head">' +
+      '<div class="th-name">' + esc(t.name || "Trip") + '</div>' +
+      (t.destination ? '<div class="th-dest">' + esc(t.destination) + '</div>' : '') +
+      '<div class="th-dates">' + dateLabel(t.start) + ' \u2013 ' + dateLabel(t.end) + ' \u00b7 ' + days.length + ' day' + (days.length > 1 ? 's' : '') + '</div>' +
+    '</div>';
+
+    // Summary
+    const total = tripTotal(t);
+    let sum = '<div class="sum-row big"><span>Total planned</span><span>' + fmtMoney(total, t.currency) + '</span></div>';
+    if (t.budget != null) {
+      const remaining = t.budget - total, over = remaining < 0;
+      const pct = t.budget > 0 ? Math.min(100, Math.round(total / t.budget * 100)) : 0;
+      sum += '<div class="sum-row"><span>Budget</span><span>' + fmtMoney(t.budget, t.currency) + '</span></div>';
+      sum += '<div class="sum-row"><span>' + (over ? 'Over by' : 'Remaining') + '</span><span class="' + (over ? 'over' : 'under') + '">' + fmtMoney(Math.abs(remaining), t.currency) + '</span></div>';
+      sum += '<div class="bar' + (over ? ' over' : '') + '"><span style="width:' + pct + '%"></span></div>';
+    }
+    const cats = categoryTotals(t);
+    const catKeys = Object.keys(cats).filter(k => cats[k] > 0).sort((a, b) => cats[b] - cats[a]);
+    if (catKeys.length) sum += '<div class="cat-list">' + catKeys.map(k => '<div class="cat-row"><span>' + esc(k) + '</span><span>' + fmtMoney(cats[k], t.currency) + '</span></div>').join("") + '</div>';
+    html += '<div class="summary">' + sum + '</div>';
+
+    // Day strip
+    html += '<div class="day-strip">' + days.map((d, i) => {
+      const cnt = dayItems(t, d).length;
+      const tot = dayTotal(t, d);
+      return '<div class="day-chip' + (d === openDate ? ' active' : '') + '" data-day="' + d + '">' +
+        '<div class="dc-dow">' + weekdayShort(d) + ' \u00b7 D' + (i + 1) + '</div>' +
+        '<div class="dc-date">' + shortDate(d) + '</div>' +
+        '<div class="dc-meta">' + cnt + ' entr' + (cnt === 1 ? 'y' : 'ies') + (tot ? ' \u00b7 ' + fmtMoney(tot, '') : '') + '</div>' +
+      '</div>';
+    }).join("") + '</div>';
+
+    // Legend
+    if (t.legend && t.legend.length) {
+      html += '<div class="legend">' + t.legend.map(lg => '<span class="lg-item"><span class="lg-dot" style="background:' + esc(lg.color) + '"></span>' + esc(lg.label) + '</span>').join("") + '</div>';
+    }
+
+    // Timeline for the open day
+    html += '<div class="day-title">' + dateLabel(openDate) + '</div>';
+    const entries = dayItems(t, openDate);
+    if (!entries.length) {
+      html += '<div class="timeline"><div class="err" style="padding:24px;">Nothing planned for this day.</div></div>';
+    } else {
+      html += '<div class="timeline">' + entries.map(it => it.kind === "leg" ? legRow(t, it) : stopRow(t, it)).join("") + '</div>';
+    }
+
+    // Checklists
+    if (t.checklists && t.checklists.length) {
+      html += '<div class="cl-wrap"><div class="cl-title">Checklists</div>';
+      html += t.checklists.map(cl => {
+        const items = cl.items || [];
+        const done = items.filter(i => i.done).length;
+        const pct = items.length ? Math.round(done / items.length * 100) : 0;
+        return '<div class="cl-card">' +
+          '<div class="cl-row"><div class="cl-name">' + esc(cl.name) + '</div><div class="cl-count">' + done + '/' + items.length + '</div></div>' +
+          (items.length ? '<div class="cl-bar"><span style="width:' + pct + '%"></span></div>' : '') +
+          '<div class="cl-items">' + items.map(ci =>
+            '<div class="cl-item' + (ci.done ? ' done' : '') + '">' +
+              '<span class="cl-box' + (ci.done ? ' on' : '') + '">' + (ci.done ? '\u2713' : '') + '</span>' +
+              '<span class="cl-text">' + esc(ci.text) + '</span>' +
+            '</div>'
+          ).join("") + '</div>' +
+        '</div>';
+      }).join("");
+      html += '</div>';
+    }
+
+    app.innerHTML = html;
+    app.querySelectorAll(".day-chip").forEach(el => el.onclick = () => { openDate = el.getAttribute("data-day"); render(); });
+  }
+
+  function stopRow(t, it) {
+    const color = it.typeId ? legendColor(t, it.typeId) : "";
+    const typed = !!color;
+    const style = typed ? ' style="background:' + esc(color) + '"' : '';
+    const td = timeDisplay(it);
+    const costStr = it.cost ? ' <span class="cost-tag">' + fmtMoney(it.cost, t.currency) + '</span>' : '';
+    const doneStr = it.done ? ' <span class="done-tag">done</span>' : '';
+    return '<div class="row' + (typed ? ' typed' : '') + (it.done ? ' done' : '') + '"' + style + '>' +
+      '<div class="r-time">' + (td ? esc(td) : '\u2014') + '</div>' +
+      '<div class="r-body">' +
+        '<div class="r-title">' + esc(it.title) + costStr + doneStr + '</div>' +
+        (it.note ? '<div class="r-note">' + esc(it.note) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+  function legRow(t, it) {
+    const route = (it.fromText || it.toText) ? (esc(it.fromText) + ' \u2192 ' + esc(it.toText)) : '';
+    return '<div class="row leg">' +
+      '<div class="r-time">' + esc(it.label || "Drive") + '</div>' +
+      '<div class="r-body">' +
+        '<div class="r-title"><span class="dur">' + esc(it.durationText || "\u2014") + '</span></div>' +
+        (route ? '<div class="r-note route">' + route + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  // ---------- Load ----------
+  function looksLikeShareId(h) { return /^[a-z0-9]{6,24}$/i.test(h); }
+  function loadFromHash() {
+    const h = location.hash.replace(/^#/, "");
+    if (!h) { data = null; render(); return; }
+    if (looksLikeShareId(h) && fbDb) {
+      fbDb.ref("shares/" + h + "/trip").on("value", (snap) => {
+        const p = snap.val();
+        if (p && Array.isArray(p.items)) { data = p; render(); }
+        else { data = null; render(); }
+      }, () => { data = null; render(); });
+      return;
+    }
+    // No Firebase or bad hash: try a one-shot REST read as a fallback.
+    if (looksLikeShareId(h)) {
+      const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/shares/" + h + "/trip.json";
+      fetch(url).then(r => r.json()).then(p => { if (p && Array.isArray(p.items)) { data = p; } else { data = null; } render(); })
+        .catch(() => { data = null; render(); });
+      return;
+    }
+    data = null; render();
+  }
+  window.addEventListener("hashchange", loadFromHash);
+  loadFromHash();
+</script>
+</body>
+</html>

@@ -261,6 +261,31 @@
 
   .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 28px; }
 
+  /* Checklists */
+  .checklist-wrap { margin-top: 18px; }
+  .cl-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .cl-head .cl-title { font-size: 15px; font-weight: 700; flex: 1; }
+  .cl-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; }
+  .cl-row { display: flex; align-items: center; gap: 8px; }
+  .cl-toggle { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 2px 4px; font-family: inherit; }
+  .cl-name { flex: 1; font-size: 15px; font-weight: 600; }
+  .cl-count { font-size: 12px; color: var(--gold-bright); font-weight: 700; }
+  .cl-rename, .cl-rem { background: none; border: none; color: var(--muted); font-size: 14px; cursor: pointer; padding: 2px 4px; }
+  .cl-rename:hover, .cl-rem:hover { color: var(--text); }
+  .cl-bar { height: 6px; border-radius: 6px; background: var(--panel-2); overflow: hidden; margin-top: 8px; }
+  .cl-bar > span { display: block; height: 100%; background: var(--green); transition: width .15s ease; }
+  .cl-items { margin-top: 10px; }
+  .cl-item { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); cursor: pointer; }
+  .cl-item:first-child { border-top: none; }
+  .cl-item input[type=checkbox] { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--gold); }
+  .cl-item .cl-text { flex: 1; font-size: 14px; }
+  .cl-item.done .cl-text { text-decoration: line-through; color: var(--muted); }
+  .cl-del { background: none; border: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
+  .cl-del:hover { color: var(--danger); }
+  .cl-add { display: flex; gap: 8px; margin-top: 10px; }
+  .cl-add-input { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 11px; font-size: 14px; font-family: inherit; }
+  .cl-add-input:focus { outline: none; border-color: var(--gold); }
+
   @media print {
     #lock, .topbar .btn, .btn, .icon-btn, .day-nav, .day-strip, .r-actions,
     .trip-head .th-actions, .modal-bg, #updateBanner, .add-row, .lg-edit { display: none !important; }
@@ -329,6 +354,7 @@
             <button class="btn ghost" id="copyBtn">Copy text</button>
           </div>
           <div class="c-sub" style="font-size:11px;color:var(--muted);margin-top:2px;">Tip: drag the &#9775; handle (or use &#8963;/&#8964;) to reorder, then tap <b>Recompute times</b> to re-chain the schedule from the first stop.</div>
+          <div class="checklist-wrap" id="checklistWrap"></div>
         </section>
       </div>
     </div>
@@ -518,6 +544,26 @@
     </div>
   </div>
 
+  <!-- Share trip modal -->
+  <div class="modal-bg" id="shareModalBg">
+    <div class="modal">
+      <h3>Share trip</h3>
+      <div class="modal-err" id="shareErr"></div>
+      <div class="scan-note" style="margin-bottom:12px;">Anyone with this link can view a read-only copy of the itinerary and checklists (no passcode needed). The link updates whenever you re-share.</div>
+      <div class="field">
+        <label>Share link</label>
+        <input id="shareLink" type="text" readonly placeholder="Generating&hellip;" style="font-size:13px;" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="shareCopyBtn">Copy link</button>
+        <button class="btn ghost" id="shareOpenBtn">Open</button>
+      </div>
+      <div class="modal-actions" style="margin-top:10px;">
+        <button class="btn ghost" id="shareDone">Done</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   // ---------- Passcode lock (same scheme as the other pages) ----------
   function simpleHash(s) {
@@ -546,7 +592,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 144;
+  const APP_VERSION = 145;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -581,6 +627,8 @@
   // legend type = { id, label, color }   (color "" = normal/plain)
   // item (stop) = { id, date, kind:"stop", time, endTime, approx, typeId, title, note, category, cost, done }
   // item (leg)  = { id, date, kind:"leg", label, durationText, fromText, toText }
+  // trip also carries: checklists[] and shareId (string|null)
+  // checklist = { id, name, items:[{ id, text, done }], open }
   let state = { version: 2, trips: [], ui: { openTripId: null, openDate: null } };
 
   function uid(p) { return p + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3); }
@@ -620,6 +668,19 @@
       t.currency = t.currency || "PHP";
       if (!Array.isArray(t.legend) || !t.legend.length) t.legend = defaultLegend();
       t.legend.forEach(lg => { if (!lg.id) lg.id = uid("ty_"); lg.label = lg.label || "Type"; lg.color = lg.color || "#6b7280"; });
+      if (typeof t.shareId !== "string") t.shareId = (t.shareId ? String(t.shareId) : "");
+      if (!Array.isArray(t.checklists)) t.checklists = [];
+      t.checklists.forEach(cl => {
+        if (!cl.id) cl.id = uid("cl_");
+        cl.name = cl.name || "Checklist";
+        if (typeof cl.open !== "boolean") cl.open = true;
+        if (!Array.isArray(cl.items)) cl.items = [];
+        cl.items.forEach(ci => {
+          if (!ci.id) ci.id = uid("ck_");
+          ci.text = ci.text || "";
+          ci.done = !!ci.done;
+        });
+      });
       if (!Array.isArray(t.items)) t.items = [];
       t.items.forEach(it => {
         if (!it.id) it.id = uid("i_");
@@ -818,6 +879,7 @@
           (t.destination ? '<div class="tc-dest">' + esc(t.destination) + '</div>' : '') +
           '<div class="tc-dates">' + shortDate(t.start) + ' \u2013 ' + shortDate(t.end) + ' \u00b7 ' + days + ' day' + (days > 1 ? 's' : '') + '</div>' +
         '</div><div class="tc-actions">' +
+          '<button class="icon-btn" data-share="' + t.id + '" title="Share">\uD83D\uDD17</button>' +
           '<button class="icon-btn" data-edit="' + t.id + '" title="Edit">Edit</button>' +
           '<button class="icon-btn" data-del="' + t.id + '" title="Delete">Del</button>' +
         '</div></div>' +
@@ -837,6 +899,7 @@
     renderDayStrip(t, days);
     renderLegend(t);
     renderTimeline(t);
+    renderChecklists(t);
   }
 
   function renderTripHead(t, days) {
@@ -847,9 +910,11 @@
       '<div class="th-dates">' + dateLabel(t.start) + ' \u2013 ' + dateLabel(t.end) + '</div>' +
       '<div class="th-actions">' +
         '<button class="btn ghost sm" id="editTripBtn">Edit trip</button>' +
+        '<button class="btn ghost sm" id="shareTripBtn">\uD83D\uDD17 Share</button>' +
         '<button class="btn ghost sm" id="delTripBtn">Delete trip</button>' +
       '</div>';
     document.getElementById("editTripBtn").onclick = () => openTripModal(t.id);
+    document.getElementById("shareTripBtn").onclick = () => openShareTrip(t.id);
     document.getElementById("delTripBtn").onclick = () => deleteTrip(t.id);
   }
 
@@ -1185,7 +1250,7 @@
       if (moved) setTimeout(() => alert(moved + " entr" + (moved === 1 ? "y was" : "ies were") + " outside the new dates and moved to the nearest day."), 50);
       renderTripDetail(t);
     } else {
-      const t = { id: uid("t_"), name: name, destination: dest, start: start, end: end, budget: budget, currency: currency, legend: defaultLegend(), items: [] };
+      const t = { id: uid("t_"), name: name, destination: dest, start: start, end: end, budget: budget, currency: currency, legend: defaultLegend(), items: [], checklists: [], shareId: "" };
       state.trips.push(t); state.ui.openTripId = t.id; state.ui.openDate = t.start;
       closeTripModal(); persist(); renderTripDetail(t);
     }
@@ -1725,6 +1790,162 @@
     closeLinkModal(); persist(); renderTripDetail(t);
   }
 
+  // ---------- Share trip (read-only snapshot in the cloud + short link) ----------
+  function newShareId() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+
+  // Build the read-only payload for trip.html (full itinerary + checklists).
+  function tripSharePayload(t) {
+    return {
+      v: 1,
+      kind: "trip",
+      shareId: t.shareId,
+      name: t.name,
+      destination: t.destination,
+      start: t.start,
+      end: t.end,
+      budget: t.budget,
+      currency: t.currency,
+      legend: t.legend.map(lg => ({ id: lg.id, label: lg.label, color: lg.color })),
+      items: t.items.map(it => it.kind === "leg"
+        ? { kind: "leg", date: it.date, label: it.label, durationText: it.durationText, fromText: it.fromText, toText: it.toText }
+        : { kind: "stop", date: it.date, time: it.time, endTime: it.endTime, approx: it.approx, typeId: it.typeId, title: it.title, note: it.note, category: it.category, cost: it.cost, done: it.done }),
+      checklists: t.checklists.map(cl => ({ name: cl.name, items: cl.items.map(ci => ({ text: ci.text, done: ci.done })) })),
+      madeAt: new Date().toISOString().slice(0, 10)
+    };
+  }
+
+  function openShareTrip(tripId) {
+    const t = findTrip(tripId); if (!t) return;
+    const bg = document.getElementById("shareModalBg");
+    const linkInput = document.getElementById("shareLink");
+    const err = document.getElementById("shareErr");
+    err.textContent = "";
+    if (!t.shareId) { t.shareId = newShareId(); persist(); }
+    const base = location.href.replace(/[^\/]*$/, "");
+    const link = base + "trip.html#" + t.shareId;
+    linkInput.value = "Generating\u2026";
+    bg.classList.add("show");
+
+    const finish = () => { linkInput.value = link; };
+    const payload = tripSharePayload(t);
+    if (fbDb) {
+      fbDb.ref("shares/" + t.shareId + "/trip").set(payload).then(finish).catch(() => {
+        // Fallback to a REST PUT if the SDK write is blocked/slow.
+        const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/shares/" + t.shareId + "/trip.json";
+        fetch(url, { method: "PUT", body: JSON.stringify(payload) })
+          .then(finish)
+          .catch(() => { err.textContent = "Could not save the shared copy (no internet?). Try again."; linkInput.value = link; });
+      });
+    } else {
+      const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/shares/" + t.shareId + "/trip.json";
+      fetch(url, { method: "PUT", body: JSON.stringify(payload) })
+        .then(finish)
+        .catch(() => { err.textContent = "Could not save the shared copy (no internet?). Try again."; linkInput.value = link; });
+    }
+
+    document.getElementById("shareCopyBtn").onclick = () => {
+      const txt = linkInput.value;
+      const done = () => { document.getElementById("shareCopyBtn").textContent = "Copied!"; setTimeout(() => { document.getElementById("shareCopyBtn").textContent = "Copy link"; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, () => fallbackCopy(txt, done));
+      else fallbackCopy(txt, done);
+    };
+    document.getElementById("shareOpenBtn").onclick = () => { window.open(linkInput.value, "_blank", "noopener"); };
+  }
+  function closeShareModal() { document.getElementById("shareModalBg").classList.remove("show"); }
+
+  // ---------- Checklists (multiple named lists per trip) ----------
+  function renderChecklists(t) {
+    const wrap = document.getElementById("checklistWrap");
+    if (!wrap) return;
+    let html = '<div class="cl-head"><div class="cl-title">Checklists</div><button class="btn ghost sm" id="addChecklistBtn">+ list</button></div>';
+    if (!t.checklists.length) {
+      html += '<div class="empty" style="padding:20px;">No checklists yet.<br/>Tap <b>+ list</b> to add a packing list, documents, or to-dos.</div>';
+    } else {
+      html += t.checklists.map(cl => {
+        const total = cl.items.length;
+        const done = cl.items.filter(i => i.done).length;
+        const open = !!cl.open;
+        let body = "";
+        if (open) {
+          body = '<div class="cl-items">' +
+            cl.items.map(ci =>
+              '<label class="cl-item' + (ci.done ? ' done' : '') + '">' +
+                '<input type="checkbox" data-cltoggle="' + cl.id + '" data-item="' + ci.id + '"' + (ci.done ? ' checked' : '') + ' />' +
+                '<span class="cl-text">' + esc(ci.text) + '</span>' +
+                '<button class="cl-del" data-cldel="' + cl.id + '" data-item="' + ci.id + '" title="Remove">\u00d7</button>' +
+              '</label>'
+            ).join("") +
+            '<div class="cl-add"><input type="text" class="cl-add-input" data-claddinput="' + cl.id + '" placeholder="Add item&hellip;" />' +
+              '<button class="btn sm" data-cladd="' + cl.id + '">Add</button></div>' +
+          '</div>';
+        }
+        return '<div class="cl-card" data-clcard="' + cl.id + '">' +
+          '<div class="cl-row">' +
+            '<button class="cl-toggle" data-clopen="' + cl.id + '">' + (open ? '\u25BC' : '\u25B6') + '</button>' +
+            '<div class="cl-name">' + esc(cl.name) + '</div>' +
+            '<div class="cl-count">' + done + '/' + total + '</div>' +
+            '<button class="cl-rename" data-clrename="' + cl.id + '" title="Rename">\u270E</button>' +
+            '<button class="cl-rem" data-clremove="' + cl.id + '" title="Delete list">\uD83D\uDDD1</button>' +
+          '</div>' +
+          (total ? '<div class="cl-bar"><span style="width:' + (total ? Math.round(done / total * 100) : 0) + '%"></span></div>' : '') +
+          body +
+        '</div>';
+      }).join("");
+    }
+    wrap.innerHTML = html;
+    wireChecklists(t);
+  }
+
+  function wireChecklists(t) {
+    const wrap = document.getElementById("checklistWrap");
+    const addBtn = document.getElementById("addChecklistBtn");
+    if (addBtn) addBtn.onclick = () => {
+      const name = (prompt("Checklist name", "Packing") || "").trim();
+      if (!name) return;
+      t.checklists.push({ id: uid("cl_"), name: name, items: [], open: true });
+      persist(); renderChecklists(t);
+    };
+    wrap.querySelectorAll("[data-clopen]").forEach(b => b.onclick = () => {
+      const cl = t.checklists.find(x => x.id === b.getAttribute("data-clopen")); if (!cl) return;
+      cl.open = !cl.open; persist(); renderChecklists(t);
+    });
+    wrap.querySelectorAll("[data-clrename]").forEach(b => b.onclick = () => {
+      const cl = t.checklists.find(x => x.id === b.getAttribute("data-clrename")); if (!cl) return;
+      const name = (prompt("Rename checklist", cl.name) || "").trim();
+      if (!name) return; cl.name = name; persist(); renderChecklists(t);
+    });
+    wrap.querySelectorAll("[data-clremove]").forEach(b => b.onclick = () => {
+      const cl = t.checklists.find(x => x.id === b.getAttribute("data-clremove")); if (!cl) return;
+      if (!confirm('Delete checklist "' + cl.name + '"?')) return;
+      t.checklists = t.checklists.filter(x => x.id !== cl.id); persist(); renderChecklists(t);
+    });
+    wrap.querySelectorAll("[data-cltoggle]").forEach(cb => cb.onchange = () => {
+      const cl = t.checklists.find(x => x.id === cb.getAttribute("data-cltoggle")); if (!cl) return;
+      const ci = cl.items.find(x => x.id === cb.getAttribute("data-item")); if (!ci) return;
+      ci.done = cb.checked; persist(); renderChecklists(t);
+    });
+    wrap.querySelectorAll("[data-cldel]").forEach(b => b.onclick = (e) => {
+      e.preventDefault();
+      const cl = t.checklists.find(x => x.id === b.getAttribute("data-cldel")); if (!cl) return;
+      cl.items = cl.items.filter(x => x.id !== b.getAttribute("data-item")); persist(); renderChecklists(t);
+    });
+    wrap.querySelectorAll("[data-cladd]").forEach(b => b.onclick = () => {
+      const id = b.getAttribute("data-cladd");
+      const cl = t.checklists.find(x => x.id === id); if (!cl) return;
+      const input = wrap.querySelector('[data-claddinput="' + id + '"]');
+      const text = (input ? input.value : "").trim();
+      if (!text) { if (input) input.focus(); return; }
+      cl.items.push({ id: uid("ck_"), text: text, done: false });
+      persist(); renderChecklists(t);
+      // keep this list open & refocus its input after re-render
+      const again = document.querySelector('[data-claddinput="' + id + '"]');
+      if (again) again.focus();
+    });
+    wrap.querySelectorAll("[data-claddinput]").forEach(inp => inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); const id = inp.getAttribute("data-claddinput"); const btn = wrap.querySelector('[data-cladd="' + id + '"]'); if (btn) btn.click(); }
+    }));
+  }
+
   // ---------- Copy as text ----------
   function copyTripText(t) {
     const days = datesInRange(t.start, t.end);
@@ -1809,12 +2030,15 @@
   document.getElementById("scanCamInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
   document.getElementById("scanUpInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
 
-  [["tripModalBg", closeTripModal], ["itemModalBg", closeItemModal], ["legendModalBg", closeLegendModal], ["scanModalBg", closeScanModal], ["linkModalBg", closeLinkModal]].forEach(([id, fn]) => {
+  document.getElementById("shareDone").onclick = closeShareModal;
+
+  [["tripModalBg", closeTripModal], ["itemModalBg", closeItemModal], ["legendModalBg", closeLegendModal], ["scanModalBg", closeScanModal], ["linkModalBg", closeLinkModal], ["shareModalBg", closeShareModal]].forEach(([id, fn]) => {
     document.getElementById(id).addEventListener("click", (e) => { if (e.target.id === id) fn(); });
   });
 
   document.getElementById("tripsList").addEventListener("click", (e) => {
-    const del = e.target.closest("[data-del]"), edit = e.target.closest("[data-edit]"), open = e.target.closest("[data-open]");
+    const del = e.target.closest("[data-del]"), edit = e.target.closest("[data-edit]"), open = e.target.closest("[data-open]"), share = e.target.closest("[data-share]");
+    if (share) { e.stopPropagation(); openShareTrip(share.getAttribute("data-share")); return; }
     if (del) { e.stopPropagation(); deleteTrip(del.getAttribute("data-del")); return; }
     if (edit) { e.stopPropagation(); openTripModal(edit.getAttribute("data-edit")); return; }
     if (open) { state.ui.openTripId = open.getAttribute("data-open"); state.ui.openDate = null; persist(); renderAll(); }
