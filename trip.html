@@ -288,22 +288,26 @@
   function loadFromHash() {
     const h = location.hash.replace(/^#/, "");
     if (!h) { data = null; render(); return; }
-    if (looksLikeShareId(h) && fbDb) {
-      fbDb.ref("shares/" + h + "/trip").on("value", (snap) => {
-        const p = snap.val();
-        if (p && Array.isArray(p.items)) { data = p; render(); }
-        else { data = null; render(); }
-      }, () => { data = null; render(); });
-      return;
+    if (!looksLikeShareId(h)) { data = null; render(); return; }
+
+    // REST read first (fast + reliable), then attach the realtime listener so a
+    // re-shared trip updates live. A slow/empty SDK first-snapshot won't flash
+    // "not available" because REST already filled the view.
+    const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/shares/" + h + "/trip.json";
+    fetch(url)
+      .then(r => r.json())
+      .then(p => { if (p && Array.isArray(p.items)) { data = p; render(); } else if (!data) { render(); } })
+      .catch(() => { if (!data) render(); });
+
+    if (fbDb) {
+      try {
+        fbDb.ref("shares/" + h + "/trip").on("value", (snap) => {
+          const p = snap.val();
+          if (p && Array.isArray(p.items)) { data = p; render(); }
+          else if (!data) { data = null; render(); }
+        }, () => { if (!data) render(); });
+      } catch (e) {}
     }
-    // No Firebase or bad hash: try a one-shot REST read as a fallback.
-    if (looksLikeShareId(h)) {
-      const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/shares/" + h + "/trip.json";
-      fetch(url).then(r => r.json()).then(p => { if (p && Array.isArray(p.items)) { data = p; } else { data = null; } render(); })
-        .catch(() => { data = null; render(); });
-      return;
-    }
-    data = null; render();
   }
   window.addEventListener("hashchange", loadFromHash);
   loadFromHash();

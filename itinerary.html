@@ -670,7 +670,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 148;
+  const APP_VERSION = 150;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1907,20 +1907,21 @@
     bg.classList.add("show");
 
     const finish = () => { linkInput.value = link; };
-    const payload = tripSharePayload(t);
+    // Deep-clean: strip any undefined values. Firebase's SDK .set() THROWS
+    // synchronously on undefined (not a rejected promise), which would otherwise
+    // crash link generation and leave the modal stuck on "Generating...".
+    const payload = JSON.parse(JSON.stringify(tripSharePayload(t)));
+    const restUrl = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/shares/" + t.shareId + "/trip.json";
+    const restSave = () => fetch(restUrl, { method: "PUT", body: JSON.stringify(payload) })
+      .then(finish)
+      .catch(() => { err.textContent = "Could not save the shared copy (no internet?). Try again."; linkInput.value = link; });
     if (fbDb) {
-      fbDb.ref("shares/" + t.shareId + "/trip").set(payload).then(finish).catch(() => {
-        // Fallback to a REST PUT if the SDK write is blocked/slow.
-        const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/shares/" + t.shareId + "/trip.json";
-        fetch(url, { method: "PUT", body: JSON.stringify(payload) })
-          .then(finish)
-          .catch(() => { err.textContent = "Could not save the shared copy (no internet?). Try again."; linkInput.value = link; });
-      });
+      // Wrap in try/catch so a synchronous SDK throw also falls back to REST.
+      try {
+        fbDb.ref("shares/" + t.shareId + "/trip").set(payload).then(finish).catch(restSave);
+      } catch (e) { restSave(); }
     } else {
-      const url = FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/shares/" + t.shareId + "/trip.json";
-      fetch(url, { method: "PUT", body: JSON.stringify(payload) })
-        .then(finish)
-        .catch(() => { err.textContent = "Could not save the shared copy (no internet?). Try again."; linkInput.value = link; });
+      restSave();
     }
 
     document.getElementById("shareCopyBtn").onclick = () => {
