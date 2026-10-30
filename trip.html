@@ -74,6 +74,9 @@
   .done-tag { color: var(--green); font-size: 11px; font-weight: 700; margin-left: 6px; }
   .row.typed .done-tag { color: #0a5a3a; }
 
+  .exp-wrap { margin-top: 6px; }
+  .exp-title { font-size: 13px; font-weight: 700; margin: 14px 0 8px; color: var(--gold-bright); }
+
   /* Checklists (read-only) */
   .cl-wrap { margin-top: 6px; }
   .cl-title { font-size: 15px; font-weight: 700; margin: 18px 0 10px; }
@@ -169,11 +172,14 @@
 
   function legendColor(t, typeId) { const lg = (t.legend || []).find(x => x.id === typeId); return lg ? lg.color : ""; }
   function dayItems(t, date) { return (t.items || []).filter(it => it.date === date); }
-  function dayTotal(t, date) { return (t.items || []).filter(it => it.date === date && it.kind === "stop").reduce((s, it) => s + (Number(it.cost) || 0), 0); }
-  function tripTotal(t) { return (t.items || []).reduce((s, it) => s + (it.kind === "stop" ? (Number(it.cost) || 0) : 0), 0); }
+  function dayExp(t, date) { return (t.expenses || []).filter(ex => ex.date === date).reduce((s, ex) => s + (Number(ex.amount) || 0), 0); }
+  function allExp(t) { return (t.expenses || []).reduce((s, ex) => s + (Number(ex.amount) || 0), 0); }
+  function dayTotal(t, date) { return (t.items || []).filter(it => it.date === date && it.kind === "stop").reduce((s, it) => s + (Number(it.cost) || 0), 0) + dayExp(t, date); }
+  function tripTotal(t) { return (t.items || []).reduce((s, it) => s + (it.kind === "stop" ? (Number(it.cost) || 0) : 0), 0) + allExp(t); }
   function categoryTotals(t) {
     const m = {};
     (t.items || []).forEach(it => { if (it.kind === "stop" && it.cost) { const c = it.category || "Other"; m[c] = (m[c] || 0) + Number(it.cost); } });
+    (t.expenses || []).forEach(ex => { if (ex.amount) { const c = ex.category || "Other"; m[c] = (m[c] || 0) + Number(ex.amount); } });
     return m;
   }
 
@@ -230,6 +236,16 @@
       html += '<div class="timeline"><div class="err" style="padding:24px;">Nothing planned for this day.</div></div>';
     } else {
       html += '<div class="timeline">' + entries.map(it => it.kind === "leg" ? legRow(t, it) : stopRow(t, it)).join("") + '</div>';
+    }
+
+    // Extra expenses for the open day
+    const dexp = (t.expenses || []).filter(ex => ex.date === openDate && Number(ex.amount) > 0);
+    if (dexp.length) {
+      html += '<div class="exp-wrap"><div class="exp-title">Extra expenses</div><div class="timeline">' +
+        dexp.map(ex => '<div class="row"><div class="r-time">\u20B1</div><div class="r-body"><div class="r-title">' + esc(ex.title) +
+          ' <span class="cost-tag">' + fmtMoney(Number(ex.amount), t.currency) + '</span></div>' +
+          '<div class="r-note">' + esc(ex.category) + '</div></div></div>').join("") +
+        '</div></div>';
     }
 
     // Checklists
