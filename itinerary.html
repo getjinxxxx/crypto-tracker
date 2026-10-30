@@ -294,6 +294,16 @@
   .cl-add-input { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 9px 11px; font-size: 14px; font-family: inherit; }
   .cl-add-input:focus { outline: none; border-color: var(--gold); }
 
+  /* Suggest stops list */
+  .sg-region { font-size: 10px; font-weight: 700; color: var(--gold-bright); text-transform: uppercase; letter-spacing: .4px; padding: 8px 10px 4px; }
+  .sg-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-top: 1px solid var(--line); cursor: pointer; }
+  .sg-row:first-child { border-top: none; }
+  .sg-row.on { background: rgba(212,160,23,.12); }
+  .sg-add { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 16px; line-height: 1; cursor: pointer; font-family: inherit; }
+  .sg-row.on .sg-add { background: var(--gold); border-color: var(--gold); color: #000; font-weight: 700; }
+  .sg-name { flex: 1; min-width: 0; font-size: 14px; }
+  .sg-cat { flex: 0 0 auto; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+
   /* ---------- Dense mobile layout (phone) ---------- */
   /* Compact summary strip: one/two short lines instead of a tall card. */
   .summary.compact { padding: 10px 12px; }
@@ -418,6 +428,7 @@
             <button class="btn ghost" id="recalcBtn">Recompute times</button>
             <button class="btn ghost" id="scanBtn">Scan photo</button>
             <button class="btn ghost" id="linkBtn">From Maps link</button>
+            <button class="btn ghost" id="suggestBtn">&#10024; Suggest stops</button>
             <button class="btn ghost" id="copyBtn">Copy text</button>
           </div>
           <div class="c-sub" style="font-size:11px;color:var(--muted);margin-top:2px;">Tip: drag the &#9775; handle (or use &#8963;/&#8964;) to reorder, then tap <b>Recompute times</b> to re-chain the schedule from the first stop.</div>
@@ -429,6 +440,7 @@
       <div class="fab-menu" id="fabMenu">
         <button id="fabAddStop">+ Stop</button>
         <button id="fabAddLeg">+ Travel leg</button>
+        <button id="fabSuggest">&#10024; Suggest stops</button>
         <button id="fabRecalc">Recompute times</button>
         <button id="fabScan">Scan photo</button>
         <button id="fabLink">From Maps link</button>
@@ -622,6 +634,41 @@
     </div>
   </div>
 
+  <!-- Suggest stops modal -->
+  <div class="modal-bg" id="suggestModalBg">
+    <div class="modal">
+      <h3>&#10024; Suggest stops along the route</h3>
+      <div class="modal-err" id="suggestErr"></div>
+      <div class="field"><label>Add suggestions to day</label><select id="suggestDay"></select></div>
+      <div class="field">
+        <label>Show</label>
+        <div class="chip-row" id="suggestCats">
+          <button type="button" class="chip-btn active" data-cat="all">All</button>
+          <button type="button" class="chip-btn" data-cat="food">Food</button>
+          <button type="button" class="chip-btn" data-cat="sight">Sights</button>
+          <button type="button" class="chip-btn" data-cat="fuel">Gas/CR</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Source</label>
+        <div class="chip-row" id="suggestSrc">
+          <button type="button" class="chip-btn active" data-src="builtin">&#9889; Built-in</button>
+          <button type="button" class="chip-btn" data-src="osm">&#127760; Live (OSM)</button>
+        </div>
+        <div class="scan-note" id="suggestSrcNote">Built-in: curated Luzon roadtrip spots, works offline. Matches the places on your route.</div>
+      </div>
+      <div class="scan-status" id="suggestStatus" style="display:none">
+        <div class="scan-prog"><div class="scan-bar" id="suggestBar"></div></div>
+        <div class="scan-msg" id="suggestMsg">Searching&hellip;</div>
+      </div>
+      <div class="scan-preview" id="suggestList" style="margin-top:6px;"></div>
+      <div class="modal-actions" style="margin-top:12px;">
+        <button class="btn ghost" id="suggestCancel">Cancel</button>
+        <button class="btn" id="suggestAdd">Add selected</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Share trip modal -->
   <div class="modal-bg" id="shareModalBg">
     <div class="modal">
@@ -670,7 +717,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 150;
+  const APP_VERSION = 151;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -2027,6 +2074,219 @@
     }));
   }
 
+  // ---------- Suggest stops (A: built-in curated library + B: live OSM/Overpass) ----------
+  // Built-in curated Luzon roadtrip spots, grouped by a region keyword that is
+  // matched (case-insensitive) against the route's place names. cat: food|sight|fuel.
+  const SPOT_LIBRARY = {
+    "bulacan":    [ { name: "Barasoain Church, Malolos", cat: "sight" }, { name: "Chicharon ng Bulacan (pasalubong)", cat: "food" }, { name: "Malolos Welcome Arch", cat: "sight" } ],
+    "pampanga":   [ { name: "San Fernando (Sisig / Kapampangan food)", cat: "food" }, { name: "San Guillermo Church, Bacolor", cat: "sight" }, { name: "NLEX San Fernando gas & CR", cat: "fuel" } ],
+    "angeles":    [ { name: "Aling Lucing Sisig, Angeles", cat: "food" }, { name: "Holy Rosary Church, Angeles", cat: "sight" } ],
+    "tarlac":     [ { name: "Isdaan Floating Restaurant, Gerona", cat: "food" }, { name: "Monasterio de Tarlac (viewpoint)", cat: "sight" }, { name: "Capas shrine turn-off gas/CR", cat: "fuel" } ],
+    "pangasinan": [ { name: "Pigar-pigar, Dagupan", cat: "food" }, { name: "Bangus (milkfish) stalls, Dagupan", cat: "food" }, { name: "Manaoag Church", cat: "sight" }, { name: "Hundred Islands, Alaminos", cat: "sight" } ],
+    "la union":   [ { name: "Halo-halo de Iloko, San Fernando LU", cat: "food" }, { name: "Ma-Cho Temple, San Fernando LU", cat: "sight" }, { name: "Tangadan / surf town, San Juan", cat: "sight" } ],
+    "ilocos sur": [ { name: "Calle Crisologo, Vigan", cat: "sight" }, { name: "Vigan empanada / longganisa", cat: "food" }, { name: "Bantay Bell Tower", cat: "sight" } ],
+    "vigan":      [ { name: "Calle Crisologo, Vigan", cat: "sight" }, { name: "Vigan empanadahan (Plaza Burgos)", cat: "food" }, { name: "Baluarte zoo, Vigan", cat: "sight" } ],
+    "ilocos norte":[ { name: "Paoay Church (UNESCO)", cat: "sight" }, { name: "Bangui Windmills", cat: "sight" }, { name: "Batac empanada / Ilocos food", cat: "food" } ],
+    "laoag":      [ { name: "Sinking Bell Tower, Laoag", cat: "sight" }, { name: "La Paz Sand Dunes", cat: "sight" } ],
+    "nueva ecija":[ { name: "Cabanatuan tapa / longganisa", cat: "food" }, { name: "Minalungao National Park, Gen. Tinio", cat: "sight" } ],
+    "baguio":     [ { name: "Burnham Park, Baguio", cat: "sight" }, { name: "Good Taste / Baguio food", cat: "food" }, { name: "Mines View Park", cat: "sight" } ],
+    "benguet":    [ { name: "Strawberry Farm, La Trinidad", cat: "food" }, { name: "Mt. Ulap / Atok viewpoints", cat: "sight" } ],
+    "laguna":     [ { name: "Buko pie, Los Ba\u00f1os / Calauan", cat: "food" }, { name: "Pagsanjan / Nagcarlan, Laguna", cat: "sight" }, { name: "Liliw footwear town", cat: "sight" } ],
+    "batangas":   [ { name: "Lomi / bulalo, Batangas", cat: "food" }, { name: "Taal Heritage Town & Basilica", cat: "sight" }, { name: "Tagaytay ridge (Taal view)", cat: "sight" } ],
+    "tagaytay":   [ { name: "Bulalo & tawilis, Tagaytay", cat: "food" }, { name: "Taal Volcano viewpoint", cat: "sight" }, { name: "Picnic Grove / Sky Ranch", cat: "sight" } ],
+    "quezon":     [ { name: "Pancit habhab, Lucban", cat: "food" }, { name: "Kamay ni Hesus, Lucban", cat: "sight" }, { name: "Villa Escudero, Tiaong", cat: "sight" } ],
+    "cavite":     [ { name: "Tahong / seafood, Cavite", cat: "food" }, { name: "Corregidor ferry (Cavite side)", cat: "sight" } ],
+    "zambales":   [ { name: "Mangoes, Zambales", cat: "food" }, { name: "Anawangin / Nagsasa coves", cat: "sight" }, { name: "Subic beaches", cat: "sight" } ],
+    "bataan":     [ { name: "Las Casas Filipinas, Bagac", cat: "sight" }, { name: "Mount Samat shrine", cat: "sight" } ],
+    "rizal":      [ { name: "Antipolo suman & kasuy", cat: "food" }, { name: "Antipolo Cathedral", cat: "sight" }, { name: "Masungi / Pinto Art (Rizal)", cat: "sight" } ]
+  };
+
+  let suggestState = { day: null, cat: "all", src: "builtin", found: [], selected: {} };
+
+  function openSuggestModal() {
+    const t = findTrip(state.ui.openTripId); if (!t) return;
+    suggestState = { day: state.ui.openDate, cat: "all", src: "builtin", found: [], selected: {} };
+    document.getElementById("suggestErr").textContent = "";
+    const days = datesInRange(t.start, t.end);
+    document.getElementById("suggestDay").innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
+    document.querySelectorAll("#suggestCats .chip-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-cat") === "all"));
+    document.querySelectorAll("#suggestSrc .chip-btn").forEach(b => b.classList.toggle("active", b.getAttribute("data-src") === "builtin"));
+    document.getElementById("suggestStatus").style.display = "none";
+    document.getElementById("suggestModalBg").classList.add("show");
+    runSuggest();
+  }
+  function closeSuggestModal() { document.getElementById("suggestModalBg").classList.remove("show"); }
+
+  function runSuggest() {
+    const t = findTrip(state.ui.openTripId); if (!t) return;
+    suggestState.selected = {};
+    if (suggestState.src === "builtin") suggestBuiltin(t);
+    else suggestOSM(t);
+  }
+
+  // A: match route place names against the library's region keywords.
+  function suggestBuiltin(t) {
+    const places = routeStops(t, suggestState.day).map(placeQuery).filter(Boolean);
+    // also include ALL stop titles for matching (not just Maps-route ones)
+    const allText = dayEntries(t, suggestState.day)
+      .filter(e => e.kind === "stop").map(e => (e.title || "")).concat(places).join(" | ").toLowerCase();
+    const out = [];
+    const seenRegion = {};
+    Object.keys(SPOT_LIBRARY).forEach(region => {
+      if (allText.indexOf(region) === -1) return;
+      if (seenRegion[region]) return; seenRegion[region] = true;
+      SPOT_LIBRARY[region].forEach(sp => out.push({ region: region, name: sp.name, cat: sp.cat }));
+    });
+    suggestState.found = out;
+    if (!out.length) {
+      document.getElementById("suggestList").innerHTML =
+        '<div style="padding:14px;color:var(--muted);font-size:12.5px;line-height:1.5;">No built-in matches for this day\u2019s places. ' +
+        'Try the places\u2019 province names (e.g. \u201cTarlac\u201d, \u201cVigan\u201d), or switch to <b>Live (OSM)</b> for a nearby search.</div>';
+      return;
+    }
+    renderSuggestList();
+  }
+
+  // B: live nearby search via OpenStreetMap Overpass (no API key). Uses stop
+  // coordinates if present; else geocodes place names via Nominatim first.
+  async function suggestOSM(t) {
+    const status = document.getElementById("suggestStatus"), bar = document.getElementById("suggestBar"), msg = document.getElementById("suggestMsg");
+    const err = document.getElementById("suggestErr");
+    err.textContent = ""; suggestState.found = [];
+    document.getElementById("suggestList").innerHTML = "";
+    status.style.display = "block"; bar.style.width = "8%"; msg.textContent = "Finding route points\u2026";
+    try {
+      // Collect coordinates for the day's route.
+      const names = routeStops(t, suggestState.day).map(placeQuery).filter(Boolean);
+      if (!names.length) { status.style.display = "none"; err.textContent = "No place names on this day to search around. Add a stop or import a Maps link first."; return; }
+      // Sample up to 4 anchor points so the query stays light.
+      const anchors = names.length <= 4 ? names : [names[0], names[Math.floor(names.length / 3)], names[Math.floor(2 * names.length / 3)], names[names.length - 1]];
+      const coords = [];
+      for (let i = 0; i < anchors.length; i++) {
+        bar.style.width = (10 + i / anchors.length * 40).toFixed(0) + "%";
+        msg.textContent = "Locating \u201c" + anchors[i] + "\u201d\u2026";
+        const c = await geocode(anchors[i]);
+        if (c) coords.push(c);
+      }
+      if (!coords.length) { status.style.display = "none"; err.textContent = "Couldn\u2019t locate the route places online. Try Built-in instead."; return; }
+      msg.textContent = "Searching nearby spots\u2026"; bar.style.width = "60%";
+      const spots = await overpassAround(coords, 5000); // 5 km radius
+      bar.style.width = "100%"; status.style.display = "none";
+      suggestState.found = spots;
+      if (!spots.length) {
+        document.getElementById("suggestList").innerHTML = '<div style="padding:14px;color:var(--muted);font-size:12.5px;">No nearby spots found on OpenStreetMap for this route. Try Built-in.</div>';
+        return;
+      }
+      renderSuggestList();
+    } catch (e) {
+      status.style.display = "none";
+      err.textContent = "Live search failed (offline or server busy). Try Built-in.";
+    }
+  }
+
+  function geocode(name) {
+    const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ph&q=" + encodeURIComponent(name);
+    return fetch(url, { headers: { "Accept": "application/json" } })
+      .then(r => r.json())
+      .then(a => (a && a[0]) ? { lat: parseFloat(a[0].lat), lng: parseFloat(a[0].lon) } : null)
+      .catch(() => null);
+  }
+
+  // Query Overpass for tourism/food/fuel nodes around each anchor, de-duplicated.
+  function overpassAround(coords, radius) {
+    const blocks = coords.map(c => {
+      const a = c.lat + "," + c.lng;
+      return 'node(around:' + radius + ',' + a + ')["tourism"~"attraction|viewpoint|museum"];' +
+             'node(around:' + radius + ',' + a + ')["amenity"~"restaurant|cafe|fast_food|fuel"];';
+    }).join("");
+    const q = "[out:json][timeout:25];(" + blocks + ");out center 60;";
+    // Overpass requires a form content-type (plain text body -> HTTP 406).
+    // Try a couple of mirrors in case one is busy/down.
+    const endpoints = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+      "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+    ];
+    const body = "data=" + encodeURIComponent(q);
+    const tryEndpoint = (i) => {
+      if (i >= endpoints.length) return Promise.reject(new Error("All Overpass mirrors failed"));
+      return fetch(endpoints[i], { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body })
+        .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .catch(() => tryEndpoint(i + 1));
+    };
+    return tryEndpoint(0)
+      .then(j => {
+        const seen = {}, out = [];
+        (j.elements || []).forEach(el => {
+          const tg = el.tags || {};
+          const nm = tg.name; if (!nm) return;
+          const key = nm.toLowerCase();
+          if (seen[key]) return; seen[key] = true;
+          let cat = "sight";
+          if (tg.amenity === "fuel") cat = "fuel";
+          else if (tg.amenity === "restaurant" || tg.amenity === "cafe" || tg.amenity === "fast_food") cat = "food";
+          const area = tg["addr:city"] || tg["addr:town"] || tg["addr:municipality"] || tg["addr:province"] || "nearby";
+          out.push({ region: String(area).toLowerCase(), name: nm, cat: cat });
+        });
+        return out.slice(0, 50);
+      });
+  }
+
+  function catLabelOf(c) { return c === "food" ? "Food" : (c === "fuel" ? "Gas/CR" : "Sights"); }
+
+  function renderSuggestList() {
+    const wrap = document.getElementById("suggestList");
+    const list = suggestState.found.filter(s => suggestState.cat === "all" || s.cat === suggestState.cat);
+    if (!list.length) { wrap.innerHTML = '<div style="padding:14px;color:var(--muted);font-size:12.5px;">Nothing in this category. Try another filter.</div>'; return; }
+    // group by region, keep insertion order
+    const groups = {}, order = [];
+    list.forEach((s, i) => { s._i = suggestState.found.indexOf(s); const r = s.region || "nearby"; if (!groups[r]) { groups[r] = []; order.push(r); } groups[r].push(s); });
+    let html = "";
+    order.forEach(r => {
+      html += '<div class="sg-region">' + esc(r.toUpperCase()) + '</div>';
+      html += groups[r].map(s => {
+        const idx = suggestState.found.indexOf(s);
+        const on = !!suggestState.selected[idx];
+        return '<div class="sg-row' + (on ? ' on' : '') + '" data-sg="' + idx + '">' +
+          '<button class="sg-add" data-sg="' + idx + '">' + (on ? '\u2713' : '+') + '</button>' +
+          '<span class="sg-name">' + esc(s.name) + '</span>' +
+          '<span class="sg-cat">' + catLabelOf(s.cat) + '</span>' +
+        '</div>';
+      }).join("");
+    });
+    wrap.innerHTML = html;
+    wrap.querySelectorAll("[data-sg]").forEach(el => el.onclick = (e) => {
+      e.stopPropagation();
+      const idx = el.getAttribute("data-sg");
+      suggestState.selected[idx] = !suggestState.selected[idx];
+      renderSuggestList();
+    });
+    updateSuggestAddBtn();
+  }
+  function updateSuggestAddBtn() {
+    const n = Object.keys(suggestState.selected).filter(k => suggestState.selected[k]).length;
+    const btn = document.getElementById("suggestAdd");
+    btn.textContent = n ? ("Add " + n + " stop" + (n === 1 ? "" : "s")) : "Add selected";
+    btn.disabled = !n;
+    btn.style.opacity = n ? "1" : ".5";
+  }
+  function confirmSuggestAdd() {
+    const t = findTrip(state.ui.openTripId); if (!t) return;
+    const day = document.getElementById("suggestDay").value;
+    const picks = Object.keys(suggestState.selected).filter(k => suggestState.selected[k]).map(k => suggestState.found[k]).filter(Boolean);
+    if (!picks.length) return;
+    picks.forEach(s => {
+      t.items.push({
+        id: uid("i_"), date: day, kind: "stop",
+        time: "", endTime: "", approx: false, typeId: "",
+        title: s.name, note: "Suggested stop", category: s.cat === "food" ? "Food" : (s.cat === "fuel" ? "Transport" : "Activity"),
+        cost: 0, done: false, inRoute: false
+      });
+    });
+    state.ui.openDate = day;
+    closeSuggestModal(); persist(); renderTripDetail(t);
+  }
+
   // ---------- Copy as text ----------
   function copyTripText(t) {
     const days = datesInRange(t.start, t.end);
@@ -2079,6 +2339,7 @@
   document.getElementById("addLegBtn").onclick = () => { openItemModal(state.ui.openTripId, null); setModalKind("leg"); };
   document.getElementById("recalcBtn").onclick = () => recomputeTimes(state.ui.openTripId);
   document.getElementById("scanBtn").onclick = openScanModal;
+  document.getElementById("suggestBtn").onclick = openSuggestModal;
   document.getElementById("copyBtn").onclick = () => { const t = findTrip(state.ui.openTripId); if (t) copyTripText(t); };
 
   document.getElementById("tmCancel").onclick = closeTripModal;
@@ -2124,6 +2385,26 @@
 
   document.getElementById("shareDone").onclick = closeShareModal;
 
+  // ---------- Suggest stops modal controls ----------
+  document.getElementById("suggestCancel").onclick = closeSuggestModal;
+  document.getElementById("suggestAdd").onclick = confirmSuggestAdd;
+  document.getElementById("suggestDay").addEventListener("change", (e) => { suggestState.day = e.target.value; runSuggest(); });
+  document.querySelectorAll("#suggestCats .chip-btn").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#suggestCats .chip-btn").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    suggestState.cat = b.getAttribute("data-cat");
+    renderSuggestList();
+  });
+  document.querySelectorAll("#suggestSrc .chip-btn").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#suggestSrc .chip-btn").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    suggestState.src = b.getAttribute("data-src");
+    document.getElementById("suggestSrcNote").innerHTML = suggestState.src === "osm"
+      ? "Live: searches OpenStreetMap for food / sights / fuel within 5\u202fkm of your route. Needs internet; no API key."
+      : "Built-in: curated Luzon roadtrip spots, works offline. Matches the places on your route.";
+    runSuggest();
+  });
+
   // ---------- FAB (phone add menu) ----------
   function closeFabMenu() { document.getElementById("fabMenu").classList.remove("open"); document.getElementById("fabBtn").textContent = "+"; }
   function toggleFabMenu() {
@@ -2134,13 +2415,14 @@
   document.getElementById("fabBtn").onclick = (e) => { e.stopPropagation(); toggleFabMenu(); };
   document.getElementById("fabAddStop").onclick = () => { closeFabMenu(); openItemModal(state.ui.openTripId, null); setModalKind("stop"); };
   document.getElementById("fabAddLeg").onclick = () => { closeFabMenu(); openItemModal(state.ui.openTripId, null); setModalKind("leg"); };
+  document.getElementById("fabSuggest").onclick = () => { closeFabMenu(); openSuggestModal(); };
   document.getElementById("fabRecalc").onclick = () => { closeFabMenu(); recomputeTimes(state.ui.openTripId); };
   document.getElementById("fabScan").onclick = () => { closeFabMenu(); openScanModal(); };
   document.getElementById("fabLink").onclick = () => { closeFabMenu(); openLinkModal(); };
   document.getElementById("fabCopy").onclick = () => { closeFabMenu(); const t = findTrip(state.ui.openTripId); if (t) copyTripText(t); };
   document.addEventListener("click", (e) => { if (!e.target.closest("#fabMenu") && !e.target.closest("#fabBtn")) closeFabMenu(); });
 
-  [["tripModalBg", closeTripModal], ["itemModalBg", closeItemModal], ["legendModalBg", closeLegendModal], ["scanModalBg", closeScanModal], ["linkModalBg", closeLinkModal], ["shareModalBg", closeShareModal]].forEach(([id, fn]) => {
+  [["tripModalBg", closeTripModal], ["itemModalBg", closeItemModal], ["legendModalBg", closeLegendModal], ["scanModalBg", closeScanModal], ["linkModalBg", closeLinkModal], ["shareModalBg", closeShareModal], ["suggestModalBg", closeSuggestModal]].forEach(([id, fn]) => {
     document.getElementById(id).addEventListener("click", (e) => { if (e.target.id === id) fn(); });
   });
 
