@@ -641,8 +641,9 @@
     <div class="modal">
       <h3>Import from Maps link</h3>
       <div class="modal-err" id="linkErr"></div>
-      <div class="field"><label>Paste Google Maps directions link</label>
-        <textarea id="linkInput" rows="3" placeholder="https://www.google.com/maps/dir/Taytay/Bulacan/..."></textarea>
+      <div class="field"><label>Paste a Google Maps link (short links OK)</label>
+        <textarea id="linkInput" rows="3" placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/dir/..."></textarea>
+        <div class="scan-note">Works with short links (maps.app.goo.gl), full directions (/maps/dir/), and single place/search links. Short links are expanded automatically.</div>
       </div>
       <div class="field two">
         <div><label>Target day</label><select id="linkDay"></select></div>
@@ -789,7 +790,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 153;
+  const APP_VERSION = 154;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1897,9 +1898,40 @@
     // ---- Format 2: path link (/maps/dir/A/B/C) ----
     const dirIdx = u.search(/\/dir\//i);
     if (dirIdx === -1) {
-      // maybe a /search/ or place link -> single stop
+      // Not a directions link -> try single-place formats (/place/, /search/, ?q=, ?ll=).
+      // Pull a coordinate if one is embedded (@lat,lng or !3d<lat>!4d<lng>).
+      let lat = null, lng = null;
+      const at = u.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+      if (at) { lat = parseFloat(at[1]); lng = parseFloat(at[2]); }
+      const d34 = u.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+      if (d34) { lat = parseFloat(d34[1]); lng = parseFloat(d34[2]); }
+      // Name from /place/<name> or /search/<name>
       const sm = u.match(/\/(?:search|place)\/([^/@?]+)/i);
-      if (sm) stops.push({ name: decodeName(sm[1]), lat: null, lng: null });
+      let name = sm ? decodeName(sm[1]) : "";
+      // Query-style: ?q=<name or lat,lng> or ?query= / ?ll=
+      if (!name || /^-?\d/.test(name)) {
+        const qi = u.indexOf("?");
+        if (qi !== -1) {
+          try {
+            const p = new URLSearchParams(u.slice(qi + 1));
+            const q = p.get("q") || p.get("query") || p.get("destination");
+            const ll = p.get("ll") || p.get("center");
+            if (ll) { const c = ll.split(","); if (c.length === 2) { lat = parseFloat(c[0]); lng = parseFloat(c[1]); } }
+            if (q) {
+              const cm = q.match(/^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$/);
+              if (cm) { lat = parseFloat(cm[1]); lng = parseFloat(cm[2]); if (!name) name = q; }
+              else name = decodeName(q);
+            }
+          } catch (e) {}
+        }
+      }
+      if (name && /^-?\d{1,3}\.\d+,-?\d{1,3}\.\d+$/.test(name.replace(/\s/g, ""))) {
+        // name is actually a coordinate string
+        const c = name.replace(/\s/g, "").split(",");
+        if (lat == null) { lat = parseFloat(c[0]); lng = parseFloat(c[1]); }
+      }
+      if (name) stops.push({ name: name, lat: lat, lng: lng });
+      else if (lat != null) stops.push({ name: lat.toFixed(5) + "," + lng.toFixed(5), lat: lat, lng: lng });
       return stops;
     }
     let seg = u.slice(dirIdx + 5);
@@ -1949,8 +1981,54 @@
   function buildLinkPreview() {
     const t = findTrip(state.ui.openTripId); if (!t) return;
     const err = document.getElementById("linkErr"); err.textContent = "";
-    const stops = parseMapsLink(document.getElementById("linkInput").value);
-    if (stops.length < 1) { err.textContent = "Couldn't read any stops from that link. Paste a Google Maps directions link."; return; }
+    const raw = document.getElementById("linkInput").value.trim();
+    if (!raw) { err.textContent = "Paste a Google Maps link first."; return; }
+
+    // Short links (maps.app.goo.gl / goo.gl/maps) carry no route data — expand first.
+    if (isShortMapsLink(raw)) {
+      err.textContent = "";
+      const btn = document.getElementById("linkParse");
+      const oldTxt = btn.textContent; btn.textContent = "Expanding link\u2026"; btn.disabled = true;
+      expandShortLink(raw).then(full => {
+        btn.textContent = oldTxt; btn.disabled = false;
+        if (!full) {
+          err.innerHTML = "Couldn\u2019t auto-expand that short link (the expander may be busy, or it\u2019s a single pin/list with no route).<br>" +
+            "<b>Tip:</b> open the link in Google Maps, copy the long URL from the address bar (the one with <code>/maps/dir/</code>), and paste that here.";
+          return;
+        }
+        // Put the expanded URL back in the box (so the user sees what was read) and build.
+        document.getElementById("linkInput").value = full;
+        buildFromMapsUrl(full, err);
+      });
+      return;
+    }
+    buildFromMapsUrl(raw, err);
+  }
+
+  // True for Google's short links that must be expanded to reveal the route.
+  function isShortMapsLink(u) { return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps)\//i.test(u.trim()); }
+
+  // Expand a short Maps link to its full /maps/... URL using the jina.ai reader
+  // (sends a CORS header for our origin). Returns the full URL or null.
+  function expandShortLink(shortUrl) {
+    const ctrl = ("AbortController" in window) ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+    return fetch("https://r.jina.ai/" + shortUrl, { signal: ctrl ? ctrl.signal : undefined })
+      .then(r => r.ok ? r.text() : "")
+      .then(txt => {
+        if (timer) clearTimeout(timer);
+        if (!txt) return null;
+        const m = txt.match(/https?:\/\/www\.google\.com\/maps\/[^"'\s\\)\]]+/);
+        return m ? m[0] : null;
+      })
+      .catch(() => { if (timer) clearTimeout(timer); return null; });
+  }
+
+  // Parse a full Maps URL into the preview (shared by direct paste + expanded short link).
+  function buildFromMapsUrl(url, err) {
+    const t = findTrip(state.ui.openTripId); if (!t) return;
+    const stops = parseMapsLink(url);
+    if (stops.length < 1) { err.textContent = "Couldn't read any stops from that link. Paste a Google Maps directions (/maps/dir/) link, or a place/search link."; return; }
     const speed = Math.max(5, Number(document.getElementById("linkSpeed").value) || 60);
     const anyCoords = stops.some(s => s.lat != null);
     const DEFAULT_LEG_MIN = 45;
