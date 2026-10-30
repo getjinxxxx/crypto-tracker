@@ -790,7 +790,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 154;
+  const APP_VERSION = 155;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -2008,20 +2008,44 @@
   // True for Google's short links that must be expanded to reveal the route.
   function isShortMapsLink(u) { return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps)\//i.test(u.trim()); }
 
-  // Expand a short Maps link to its full /maps/... URL using the jina.ai reader
-  // (sends a CORS header for our origin). Returns the full URL or null.
+  // Pick the most useful Google Maps URL out of a blob of expanded page text.
+  // Prefer directions (/dir/), then place/search, then any /maps/ URL.
+  function pickBestMapsUrl(txt) {
+    if (!txt) return null;
+    const all = txt.match(/https?:\/\/(?:www\.)?google\.[a-z.]+\/maps\/[^"'\s\\)\]<>]+/gi) || [];
+    if (!all.length) return null;
+    const clean = u => u.replace(/\\u0026/g, "&").replace(/&amp;/g, "&");
+    const dir = all.find(u => /\/maps\/dir\//i.test(u));
+    if (dir) return clean(dir);
+    const place = all.find(u => /\/maps\/(place|search)\//i.test(u));
+    if (place) return clean(place);
+    // Longest tends to carry the most route/coordinate data.
+    return clean(all.sort((a, b) => b.length - a.length)[0]);
+  }
+
+  // Expand a short Maps link to its full /maps/... URL. Google short links have no
+  // route data, so we fetch the redirect target via read-through proxies. We try a
+  // few in sequence (they rate-limit / fail intermittently) and keep the first good hit.
   function expandShortLink(shortUrl) {
-    const ctrl = ("AbortController" in window) ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
-    return fetch("https://r.jina.ai/" + shortUrl, { signal: ctrl ? ctrl.signal : undefined })
-      .then(r => r.ok ? r.text() : "")
-      .then(txt => {
-        if (timer) clearTimeout(timer);
-        if (!txt) return null;
-        const m = txt.match(/https?:\/\/www\.google\.com\/maps\/[^"'\s\\)\]]+/);
-        return m ? m[0] : null;
-      })
-      .catch(() => { if (timer) clearTimeout(timer); return null; });
+    const target = shortUrl.trim();
+    const proxies = [
+      "https://r.jina.ai/" + target,
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(target),
+      "https://corsproxy.io/?url=" + encodeURIComponent(target)
+    ];
+    const tryOne = (url) => {
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+      return fetch(url, { signal: ctrl ? ctrl.signal : undefined })
+        .then(r => r.ok ? r.text() : "")
+        .then(txt => { if (timer) clearTimeout(timer); return pickBestMapsUrl(txt); })
+        .catch(() => { if (timer) clearTimeout(timer); return null; });
+    };
+    // Run proxies in order; resolve on the first that yields a usable URL.
+    return proxies.reduce(
+      (chain, p) => chain.then(found => found || tryOne(p)),
+      Promise.resolve(null)
+    );
   }
 
   // Parse a full Maps URL into the preview (shared by direct paste + expanded short link).
