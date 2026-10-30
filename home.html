@@ -124,6 +124,19 @@
   }
 
   .foot { text-align: center; color: var(--muted); font-size: 11px; margin-top: 28px; }
+
+  /* Version / update chip (dashboard right side) */
+  .version-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+    border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: default;
+  }
+  .version-chip.has-update {
+    background: var(--accent); border-color: var(--accent); color: #130a02;
+    cursor: pointer; animation: chipPulse 1.6s ease-in-out infinite;
+  }
+  .version-chip.has-update:active { transform: scale(.96); }
+  @keyframes chipPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,122,26,.45); } 50% { box-shadow: 0 0 0 5px rgba(255,122,26,0); } }
 </style>
 <link rel="stylesheet" href="theme.css" />
 </head>
@@ -172,6 +185,9 @@
         <div class="welcome" id="greet">Welcome back</div>
         <div class="subdate" id="todayDate"></div>
 
+        <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+          <button id="versionChip" class="version-chip" title="App version">v&mdash;</button>
+        </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
           <button id="eyeBtn" style="display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:7px 11px;font-size:13px;font-weight:600;cursor:pointer;">Show amounts</button>
         </div>
@@ -226,29 +242,36 @@
     document.getElementById("todayDate").textContent = now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   }
 
-  // ---------- Auto-update (manual banner only) ----------
-  const APP_VERSION = 143;
+  // ---------- Version / update chip (dashboard right side; no bottom banner) ----------
+  const APP_VERSION = 149;
+  function setVersionChipIdle() {
+    const chip = document.getElementById("versionChip");
+    if (!chip) return;
+    chip.classList.remove("has-update");
+    chip.textContent = "v" + APP_VERSION + " \u00b7 latest";
+    chip.title = "You're on the latest version";
+    chip.onclick = null;
+  }
+  function setVersionChipUpdate(ver) {
+    const chip = document.getElementById("versionChip");
+    if (!chip) return;
+    chip.classList.add("has-update");
+    chip.textContent = "\u2191 Update v" + ver;
+    chip.title = "A newer version is available \u2014 tap to refresh";
+    chip.onclick = async () => {
+      chip.textContent = "Updating\u2026";
+      if (window.caches && caches.keys) { try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {} }
+      const u = new URL(location.href); u.searchParams.set("v", String(ver) + "." + Date.now()); location.replace(u.toString());
+    };
+  }
   async function checkForUpdate() {
+    setVersionChipIdle();
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
       if (!res.ok) return;
       const j = await res.json();
-      if (!(j && typeof j.version === "number" && j.version > APP_VERSION)) return;
-      showUpdateBanner(j.version);
+      if (j && typeof j.version === "number" && j.version > APP_VERSION) setVersionChipUpdate(j.version);
     } catch (e) {}
-  }
-  function showUpdateBanner(ver) {
-    if (document.getElementById("updateBanner")) return;
-    const bar = document.createElement("div");
-    bar.id = "updateBanner";
-    bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:600;background:var(--accent);color:#130a02;font-size:13px;font-weight:700;text-align:center;padding:10px 14px;cursor:pointer;box-shadow:0 -2px 10px rgba(0,0,0,.4)";
-    bar.textContent = "Update available (v" + ver + ") \u2014 tap to refresh";
-    bar.onclick = async () => {
-      bar.textContent = "Updating\u2026";
-      if (window.caches && caches.keys) { try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {} }
-      const u = new URL(location.href); u.searchParams.set("v", String(ver) + "." + Date.now()); location.replace(u.toString());
-    };
-    document.body.appendChild(bar);
   }
 
   // ---------- Firebase (read-only dashboard; reuses the tracker project) ----------
