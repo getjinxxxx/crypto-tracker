@@ -228,7 +228,7 @@
     #app > .card { margin-bottom: 0; }
   }
 
-  /* ---------- Dense mobile layout (phone) ---------- */
+  /* ---------- Dense mobile layout (phone): one-line rows, no cards ---------- */
   @media (max-width: 899px) {
     body { padding: 8px 10px 90px; }
     .topbar { margin: 4px 0 10px; }
@@ -238,7 +238,7 @@
 
     /* Month bar: compact + sticky. */
     .month-bar {
-      position: sticky; top: 0; z-index: 30; margin: 0 -10px 10px; border-radius: 0;
+      position: sticky; top: 0; z-index: 30; margin: 0 -10px 8px; border-radius: 0;
       border-left: none; border-right: none; padding: 7px 12px; gap: 10px;
     }
     .month-bar button { width: 34px; height: 34px; font-size: 16px; }
@@ -246,32 +246,50 @@
 
     /* Summary: compact strip, sticky under the month bar. */
     .summary {
-      position: sticky; top: 48px; z-index: 29; margin: 0 -10px 12px; border-radius: 0;
+      position: sticky; top: 48px; z-index: 29; margin: 0 -10px 10px; border-radius: 0;
       border-left: none; border-right: none; padding: 8px 12px;
     }
     .summary .srow { padding: 2px 0; font-size: 13px; }
     .summary .big { font-size: 18px; }
 
-    /* Flatten cards into rows. */
-    .card { border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
-    .debt-item {
-      background: transparent; border: none; border-top: 1px solid var(--line);
-      border-radius: 0; padding: 8px 2px; margin-bottom: 0;
+    /* Main list is not a card on phone. */
+    #debtList .card { background: transparent; border: none; border-radius: 0; padding: 0; margin: 0; }
+
+    .sec-head { padding: 7px 10px; margin: 6px 0 6px; }
+    .sec-head .sec-title { font-size: 12px; }
+    .sec-head .sec-total { font-size: 13px; }
+
+    .cat-group { margin-bottom: 10px; }
+    .cat-header { padding: 2px 2px 5px; margin-bottom: 2px; }
+    .cat-title { font-size: 12px; }
+    .cat-total { font-size: 12px; }
+
+    .debt-item { background: transparent; border: none; border-radius: 0; padding: 0; margin: 0 0 2px; }
+    .debt-item.paid-off { border: none; }
+    .debt-head { margin: 0; gap: 6px; padding: 4px 2px; align-items: center; }
+    .debt-head .d-name { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+    .debt-head .d-badge { display: none; }
+    .debt-head .d-edit, .debt-head .d-del, .debt-head .d-share { font-size: 16px; padding: 3px 5px; }
+
+    .d-amounts, .d-bar, .d-meta { display: none !important; }
+
+    .sub-box { background: transparent; border: none; border-radius: 0; padding: 0; margin: 0; }
+    .sub-box-head { font-size: 10px; padding: 4px 2px 2px; margin: 0; opacity: .7; }
+
+    .bd-row {
+      padding: 10px 8px; gap: 10px; border-top: 1px solid var(--line);
+      font-size: 14px; min-height: 44px;
     }
-    .debt-item.paid-off { border-color: var(--line); }
-    .debt-head { margin-bottom: 4px; gap: 8px; }
-    .debt-head .d-name { font-size: 15px; }
-    .d-sub { font-size: 11px; margin: -2px 0 6px; }
+    .bd-check { width: 20px; height: 20px; }
+    .bd-label { font-size: 14px; line-height: 1.3; }
+    .bd-amt { font-size: 14px; font-variant-numeric: tabular-nums; }
+    .bd-edit { font-size: 15px; padding: 2px 5px; }
+    .bd-del  { font-size: 18px; padding: 2px 5px; }
+    .due-simple { display: inline-block !important; background: rgba(245,197,66,0.15); color: var(--gold-bright);
+      font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-left: 4px; }
 
-    .sec-head { padding: 8px 12px; margin: 2px 0 8px; }
-    .cat-group { margin-bottom: 12px; }
-    .cat-header { padding: 2px 2px 6px; margin-bottom: 6px; }
-
-    .bd-row { padding: 5px 0; }
-    .term-row { padding: 8px 10px; margin-top: 8px; }
-    .sub-box { padding: 6px 10px; margin-top: 8px; }
-
-    .debt-head .d-edit, .debt-head .d-del, .debt-head .d-share { font-size: 17px; padding: 4px 6px; }
+    .term-row { padding: 9px 10px; margin-top: 8px; }
+    .edit-panel { margin-top: 6px; }
   }
 </style>
 </head>
@@ -1139,7 +1157,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 146;
+  const APP_VERSION = 147;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
