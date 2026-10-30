@@ -451,6 +451,57 @@
     #app > .summary, #app > #debtList { grid-column: 1 / -1; }
     #app > .card { margin-bottom: 0; }
   }
+
+  /* ---------- Dense mobile layout (phone) ---------- */
+  @media (max-width: 899px) {
+    body { padding: 8px 10px 90px; }
+    .topbar { margin: 4px 0 10px; }
+
+    /* Toggles: slimmer pills, less vertical space. */
+    .view-toggle { margin-bottom: 8px; }
+    .view-toggle button { padding: 6px 8px; font-size: 12px; }
+    #cutoffToggle { margin-top: 6px !important; }
+
+    /* Month bar: compact + sticky at the top so you always know/switch the month. */
+    .month-bar {
+      position: sticky; top: 0; z-index: 30; margin: 0 -10px 10px; border-radius: 0;
+      border-left: none; border-right: none; padding: 7px 12px; gap: 10px;
+    }
+    .month-bar button { width: 34px; height: 34px; font-size: 16px; }
+    .month-bar .m-label { font-size: 15px; min-width: 0; flex: 1; }
+
+    /* Summary: compact strip, sticky under the month bar. Big number toned down. */
+    .summary {
+      position: sticky; top: 48px; z-index: 29; margin: 0 -10px 12px; border-radius: 0;
+      border-left: none; border-right: none; padding: 8px 12px;
+    }
+    .summary .srow { padding: 2px 0; font-size: 13px; }
+    .summary .big { font-size: 18px; }
+
+    /* Flatten cards: kill the heavy border/padding/radius that eats vertical space. */
+    .card { border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .debt-item {
+      background: transparent; border: none; border-top: 1px solid var(--line);
+      border-radius: 0; padding: 8px 2px; margin-bottom: 0;
+    }
+    .debt-item.paid-off { border-color: var(--line); }
+    .debt-head { margin-bottom: 4px; gap: 8px; }
+    .debt-head .d-name { font-size: 15px; }
+    .d-sub { font-size: 11px; margin: -2px 0 6px; }
+
+    /* Section + category headers: tighter. */
+    .sec-head { padding: 8px 12px; margin: 2px 0 8px; }
+    .cat-group { margin-bottom: 12px; }
+    .cat-header { padding: 2px 2px 6px; margin-bottom: 6px; }
+
+    /* Breakdown rows: a touch denser. */
+    .bd-row { padding: 5px 0; }
+    .term-row { padding: 8px 10px; margin-top: 8px; }
+    .sub-box { padding: 6px 10px; margin-top: 8px; }
+
+    /* Bigger tap targets for the small header action icons. */
+    .debt-head .d-edit, .debt-head .d-del, .debt-head .d-share { font-size: 17px; padding: 4px 6px; }
+  }
 </style>
 </head>
 <body class="locked">
@@ -2765,7 +2816,7 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 143;
+  const APP_VERSION = 146;
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
     try {
