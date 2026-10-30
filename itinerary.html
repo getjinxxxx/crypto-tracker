@@ -180,7 +180,10 @@
   .menu-btn { width: 34px; height: 34px; border-radius: 9px; background: transparent; border: 1px solid transparent; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .menu-btn:hover { background: var(--panel-2); color: var(--text); }
   .row.typed .menu-btn { color: rgba(0,0,0,.6); }
-  .menu-pop { display: none; position: absolute; top: 40px; right: 6px; z-index: 50; min-width: 170px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.5); overflow: hidden; }
+  /* Open menu is FIXED and positioned by JS next to the button, so it never gets
+     clipped by the timeline's overflow and is always on-screen (flips up near the
+     bottom edge). It can also scroll internally if it's very tall. */
+  .menu-pop { display: none; position: fixed; z-index: 450; min-width: 180px; max-height: 70vh; overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
   .menu-pop.open { display: block; }
   .menu-item { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text); font-size: 14px; padding: 11px 14px; cursor: pointer; font-family: inherit; }
   .menu-item:hover { background: var(--panel-2); }
@@ -717,7 +720,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 151;
+  const APP_VERSION = 152;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1131,7 +1134,7 @@
       const pop = document.getElementById("menu-" + id);
       const wasOpen = pop.classList.contains("open");
       closeAllRowMenus();
-      if (!wasOpen) pop.classList.add("open");
+      if (!wasOpen) { pop.classList.add("open"); positionRowMenu(b, pop); }
     });
     wrap.querySelectorAll(".menu-item").forEach(mi => mi.onclick = (e) => {
       e.stopPropagation();
@@ -1148,6 +1151,37 @@
   }
   function closeAllRowMenus() { document.querySelectorAll(".menu-pop.open").forEach(p => p.classList.remove("open")); }
   document.addEventListener("click", closeAllRowMenus);
+
+  // Place the (fixed) row menu next to its button. Flip up when near the bottom,
+  // and clamp within the viewport so the whole menu is always reachable.
+  function positionRowMenu(btn, pop) {
+    const r = btn.getBoundingClientRect();
+    const margin = 8;
+    // Measure natural size (temporarily unclamp height for measuring).
+    pop.style.maxHeight = "70vh";
+    const pw = Math.max(pop.offsetWidth, 180);
+    const ph = pop.offsetHeight;
+    // Horizontal: align right edge of menu to right edge of button, clamp to screen.
+    let left = Math.min(r.right - pw, window.innerWidth - pw - margin);
+    left = Math.max(margin, left);
+    // Vertical: prefer below the button; if not enough room, open above.
+    const below = window.innerHeight - r.bottom;
+    let top;
+    if (below >= ph + margin || below >= r.top) { top = Math.min(r.bottom + 4, window.innerHeight - ph - margin); }
+    else { top = Math.max(margin, r.top - ph - 4); }
+    top = Math.max(margin, Math.min(top, window.innerHeight - ph - margin));
+    pop.style.left = left + "px";
+    pop.style.top = top + "px";
+  }
+  // Keep the open menu glued to its row while scrolling; close on resize.
+  window.addEventListener("scroll", () => {
+    const pop = document.querySelector(".menu-pop.open");
+    if (!pop) return;
+    const id = pop.id.replace(/^menu-/, "");
+    const btn = document.querySelector('[data-menu="' + id + '"]');
+    if (btn) positionRowMenu(btn, pop); else closeAllRowMenus();
+  }, true);
+  window.addEventListener("resize", closeAllRowMenus);
   // ---------- Drag & drop reorder within a day ----------
   let dragRowId = null;
   function wireRowDrag(t, wrap) {
