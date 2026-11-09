@@ -807,7 +807,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 165;
+  const APP_VERSION = 166;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -2152,20 +2152,66 @@
       return;
     }
     if (!orsKey) { found.textContent = "Enter your OpenRouteService key to use real road times."; return; }
-    if (!hasCoords) { found.textContent = "This link has no coordinates, so real road times aren\u2019t available \u2014 using the speed estimate."; return; }
 
-    found.textContent = "Fetching real road times\u2026";
-    applyRealRouteTimes(orsKey).then(n => {
-      const nStops = linkStops.length;
-      if (n > 0) {
-        found.textContent = "Using real road times for " + n + " leg" + (n === 1 ? "" : "s") +
-          " (" + nStops + " stops). Edit any drive time to override.";
-      } else {
-        found.textContent = "Couldn\u2019t get real road times" + (lastOrsError ? " (" + lastOrsError + ")" : "") +
-          " \u2014 using the speed estimate instead.";
+    // If stops are names only (e.g. ?origin=...&destination=...), geocode them first
+    // so routing has coordinates to work with.
+    const needGeo = linkStops.some(s => s.lat == null && s.name);
+    const prep = needGeo
+      ? (found.textContent = "Looking up stop locations\u2026", geocodeMissing(orsKey))
+      : Promise.resolve(0);
+
+    prep.then(() => {
+      if (!linkStops.some(s => s.lat != null)) {
+        found.textContent = "Couldn\u2019t find coordinates for these places" + (lastOrsError ? " (" + lastOrsError + ")" : "") +
+          " \u2014 using the speed estimate. Try a link with pins/coordinates.";
+        rescheduleLink();
+        return;
       }
-      rescheduleLink();
+      found.textContent = "Fetching real road times\u2026";
+      applyRealRouteTimes(orsKey).then(n => {
+        const nStops = linkStops.length;
+        if (n > 0) {
+          found.textContent = "Using real road times for " + n + " leg" + (n === 1 ? "" : "s") +
+            " (" + nStops + " stops). Edit any drive time to override.";
+        } else {
+          found.textContent = "Couldn\u2019t get real road times" + (lastOrsError ? " (" + lastOrsError + ")" : "") +
+            " \u2014 using the speed estimate instead.";
+        }
+        rescheduleLink();
+      });
     });
+  }
+
+  // Geocode any stop that has a name but no coordinates, using ORS geocoding
+  // (same key). Fills lat/lng in place. Returns count resolved. Biased to the
+  // Philippines so local place names resolve well.
+  function geocodeMissing(key) {
+    const todo = [];
+    linkStops.forEach((s, i) => { if (s.lat == null && s.name) todo.push(i); });
+    if (!todo.length) return Promise.resolve(0);
+
+    const geoOne = (i) => {
+      const s = linkStops[i];
+      const url = "https://api.openrouteservice.org/geocode/search?api_key=" + encodeURIComponent(key) +
+        "&text=" + encodeURIComponent(s.name) +
+        "&boundary.country=PH&size=1";
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+      return fetch(url, { signal: ctrl ? ctrl.signal : undefined })
+        .then(r => { if (timer) clearTimeout(timer); if (!r.ok) { lastOrsError = "geocode HTTP " + r.status; return null; } return r.json(); })
+        .then(j => {
+          const f = j && j.features && j.features[0];
+          const c = f && f.geometry && f.geometry.coordinates; // [lng, lat]
+          if (c && c.length === 2) { linkStops[i].lng = c[0]; linkStops[i].lat = c[1]; return true; }
+          return false;
+        })
+        .catch((e) => { if (timer) clearTimeout(timer); lastOrsError = (e && e.name === "AbortError") ? "geocode timeout" : "geocode network"; return false; });
+    };
+    // Sequential to stay under the free-tier rate limit.
+    return todo.reduce(
+      (chain, i) => chain.then(count => geoOne(i).then(ok => count + (ok ? 1 : 0))),
+      Promise.resolve(0)
+    );
   }
 
   // Recompute every leg's minutes from the straight-line estimate (used when real
