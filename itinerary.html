@@ -807,7 +807,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 160;
+  const APP_VERSION = 161;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -2149,7 +2149,8 @@
         found.textContent = "Using real road times for " + n + " leg" + (n === 1 ? "" : "s") +
           " (" + nStops + " stops). Edit any drive time to override.";
       } else {
-        found.textContent = "Couldn\u2019t get real road times (check the key / quota) \u2014 using the speed estimate instead.";
+        found.textContent = "Couldn\u2019t get real road times" + (lastOrsError ? " (" + lastOrsError + ")" : "") +
+          " \u2014 using the speed estimate instead.";
       }
       rescheduleLink();
     });
@@ -2168,14 +2169,22 @@
     }
   }
 
+  // Last ORS error (for a clearer status message). Reset each run.
+  let lastOrsError = "";
+
   // Fetch real driving times per leg from OpenRouteService and write them into
   // linkStops (legMin + km + real flag). Returns how many legs were updated.
   // Honors the Avoid tolls / Avoid highways checkboxes. Falls back silently per leg.
+  //
+  // Uses the GET endpoint with the key as a query param: a GET with no custom
+  // headers is a "simple" CORS request, so it avoids the preflight that was
+  // blocking the browser POST on GitHub Pages.
   function applyRealRouteTimes(key) {
+    lastOrsError = "";
     const avoid = [];
     if (document.getElementById("linkAvoidTolls").checked) avoid.push("tollways");
     if (document.getElementById("linkAvoidHwy").checked) avoid.push("highways");
-    const options = avoid.length ? { avoid_features: avoid } : null;
+    const optionsParam = avoid.length ? "&options=" + encodeURIComponent(JSON.stringify({ avoid_features: avoid })) : "";
 
     const legs = [];
     for (let i = 1; i < linkStops.length; i++) {
@@ -2186,27 +2195,30 @@
 
     const fetchLeg = (i) => {
       const a = linkStops[i - 1], b = linkStops[i];
-      const body = { coordinates: [[a.lng, a.lat], [b.lng, b.lat]] };
-      if (options) body.options = options;
+      const url = "https://api.openrouteservice.org/v2/directions/driving-car" +
+        "?api_key=" + encodeURIComponent(key) +
+        "&start=" + a.lng + "," + a.lat +
+        "&end=" + b.lng + "," + b.lat +
+        optionsParam;
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
-      return fetch("https://api.openrouteservice.org/v2/directions/driving-car", {
-        method: "POST",
-        headers: { "Authorization": key, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: ctrl ? ctrl.signal : undefined
-      })
-        .then(r => r.ok ? r.json() : null)
+      return fetch(url)
+        .then(r => {
+          if (!r.ok) { lastOrsError = "HTTP " + r.status; return null; }
+          return r.json();
+        })
         .then(j => {
           if (timer) clearTimeout(timer);
-          const sum = j && j.routes && j.routes[0] && j.routes[0].summary;
-          if (!sum) return false;
+          // GET endpoint returns GeoJSON: features[0].properties.summary
+          const feat = j && j.features && j.features[0];
+          const sum = feat && feat.properties && feat.properties.summary;
+          if (!sum) { if (!lastOrsError) lastOrsError = "no route"; return false; }
           linkStops[i].legMin = Math.max(1, Math.round(sum.duration / 60));
           linkStops[i].km = Math.round(sum.distance / 1000);
           linkStops[i].real = true;
           return true;
         })
-        .catch(() => { if (timer) clearTimeout(timer); return false; });
+        .catch((e) => { if (timer) clearTimeout(timer); lastOrsError = (e && e.name === "AbortError") ? "timeout" : "network/CORS"; return false; });
     };
     // Sequential to stay well under the free-tier rate limit.
     return legs.reduce(
