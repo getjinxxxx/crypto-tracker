@@ -807,7 +807,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 162;
+  const APP_VERSION = 163;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -2178,15 +2178,14 @@
   // linkStops (legMin + km + real flag). Returns how many legs were updated.
   // Honors the Avoid tolls / Avoid highways checkboxes. Falls back silently per leg.
   //
-  // Uses the GET endpoint with the key as a query param: a GET with no custom
-  // headers is a "simple" CORS request, so it avoids the preflight that was
-  // blocking the browser POST on GitHub Pages.
+  // Uses the POST endpoint: it's the only one that supports avoid_features, and
+  // ORS sends CORS headers so the browser request works. (The GET endpoint 404s
+  // when given an options param, which is why avoid routes failed before.)
   function applyRealRouteTimes(key) {
     lastOrsError = "";
     const avoid = [];
     if (document.getElementById("linkAvoidTolls").checked) avoid.push("tollways");
     if (document.getElementById("linkAvoidHwy").checked) avoid.push("highways");
-    const optionsParam = avoid.length ? "&options=" + encodeURIComponent(JSON.stringify({ avoid_features: avoid })) : "";
 
     const legs = [];
     for (let i = 1; i < linkStops.length; i++) {
@@ -2197,23 +2196,24 @@
 
     const fetchLeg = (i) => {
       const a = linkStops[i - 1], b = linkStops[i];
-      const url = "https://api.openrouteservice.org/v2/directions/driving-car" +
-        "?api_key=" + encodeURIComponent(key) +
-        "&start=" + a.lng + "," + a.lat +
-        "&end=" + b.lng + "," + b.lat +
-        optionsParam;
+      const body = { coordinates: [[a.lng, a.lat], [b.lng, b.lat]] };
+      if (avoid.length) body.options = { avoid_features: avoid };
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
-      return fetch(url)
+      return fetch("https://api.openrouteservice.org/v2/directions/driving-car", {
+        method: "POST",
+        headers: { "Authorization": key, "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl ? ctrl.signal : undefined
+      })
         .then(r => {
           if (!r.ok) { lastOrsError = "HTTP " + r.status; return null; }
           return r.json();
         })
         .then(j => {
           if (timer) clearTimeout(timer);
-          // GET endpoint returns GeoJSON: features[0].properties.summary
-          const feat = j && j.features && j.features[0];
-          const sum = feat && feat.properties && feat.properties.summary;
+          // POST endpoint returns { routes: [ { summary: { duration, distance } } ] }
+          const sum = j && j.routes && j.routes[0] && j.routes[0].summary;
           if (!sum) { if (!lastOrsError) lastOrsError = "no route"; return false; }
           linkStops[i].legMin = Math.max(1, Math.round(sum.duration / 60));
           linkStops[i].km = Math.round(sum.distance / 1000);
