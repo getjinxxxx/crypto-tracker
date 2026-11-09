@@ -657,7 +657,7 @@
         </div>
         <div class="field"><label>OpenRouteService API key</label>
           <input id="linkOrsKey" type="text" placeholder="Paste your free ORS key (saved on this device)" />
-          <div class="scan-note">Get a free key at <b>openrouteservice.org</b> &rarr; Sign up &rarr; Dashboard. Stored only in this browser. Without a key, times fall back to the speed estimate.</div>
+          <div class="scan-note">A built-in key is already filled in, so this just works. To use your own (free at <b>openrouteservice.org</b> &rarr; Dashboard), paste it here &mdash; it's saved on this device and overrides the default.</div>
         </div>
       </div>
       <div class="field two">
@@ -800,8 +800,14 @@
     boot();
   }
 
+  // Default OpenRouteService key (free tier). Hardcoded so real road times work
+  // without pasting a key each time. NOTE: this repo is public, so this key is
+  // visible in source — it's a personal free key; regenerate at openrouteservice.org
+  // if the quota gets abused. The key field in the Import modal still overrides it.
+  const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
+
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 159;
+  const APP_VERSION = 160;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1880,10 +1886,11 @@
     document.getElementById("linkSpeed").value = "60";
     document.getElementById("linkBuffer").value = "0.25";
     document.getElementById("linkReplace").checked = false;
-    // Real-road-times controls: restore saved prefs (ORS key + toggle state).
+    // Real-road-times controls: use a saved override if present, else the built-in
+    // default key. Real times default ON so it just works.
     const savedKey = (function(){ try { return localStorage.getItem("itn_ors_key") || ""; } catch (e) { return ""; } })();
-    document.getElementById("linkOrsKey").value = savedKey;
-    document.getElementById("linkReal").checked = !!savedKey;
+    document.getElementById("linkOrsKey").value = savedKey || DEFAULT_ORS_KEY;
+    document.getElementById("linkReal").checked = true;
     document.getElementById("linkAvoidTolls").checked = false;
     document.getElementById("linkAvoidHwy").checked = false;
     syncLinkRealUI();
