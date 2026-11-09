@@ -648,8 +648,20 @@
         <div><label>Target day</label><select id="linkDay"></select></div>
         <div><label>Start time</label><input id="linkStart" type="time" value="08:00" /></div>
       </div>
+      <div class="field inline"><input type="checkbox" id="linkReal" /><label for="linkReal" style="margin:0;">Use real road times</label></div>
+      <!-- Routing options: only relevant when real times are on. -->
+      <div id="linkRealOpts" style="display:none;">
+        <div class="field inline" style="gap:16px;">
+          <label class="rad" style="margin:0;"><input type="checkbox" id="linkAvoidTolls" /> Avoid tolls</label>
+          <label class="rad" style="margin:0;"><input type="checkbox" id="linkAvoidHwy" /> Avoid highways</label>
+        </div>
+        <div class="field"><label>OpenRouteService API key</label>
+          <input id="linkOrsKey" type="text" placeholder="Paste your free ORS key (saved on this device)" />
+          <div class="scan-note">Get a free key at <b>openrouteservice.org</b> &rarr; Sign up &rarr; Dashboard. Stored only in this browser. Without a key, times fall back to the speed estimate.</div>
+        </div>
+      </div>
       <div class="field two">
-        <div><label>Avg speed (km/h)</label><input id="linkSpeed" type="number" inputmode="decimal" value="60" /></div>
+        <div id="linkSpeedWrap"><label>Avg speed (km/h)</label><input id="linkSpeed" type="number" inputmode="decimal" value="60" /></div>
         <div><label>Buffer per stop (hrs)</label><input id="linkBuffer" type="number" step="0.25" inputmode="decimal" value="0.25" /></div>
       </div>
       <div class="field inline"><input type="checkbox" id="linkReplace" /><label for="linkReplace" style="margin:0;">Replace day's entries</label></div>
@@ -789,7 +801,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 157;
+  const APP_VERSION = 158;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1866,8 +1878,15 @@
     document.getElementById("linkInput").value = "";
     document.getElementById("linkStart").value = "08:00";
     document.getElementById("linkSpeed").value = "60";
-    document.getElementById("linkBuffer").value = "15";
+    document.getElementById("linkBuffer").value = "0.25";
     document.getElementById("linkReplace").checked = false;
+    // Real-road-times controls: restore saved prefs (ORS key + toggle state).
+    const savedKey = (function(){ try { return localStorage.getItem("itn_ors_key") || ""; } catch (e) { return ""; } })();
+    document.getElementById("linkOrsKey").value = savedKey;
+    document.getElementById("linkReal").checked = !!savedKey;
+    document.getElementById("linkAvoidTolls").checked = false;
+    document.getElementById("linkAvoidHwy").checked = false;
+    syncLinkRealUI();
     const days = datesInRange(t.start, t.end);
     document.getElementById("linkDay").innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
     document.getElementById("linkModalBg").classList.add("show");
@@ -2084,11 +2103,84 @@
       const legMin = km != null ? Math.round((km / speed) * 60) : DEFAULT_LEG_MIN;
       return { name: s.name, lat: s.lat, lng: s.lng, km: km != null ? Math.round(km) : null, legMin: legMin, stayMin: isEnd ? 0 : defBuffer };
     });
-    document.getElementById("linkFound").textContent = "Scheduled " + stops.length + " stop" + (stops.length === 1 ? "" : "s") +
+    const found = document.getElementById("linkFound");
+    found.textContent = "Scheduled " + stops.length + " stop" + (stops.length === 1 ? "" : "s") +
       (anyCoords ? " using link coordinates. Edit any drive time below \u2014 times recompute automatically." : " (no coords \u2014 " + minToHrs(DEFAULT_LEG_MIN) + " hr/leg default; edit drive times below).");
     rescheduleLink();
     document.getElementById("linkResultWrap").style.display = "block";
     document.getElementById("linkAdd").style.display = "block";
+
+    // Optional: replace the straight-line estimate with real road times from ORS.
+    const wantReal = document.getElementById("linkReal").checked;
+    const orsKey = (document.getElementById("linkOrsKey").value || "").trim();
+    if (wantReal && orsKey && anyCoords) {
+      found.textContent = "Fetching real road times\u2026";
+      applyRealRouteTimes(orsKey).then(n => {
+        if (n > 0) {
+          found.textContent = "Scheduled " + stops.length + " stop" + (stops.length === 1 ? "" : "s") +
+            " with real road times (" + n + " leg" + (n === 1 ? "" : "s") + "). Edit any drive time below to override.";
+        } else {
+          found.textContent = "Couldn\u2019t get real road times (bad key, no quota, or no coords) \u2014 using the speed estimate instead.";
+        }
+        rescheduleLink();
+      });
+    }
+  }
+
+  // Fetch real driving times per leg from OpenRouteService and write them into
+  // linkStops (legMin + km + real flag). Returns how many legs were updated.
+  // Honors the Avoid tolls / Avoid highways checkboxes. Falls back silently per leg.
+  function applyRealRouteTimes(key) {
+    const avoid = [];
+    if (document.getElementById("linkAvoidTolls").checked) avoid.push("tollways");
+    if (document.getElementById("linkAvoidHwy").checked) avoid.push("highways");
+    const options = avoid.length ? { avoid_features: avoid } : null;
+
+    const legs = [];
+    for (let i = 1; i < linkStops.length; i++) {
+      const a = linkStops[i - 1], b = linkStops[i];
+      if (a.lat != null && a.lng != null && b.lat != null && b.lng != null) legs.push(i);
+    }
+    if (!legs.length) return Promise.resolve(0);
+
+    const fetchLeg = (i) => {
+      const a = linkStops[i - 1], b = linkStops[i];
+      const body = { coordinates: [[a.lng, a.lat], [b.lng, b.lat]] };
+      if (options) body.options = options;
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+      return fetch("https://api.openrouteservice.org/v2/directions/driving-car", {
+        method: "POST",
+        headers: { "Authorization": key, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl ? ctrl.signal : undefined
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(j => {
+          if (timer) clearTimeout(timer);
+          const sum = j && j.routes && j.routes[0] && j.routes[0].summary;
+          if (!sum) return false;
+          linkStops[i].legMin = Math.max(1, Math.round(sum.duration / 60));
+          linkStops[i].km = Math.round(sum.distance / 1000);
+          linkStops[i].real = true;
+          return true;
+        })
+        .catch(() => { if (timer) clearTimeout(timer); return false; });
+    };
+    // Sequential to stay well under the free-tier rate limit.
+    return legs.reduce(
+      (chain, i) => chain.then(count => fetchLeg(i).then(ok => count + (ok ? 1 : 0))),
+      Promise.resolve(0)
+    );
+  }
+
+  // Show/hide the routing options + speed field based on the real-times toggle,
+  // and persist the ORS key so it's remembered next time.
+  function syncLinkRealUI() {
+    const on = document.getElementById("linkReal").checked;
+    document.getElementById("linkRealOpts").style.display = on ? "" : "none";
+    const speedWrap = document.getElementById("linkSpeedWrap");
+    if (speedWrap) speedWrap.style.display = on ? "none" : "";
   }
   // Rebuild linkParsed (stops + legs with arrival & end times) from linkStops + start, then render.
   function rescheduleLink() {
@@ -2119,6 +2211,7 @@
         html += '<div class="pv-row leg"><div class="pv-t">Drive</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
           '<input type="number" min="0" step="0.25" inputmode="decimal" data-legmin="' + i + '" value="' + minToHrs(s.legMin) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 6px;font-size:12px;" /> hrs' +
           (s.km != null ? ' <span style="color:var(--muted)">\u2248' + s.km + ' km</span>' : ' <span style="color:var(--muted)">(est.)</span>') +
+          (s.real ? ' <span style="color:var(--gold-bright);font-size:11px;">\uD83D\uDEE3 real route</span>' : '') +
           '</div></div>';
       }
       const timed = stopEntries[i];
@@ -2137,7 +2230,7 @@
     totalLine.textContent = "Driving: " + minsToText(driveMin) + "  \u00b7  Stops: " + minsToText(stayMin);
     wrap.appendChild(totalLine);
     wrap.querySelectorAll("[data-legmin]").forEach(inp => {
-      inp.onchange = () => { const i = Number(inp.getAttribute("data-legmin")); if (linkStops[i]) { linkStops[i].legMin = hrsToMin(inp.value); rescheduleLink(); } };
+      inp.onchange = () => { const i = Number(inp.getAttribute("data-legmin")); if (linkStops[i]) { linkStops[i].legMin = hrsToMin(inp.value); linkStops[i].real = false; rescheduleLink(); } };
     });
     wrap.querySelectorAll("[data-staymin]").forEach(inp => {
       inp.onchange = () => { const i = Number(inp.getAttribute("data-staymin")); if (linkStops[i]) { linkStops[i].stayMin = hrsToMin(inp.value); rescheduleLink(); } };
@@ -2744,9 +2837,18 @@
   // hold the old default (keeps your custom per-stop stays intact).
   document.getElementById("linkBuffer").addEventListener("change", () => {
     if (!linkStops.length) return;
-    const nb = Math.max(0, Number(document.getElementById("linkBuffer").value) || 0);
+    const nb = hrsToMin(document.getElementById("linkBuffer").value); // hours -> minutes
     linkStops.forEach((s, i) => { if (i > 0 && i < linkStops.length - 1) s.stayMin = nb; });
     rescheduleLink();
+  });
+  // Real-road-times controls.
+  document.getElementById("linkReal").addEventListener("change", () => {
+    syncLinkRealUI();
+    if (document.getElementById("linkReal").checked) document.getElementById("linkOrsKey").focus();
+  });
+  document.getElementById("linkOrsKey").addEventListener("change", () => {
+    const k = (document.getElementById("linkOrsKey").value || "").trim();
+    try { if (k) localStorage.setItem("itn_ors_key", k); else localStorage.removeItem("itn_ors_key"); } catch (e) {}
   });
   document.getElementById("scanCamBtn").onclick = () => document.getElementById("scanCamInput").click();
   document.getElementById("scanUpBtn").onclick = () => document.getElementById("scanUpInput").click();
