@@ -172,7 +172,7 @@
 
     <div class="board" id="board"></div>
 
-    <div class="foot">Personal use only &bull; data stays on your device &amp; syncs to your cloud</div>
+    <div class="foot">Personal use only &bull; data stays on your device &amp; syncs to your cloud &bull; <span id="footVer"></span></div>
   </div>
 
   <!-- Card modal -->
@@ -222,8 +222,10 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 143;
+  const APP_VERSION = 144;
+  function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
+    setFooterVersion();
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
       if (!res.ok) return;

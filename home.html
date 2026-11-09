@@ -215,7 +215,7 @@
           <div class="kb" id="kbSnapshot"></div>
         </div>
 
-        <div class="foot">Personal use only &bull; data stays on your device</div>
+        <div class="foot">Personal use only &bull; data stays on your device &bull; <span id="footVer"></span></div>
       </main>
     </div>
   </div>
@@ -243,8 +243,9 @@
   }
 
   // ---------- Version / update chip (dashboard right side; no bottom banner) ----------
-  const APP_VERSION = 150;
+  const APP_VERSION = 151;
   function setVersionChipIdle() {
+    const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION;
     const chip = document.getElementById("versionChip");
     if (!chip) return;
     chip.classList.remove("has-update");

@@ -831,7 +831,7 @@
     </div>
 
     <div class="note" style="text-align:center">
-      Personal use only. All data stays on this device (nothing is sent anywhere).
+      Personal use only. All data stays on this device (nothing is sent anywhere). &bull; <span id="footVer"></span>
     </div>
   </div>
 
@@ -2840,9 +2840,11 @@
   }
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 147;
+  const APP_VERSION = 148;
+  function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
+    setFooterVersion();
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
       if (!res.ok) return;

@@ -480,7 +480,7 @@
       <button class="fab" id="fabBtn" aria-label="Add">+</button>
     </div>
 
-    <div class="foot">Personal use only &bull; data stays on your device &amp; syncs to your cloud</div>
+    <div class="foot">Personal use only &bull; data stays on your device &amp; syncs to your cloud &bull; <span id="footVer"></span></div>
   </div>
 
   <!-- Trip modal -->
@@ -807,8 +807,10 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 161;
+  const APP_VERSION = 162;
+  function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
+    setFooterVersion();
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
       if (!res.ok) return;
