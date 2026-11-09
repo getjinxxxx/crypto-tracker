@@ -807,7 +807,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 164;
+  const APP_VERSION = 165;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -2070,14 +2070,17 @@
   }
 
   // Expand a short Maps link to its full /maps/... URL. Google short links have no
-  // route data, so we fetch the redirect target via read-through proxies. We try a
-  // few in sequence (they rate-limit / fail intermittently) and keep the first good hit.
+  // route data, so we fetch the redirect target via read-through proxies. These
+  // services rate-limit / go down intermittently, so we hit SEVERAL IN PARALLEL
+  // and resolve on the first one that yields a usable Maps URL.
   function expandShortLink(shortUrl) {
     const target = shortUrl.trim();
     const proxies = [
       "https://r.jina.ai/" + target,
+      "https://api.codetabs.com/v1/proxy/?quest=" + target,
       "https://api.allorigins.win/raw?url=" + encodeURIComponent(target),
-      "https://corsproxy.io/?url=" + encodeURIComponent(target)
+      "https://corsproxy.io/?url=" + encodeURIComponent(target),
+      "https://thingproxy.freeboard.io/fetch/" + target
     ];
     const tryOne = (url) => {
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
@@ -2087,11 +2090,18 @@
         .then(txt => { if (timer) clearTimeout(timer); return pickBestMapsUrl(txt); })
         .catch(() => { if (timer) clearTimeout(timer); return null; });
     };
-    // Run proxies in order; resolve on the first that yields a usable URL.
-    return proxies.reduce(
-      (chain, p) => chain.then(found => found || tryOne(p)),
-      Promise.resolve(null)
-    );
+    // Resolve with the first proxy that returns a usable URL; null only if all fail.
+    return new Promise((resolve) => {
+      let pending = proxies.length;
+      let done = false;
+      proxies.forEach(p => {
+        tryOne(p).then(found => {
+          if (done) return;
+          if (found) { done = true; resolve(found); return; }
+          if (--pending === 0) resolve(null);
+        });
+      });
+    });
   }
 
   // Parse a full Maps URL into the preview (shared by direct paste + expanded short link).
