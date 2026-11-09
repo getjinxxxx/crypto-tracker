@@ -801,7 +801,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 158;
+  const APP_VERSION = 159;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -2111,19 +2111,53 @@
     document.getElementById("linkAdd").style.display = "block";
 
     // Optional: replace the straight-line estimate with real road times from ORS.
+    refreshRealTimes();
+  }
+
+  // Re-apply (or clear) real road times for the CURRENT preview. Safe to call any
+  // time after a preview is built; used on first build and when the toggle / avoid
+  // options / key change. Updates the status line and reschedules.
+  function refreshRealTimes() {
+    if (!linkStops.length) return;
+    const found = document.getElementById("linkFound");
     const wantReal = document.getElementById("linkReal").checked;
     const orsKey = (document.getElementById("linkOrsKey").value || "").trim();
-    if (wantReal && orsKey && anyCoords) {
-      found.textContent = "Fetching real road times\u2026";
-      applyRealRouteTimes(orsKey).then(n => {
-        if (n > 0) {
-          found.textContent = "Scheduled " + stops.length + " stop" + (stops.length === 1 ? "" : "s") +
-            " with real road times (" + n + " leg" + (n === 1 ? "" : "s") + "). Edit any drive time below to override.";
-        } else {
-          found.textContent = "Couldn\u2019t get real road times (bad key, no quota, or no coords) \u2014 using the speed estimate instead.";
-        }
-        rescheduleLink();
-      });
+    const hasCoords = linkStops.some(s => s.lat != null);
+
+    if (!wantReal) {
+      // Toggle off: drop any real-time results and fall back to the speed estimate.
+      let changed = false;
+      linkStops.forEach(s => { if (s.real) { s.real = false; changed = true; } });
+      if (changed) recomputeEstimateLegs();
+      rescheduleLink();
+      return;
+    }
+    if (!orsKey) { found.textContent = "Enter your OpenRouteService key to use real road times."; return; }
+    if (!hasCoords) { found.textContent = "This link has no coordinates, so real road times aren\u2019t available \u2014 using the speed estimate."; return; }
+
+    found.textContent = "Fetching real road times\u2026";
+    applyRealRouteTimes(orsKey).then(n => {
+      const nStops = linkStops.length;
+      if (n > 0) {
+        found.textContent = "Using real road times for " + n + " leg" + (n === 1 ? "" : "s") +
+          " (" + nStops + " stops). Edit any drive time to override.";
+      } else {
+        found.textContent = "Couldn\u2019t get real road times (check the key / quota) \u2014 using the speed estimate instead.";
+      }
+      rescheduleLink();
+    });
+  }
+
+  // Recompute every leg's minutes from the straight-line estimate (used when real
+  // times are turned off, to undo the ORS values).
+  function recomputeEstimateLegs() {
+    const speed = Math.max(5, Number(document.getElementById("linkSpeed").value) || 60);
+    const DEFAULT_LEG_MIN = 45;
+    for (let i = 1; i < linkStops.length; i++) {
+      const a = linkStops[i - 1], b = linkStops[i];
+      const km = haversineKm(a, b);
+      linkStops[i].km = km != null ? Math.round(km) : null;
+      linkStops[i].legMin = km != null ? Math.round((km / speed) * 60) : DEFAULT_LEG_MIN;
     }
   }
 
@@ -2841,15 +2875,22 @@
     linkStops.forEach((s, i) => { if (i > 0 && i < linkStops.length - 1) s.stayMin = nb; });
     rescheduleLink();
   });
-  // Real-road-times controls.
+  // Real-road-times controls. Changing any of them re-applies to an existing preview.
   document.getElementById("linkReal").addEventListener("change", () => {
     syncLinkRealUI();
-    if (document.getElementById("linkReal").checked) document.getElementById("linkOrsKey").focus();
+    const on = document.getElementById("linkReal").checked;
+    if (on && !((document.getElementById("linkOrsKey").value || "").trim())) {
+      document.getElementById("linkOrsKey").focus();
+    }
+    refreshRealTimes();
   });
   document.getElementById("linkOrsKey").addEventListener("change", () => {
     const k = (document.getElementById("linkOrsKey").value || "").trim();
     try { if (k) localStorage.setItem("itn_ors_key", k); else localStorage.removeItem("itn_ors_key"); } catch (e) {}
+    if (document.getElementById("linkReal").checked) refreshRealTimes();
   });
+  document.getElementById("linkAvoidTolls").addEventListener("change", refreshRealTimes);
+  document.getElementById("linkAvoidHwy").addEventListener("change", refreshRealTimes);
   document.getElementById("scanCamBtn").onclick = () => document.getElementById("scanCamInput").click();
   document.getElementById("scanUpBtn").onclick = () => document.getElementById("scanUpInput").click();
   document.getElementById("scanCamInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
