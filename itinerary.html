@@ -807,7 +807,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 166;
+  const APP_VERSION = 167;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -2252,27 +2252,6 @@
 
     const ORS_URL = "https://api.openrouteservice.org/v2/directions/driving-car";
 
-    // One POST attempt. `useProxy` routes through corsproxy.io (adds CORS headers
-    // and forwards the method/body/headers), which sidesteps the browser preflight
-    // that can 404/block the direct call from GitHub Pages.
-    const postOnce = (body, useProxy) => {
-      const ctrl = ("AbortController" in window) ? new AbortController() : null;
-      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
-      const url = useProxy ? ("https://corsproxy.io/?url=" + encodeURIComponent(ORS_URL)) : ORS_URL;
-      return fetch(url, {
-        method: "POST",
-        headers: { "Authorization": key, "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify(body),
-        signal: ctrl ? ctrl.signal : undefined
-      })
-        .then(r => {
-          if (timer) clearTimeout(timer);
-          if (!r.ok) { lastOrsError = "HTTP " + r.status; return null; }
-          return r.json();
-        })
-        .catch((e) => { if (timer) clearTimeout(timer); lastOrsError = (e && e.name === "AbortError") ? "timeout" : "network/CORS"; return null; });
-    };
-
     const applyLeg = (i, j) => {
       const sum = j && j.routes && j.routes[0] && j.routes[0].summary;
       if (!sum) return false;
@@ -2284,17 +2263,40 @@
 
     const fetchLeg = (i) => {
       const a = linkStops[i - 1], b = linkStops[i];
-      const body = { coordinates: [[a.lng, a.lat], [b.lng, b.lat]] };
+      // radiuses:[-1,-1] = snap each coordinate to the nearest road with no limit.
+      // Geocoded POIs (e.g. a mountain) often sit off-road; without this ORS returns
+      // 404 "Could not find routable point". This is a direct POST — ORS sends CORS
+      // headers, so no proxy is needed.
+      const body = {
+        coordinates: [[a.lng, a.lat], [b.lng, b.lat]],
+        radiuses: [-1, -1]
+      };
       if (avoid.length) body.options = { avoid_features: avoid };
-      // Try direct first; if it fails (CORS/404/network), retry via the CORS proxy.
-      return postOnce(body, false).then(j => {
-        if (applyLeg(i, j)) return true;
-        return postOnce(body, true).then(j2 => applyLeg(i, j2));
-      });
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+      return fetch(ORS_URL, {
+        method: "POST",
+        headers: { "Authorization": key, "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl ? ctrl.signal : undefined
+      })
+        .then(r => {
+          if (timer) clearTimeout(timer);
+          return r.json().catch(() => null).then(j => {
+            if (!r.ok) {
+              // ORS puts a useful reason in { error: { message } }.
+              const msg = j && j.error && j.error.message;
+              lastOrsError = msg ? ("HTTP " + r.status + ": " + msg.slice(0, 90)) : ("HTTP " + r.status);
+              return null;
+            }
+            return j;
+          });
+        })
+        .catch((e) => { if (timer) clearTimeout(timer); lastOrsError = (e && e.name === "AbortError") ? "timeout" : "network/CORS"; return null; });
     };
     // Sequential to stay well under the free-tier rate limit.
     return legs.reduce(
-      (chain, i) => chain.then(count => fetchLeg(i).then(ok => count + (ok ? 1 : 0))),
+      (chain, i) => chain.then(count => fetchLeg(i).then(j => count + (applyLeg(i, j) ? 1 : 0))),
       Promise.resolve(0)
     );
   }
