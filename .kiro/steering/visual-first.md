@@ -22,5 +22,5 @@ confirm or pick an option before writing code.
 
 ## After confirmation
 Proceed normally: implement, verify locally (node --check for JS, run the local
-server for a smoke check), bump version.json + APP_VERSION, commit, push, and
-confirm the push via the GitHub raw URL.
+server for a smoke check), bump version.json + APP_VERSION. Do NOT commit or push
+(see git-handoff steering) — hand the change to the user with the new version.

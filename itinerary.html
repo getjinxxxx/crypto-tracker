@@ -807,7 +807,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 163;
+  const APP_VERSION = 164;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -2194,33 +2194,47 @@
     }
     if (!legs.length) return Promise.resolve(0);
 
-    const fetchLeg = (i) => {
-      const a = linkStops[i - 1], b = linkStops[i];
-      const body = { coordinates: [[a.lng, a.lat], [b.lng, b.lat]] };
-      if (avoid.length) body.options = { avoid_features: avoid };
+    const ORS_URL = "https://api.openrouteservice.org/v2/directions/driving-car";
+
+    // One POST attempt. `useProxy` routes through corsproxy.io (adds CORS headers
+    // and forwards the method/body/headers), which sidesteps the browser preflight
+    // that can 404/block the direct call from GitHub Pages.
+    const postOnce = (body, useProxy) => {
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
-      return fetch("https://api.openrouteservice.org/v2/directions/driving-car", {
+      const url = useProxy ? ("https://corsproxy.io/?url=" + encodeURIComponent(ORS_URL)) : ORS_URL;
+      return fetch(url, {
         method: "POST",
         headers: { "Authorization": key, "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify(body),
         signal: ctrl ? ctrl.signal : undefined
       })
         .then(r => {
+          if (timer) clearTimeout(timer);
           if (!r.ok) { lastOrsError = "HTTP " + r.status; return null; }
           return r.json();
         })
-        .then(j => {
-          if (timer) clearTimeout(timer);
-          // POST endpoint returns { routes: [ { summary: { duration, distance } } ] }
-          const sum = j && j.routes && j.routes[0] && j.routes[0].summary;
-          if (!sum) { if (!lastOrsError) lastOrsError = "no route"; return false; }
-          linkStops[i].legMin = Math.max(1, Math.round(sum.duration / 60));
-          linkStops[i].km = Math.round(sum.distance / 1000);
-          linkStops[i].real = true;
-          return true;
-        })
-        .catch((e) => { if (timer) clearTimeout(timer); lastOrsError = (e && e.name === "AbortError") ? "timeout" : "network/CORS"; return false; });
+        .catch((e) => { if (timer) clearTimeout(timer); lastOrsError = (e && e.name === "AbortError") ? "timeout" : "network/CORS"; return null; });
+    };
+
+    const applyLeg = (i, j) => {
+      const sum = j && j.routes && j.routes[0] && j.routes[0].summary;
+      if (!sum) return false;
+      linkStops[i].legMin = Math.max(1, Math.round(sum.duration / 60));
+      linkStops[i].km = Math.round(sum.distance / 1000);
+      linkStops[i].real = true;
+      return true;
+    };
+
+    const fetchLeg = (i) => {
+      const a = linkStops[i - 1], b = linkStops[i];
+      const body = { coordinates: [[a.lng, a.lat], [b.lng, b.lat]] };
+      if (avoid.length) body.options = { avoid_features: avoid };
+      // Try direct first; if it fails (CORS/404/network), retry via the CORS proxy.
+      return postOnce(body, false).then(j => {
+        if (applyLeg(i, j)) return true;
+        return postOnce(body, true).then(j2 => applyLeg(i, j2));
+      });
     };
     // Sequential to stay well under the free-tier rate limit.
     return legs.reduce(
