@@ -544,16 +544,15 @@
           <div><label>End time (optional)</label><input id="imEnd" type="time" /></div>
         </div>
         <div class="field">
-          <label>Stay here (minutes)</label>
+          <label>Stay here (hours)</label>
           <div class="chip-row" id="stayChips">
             <button type="button" class="chip-btn" data-stay="0">None</button>
-            <button type="button" class="chip-btn" data-stay="15">15 min</button>
-            <button type="button" class="chip-btn" data-stay="30">30 min</button>
+            <button type="button" class="chip-btn" data-stay="30">0.5 hr</button>
             <button type="button" class="chip-btn" data-stay="60">1 hr</button>
             <button type="button" class="chip-btn" data-stay="120">2 hrs</button>
             <button type="button" class="chip-btn" data-stay="180">3 hrs</button>
           </div>
-          <input id="imStay" type="number" inputmode="numeric" min="0" placeholder="Custom minutes" style="margin-top:8px;" />
+          <input id="imStay" type="number" inputmode="decimal" min="0" step="0.25" placeholder="Custom hours (e.g. 1.5)" style="margin-top:8px;" />
           <div class="scan-note">Sets how long you stay. It fills the end time (start + stay) so the stop shows a time range.</div>
         </div>
         <div class="field inline"><input type="checkbox" id="imApprox" /><label for="imApprox" style="margin:0;">Approximate time (show as &ldquo;~&rdquo;)</label></div>
@@ -651,7 +650,7 @@
       </div>
       <div class="field two">
         <div><label>Avg speed (km/h)</label><input id="linkSpeed" type="number" inputmode="decimal" value="60" /></div>
-        <div><label>Buffer per stop (min)</label><input id="linkBuffer" type="number" inputmode="decimal" value="15" /></div>
+        <div><label>Buffer per stop (hrs)</label><input id="linkBuffer" type="number" step="0.25" inputmode="decimal" value="0.25" /></div>
       </div>
       <div class="field inline"><input type="checkbox" id="linkReplace" /><label for="linkReplace" style="margin:0;">Replace day's entries</label></div>
       <button class="btn ghost sm" id="linkParse" type="button" style="margin-bottom:12px;">Build preview</button>
@@ -790,7 +789,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 156;
+  const APP_VERSION = 157;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1538,11 +1537,11 @@
     // stop fields
     document.getElementById("imTime").value = (it && it.kind === "stop") ? it.time : "";
     document.getElementById("imEnd").value = (it && it.kind === "stop") ? it.endTime : "";
-    // Stay minutes: derive from an existing time range when editing.
-    let stayVal = "";
-    if (it && it.kind === "stop" && it.time && it.endTime) { const d = toMin(it.endTime) - toMin(it.time); if (d > 0) stayVal = String(d); }
-    document.getElementById("imStay").value = stayVal;
-    setStayChips(stayVal);
+    // Stay: derive minutes from an existing time range when editing, show as hours.
+    let stayMinVal = 0;
+    if (it && it.kind === "stop" && it.time && it.endTime) { const d = toMin(it.endTime) - toMin(it.time); if (d > 0) stayMinVal = d; }
+    document.getElementById("imStay").value = minToHrs(stayMinVal);
+    setStayChips(stayMinVal ? String(stayMinVal) : "");
     document.getElementById("imApprox").checked = (it && it.kind === "stop") ? it.approx : false;
     document.getElementById("imTitle").value = (it && it.kind === "stop") ? it.title : "";
     document.getElementById("imNote").value = (it && it.kind === "stop") ? it.note : "";
@@ -1568,7 +1567,7 @@
       if (!title) { err.textContent = "Please enter a title."; return; }
       const startT = document.getElementById("imTime").value || "";
       let endT = document.getElementById("imEnd").value || "";
-      const stay = Math.max(0, Number(document.getElementById("imStay").value) || 0);
+      const stay = hrsToMin(document.getElementById("imStay").value); // input is hours -> minutes
       // If a stay is given and we have a start time, derive the end time from it.
       if (stay > 0 && startT) endT = addMinutes(startT, stay);
       data = {
@@ -1978,6 +1977,18 @@
     const h = Math.floor(mins / 60), m = mins % 60;
     return (h ? h + " hr " : "") + (m ? m + " min" : (h ? "" : "0 min")).trim();
   }
+  // Hours <-> minutes helpers for hour-based input fields.
+  // minToHrs: 90 -> "1.5"  (trims trailing zeros; "" for 0/empty)
+  // hrsToMin: "1.5" -> 90  (rounded to the nearest minute)
+  function minToHrs(mins) {
+    const n = Number(mins) || 0;
+    if (n <= 0) return "";
+    return String(Math.round((n / 60) * 100) / 100);
+  }
+  function hrsToMin(hrs) {
+    const n = Number(hrs) || 0;
+    return Math.max(0, Math.round(n * 60));
+  }
   function addMinutes(hm, mins) {
     const p = hm.split(":").map(Number); let total = p[0] * 60 + p[1] + Math.round(mins);
     total = ((total % 1440) + 1440) % 1440;
@@ -2064,7 +2075,7 @@
     const anyCoords = stops.some(s => s.lat != null);
     const DEFAULT_LEG_MIN = 45;
 
-    const defBuffer = Math.max(0, Number(document.getElementById("linkBuffer").value) || 0);
+    const defBuffer = hrsToMin(document.getElementById("linkBuffer").value); // hours -> minutes
     linkStops = stops.map((s, i) => {
       // stayMin = how long you stay before leaving; first+last default to 0, middle stops get the buffer.
       const isEnd = (i === 0 || i === stops.length - 1);
@@ -2074,7 +2085,7 @@
       return { name: s.name, lat: s.lat, lng: s.lng, km: km != null ? Math.round(km) : null, legMin: legMin, stayMin: isEnd ? 0 : defBuffer };
     });
     document.getElementById("linkFound").textContent = "Scheduled " + stops.length + " stop" + (stops.length === 1 ? "" : "s") +
-      (anyCoords ? " using link coordinates. Edit any drive time below \u2014 times recompute automatically." : " (no coords \u2014 " + DEFAULT_LEG_MIN + " min/leg default; edit drive times below).");
+      (anyCoords ? " using link coordinates. Edit any drive time below \u2014 times recompute automatically." : " (no coords \u2014 " + minToHrs(DEFAULT_LEG_MIN) + " hr/leg default; edit drive times below).");
     rescheduleLink();
     document.getElementById("linkResultWrap").style.display = "block";
     document.getElementById("linkAdd").style.display = "block";
@@ -2106,7 +2117,7 @@
     linkStops.forEach((s, i) => {
       if (i > 0) {
         html += '<div class="pv-row leg"><div class="pv-t">Drive</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
-          '<input type="number" min="0" data-legmin="' + i + '" value="' + (Number(s.legMin) || 0) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 6px;font-size:12px;" /> min' +
+          '<input type="number" min="0" step="0.25" inputmode="decimal" data-legmin="' + i + '" value="' + minToHrs(s.legMin) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 6px;font-size:12px;" /> hrs' +
           (s.km != null ? ' <span style="color:var(--muted)">\u2248' + s.km + ' km</span>' : ' <span style="color:var(--muted)">(est.)</span>') +
           '</div></div>';
       }
@@ -2115,7 +2126,7 @@
       html += '<div class="pv-row"><span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span>' +
         '<div class="pv-t">' + esc(tLabel) + '</div>' +
         '<div style="flex:1;min-width:0;">' + esc(s.name) +
-          '<div style="margin-top:4px;color:var(--muted);">stay <input type="number" min="0" data-staymin="' + i + '" value="' + (Number(s.stayMin) || 0) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:3px 6px;font-size:12px;" /> min</div>' +
+          '<div style="margin-top:4px;color:var(--muted);">stay <input type="number" min="0" step="0.25" inputmode="decimal" data-staymin="' + i + '" value="' + minToHrs(s.stayMin) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:3px 6px;font-size:12px;" /> hrs</div>' +
         '</div></div>';
     });
     wrap.innerHTML = html;
@@ -2126,10 +2137,10 @@
     totalLine.textContent = "Driving: " + minsToText(driveMin) + "  \u00b7  Stops: " + minsToText(stayMin);
     wrap.appendChild(totalLine);
     wrap.querySelectorAll("[data-legmin]").forEach(inp => {
-      inp.onchange = () => { const i = Number(inp.getAttribute("data-legmin")); if (linkStops[i]) { linkStops[i].legMin = Math.max(0, Number(inp.value) || 0); rescheduleLink(); } };
+      inp.onchange = () => { const i = Number(inp.getAttribute("data-legmin")); if (linkStops[i]) { linkStops[i].legMin = hrsToMin(inp.value); rescheduleLink(); } };
     });
     wrap.querySelectorAll("[data-staymin]").forEach(inp => {
-      inp.onchange = () => { const i = Number(inp.getAttribute("data-staymin")); if (linkStops[i]) { linkStops[i].stayMin = Math.max(0, Number(inp.value) || 0); rescheduleLink(); } };
+      inp.onchange = () => { const i = Number(inp.getAttribute("data-staymin")); if (linkStops[i]) { linkStops[i].stayMin = hrsToMin(inp.value); rescheduleLink(); } };
     });
   }
   function confirmLinkInsert() {
@@ -2708,11 +2719,15 @@
   document.getElementById("segStop").onclick = () => setModalKind("stop");
   document.getElementById("segLeg").onclick = () => setModalKind("leg");
   document.querySelectorAll("#stayChips .chip-btn").forEach(b => b.onclick = () => {
-    const v = b.getAttribute("data-stay");
-    document.getElementById("imStay").value = (v === "0") ? "" : v;
+    const v = b.getAttribute("data-stay"); // minutes
+    document.getElementById("imStay").value = (v === "0") ? "" : minToHrs(v);
     setStayChips(v);
   });
-  document.getElementById("imStay").addEventListener("input", () => setStayChips(document.getElementById("imStay").value));
+  // Input holds hours; match the chips by converting back to minutes.
+  document.getElementById("imStay").addEventListener("input", () => {
+    const mins = hrsToMin(document.getElementById("imStay").value);
+    setStayChips(mins ? String(mins) : "");
+  });
 
   document.getElementById("legAdd").onclick = addLegendType;
   document.getElementById("legDone").onclick = closeLegendModal;
