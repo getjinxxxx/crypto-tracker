@@ -790,7 +790,7 @@
   }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 155;
+  const APP_VERSION = 156;
   async function checkForUpdate() {
     try {
       const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
@@ -1580,7 +1580,10 @@
         title: title,
         note: document.getElementById("imNote").value.trim(),
         category: document.getElementById("imCat").value,
-        cost: Number(document.getElementById("imCost").value) || 0
+        cost: Number(document.getElementById("imCost").value) || 0,
+        // Default Maps-route inclusion (same rule as load-time migration):
+        // real places ON, pitstops/activities OFF. Preserved on edit below.
+        inRoute: !NON_PLACE_RE.test(title)
       };
     } else {
       const dur = document.getElementById("imDur").value.trim();
@@ -1596,7 +1599,11 @@
       const it = t.items.find(x => x.id === editingItem.itemId);
       // if kind changed, wipe old-kind fields by replacing the object (keep id)
       const fresh = Object.assign({ id: it.id }, data);
-      if (data.kind === "stop") fresh.done = it.done || false;
+      if (data.kind === "stop") {
+        fresh.done = it.done || false;
+        // Keep the user's manual route choice when editing (don't reset to default).
+        if (typeof it.inRoute === "boolean") fresh.inRoute = it.inRoute;
+      }
       const idx = t.items.indexOf(it); t.items[idx] = fresh;
     } else {
       const base = data.kind === "stop" ? { id: uid("i_"), done: false } : { id: uid("i_") };
