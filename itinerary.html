@@ -655,6 +655,10 @@
           <label class="rad" style="margin:0;"><input type="checkbox" id="linkAvoidTolls" /> Avoid tolls</label>
           <label class="rad" style="margin:0;"><input type="checkbox" id="linkAvoidHwy" /> Avoid highways</label>
         </div>
+        <div class="field"><label>Traffic buffer (%)</label>
+          <input id="linkTraffic" type="number" inputmode="numeric" min="0" step="5" value="30" />
+          <div class="scan-note">Real road times are free-flow (no live traffic). Drive times come from Google Maps first (traffic already included). This % is only added to legs Google couldn't answer, which fall back to a free-flow road estimate. 0 = no buffer.</div>
+        </div>
         <div class="field"><label>OpenRouteService API key</label>
           <input id="linkOrsKey" type="text" placeholder="Paste your free ORS key (saved on this device)" />
           <div class="scan-note">A built-in key is already filled in, so this just works. To use your own (free at <b>openrouteservice.org</b> &rarr; Dashboard), paste it here &mdash; it's saved on this device and overrides the default.</div>
@@ -807,7 +811,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 167;
+  const APP_VERSION = 169;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -1895,6 +1899,7 @@
     document.getElementById("linkReal").checked = true;
     document.getElementById("linkAvoidTolls").checked = false;
     document.getElementById("linkAvoidHwy").checked = false;
+    document.getElementById("linkTraffic").value = "30";
     syncLinkRealUI();
     const days = datesInRange(t.start, t.end);
     document.getElementById("linkDay").innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
@@ -1925,6 +1930,20 @@
         const wp = params.get("waypoints");
         if (wp) decodeName(wp).split("|").forEach(w => { const s = asStop(w); if (s) stops.push(s); });
         const dest = params.get("destination"); if (dest) { const s = asStop(dest); if (s) stops.push(s); }
+        if (stops.length) return stops;
+      }
+      // ---- Format 1b: classic saddr/daddr link (maps.google.com/?saddr=A&daddr=B+to:C) ----
+      if (params && (params.get("saddr") || params.get("daddr"))) {
+        const asStop2 = (raw) => {
+          const name = (raw || "").replace(/\s{2,}/g, " ").trim();
+          if (!name) return null;
+          const cm = name.match(/^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$/);
+          if (cm) return { name: name, lat: parseFloat(cm[1]), lng: parseFloat(cm[2]) };
+          return { name: name, lat: null, lng: null };
+        };
+        const sa = params.get("saddr"); if (sa) { const s = asStop2(sa); if (s) stops.push(s); }
+        const da = params.get("daddr");
+        if (da) da.split(/\s*\bto:\s*/i).forEach(d => { const s = asStop2(d); if (s) stops.push(s); });
         if (stops.length) return stops;
       }
     }
@@ -1980,7 +1999,17 @@
       const name = decodeName(p);
       if (name) stops.push({ name: name, lat: null, lng: null });
     });
-    // Some links append coordinates in /data= as !1d<lng>!2d<lat> per waypoint; try to backfill.
+    // Google puts each NAMED waypoint's exact coordinates in /data= as
+    // !1m1!1s<placeId>!2m2!1d<lng>!2d<lat>, in route order (coordinate waypoints
+    // already carry lat,lng in the path). Map them 1:1 onto the named stops — this
+    // is Google's own location, far more accurate than geocoding the name.
+    const placeCoords = [...u.matchAll(/!1m1!1s[^!]*!2m2!1d(-?\d+\.\d+)!2d(-?\d+\.\d+)/g)];
+    const named = stops.filter(s => s.lat == null);
+    if (placeCoords.length && placeCoords.length === named.length) {
+      named.forEach((s, k) => { s.lng = parseFloat(placeCoords[k][1]); s.lat = parseFloat(placeCoords[k][2]); });
+      return stops;
+    }
+    // Fallback: older links with bare !1d<lng>!2d<lat> per waypoint.
     const coordMatches = [...u.matchAll(/!1d(-?\d+\.\d+)!2d(-?\d+\.\d+)/g)];
     if (coordMatches.length && coordMatches.length <= stops.length) {
       // data lng/lat are often destination-centric; only use if counts line up with stops lacking coords
@@ -2027,8 +2056,9 @@
   function buildLinkPreview() {
     const t = findTrip(state.ui.openTripId); if (!t) return;
     const err = document.getElementById("linkErr"); err.textContent = "";
-    const raw = document.getElementById("linkInput").value.trim();
+    const raw = normalizeMapsInput(document.getElementById("linkInput").value);
     if (!raw) { err.textContent = "Paste a Google Maps link first."; return; }
+    document.getElementById("linkInput").value = raw;
 
     // Short links (maps.app.goo.gl / goo.gl/maps) carry no route data — expand first.
     if (isShortMapsLink(raw)) {
@@ -2051,17 +2081,48 @@
     buildFromMapsUrl(raw, err);
   }
 
+  // Clean whatever the user pasted into a single Maps URL:
+  //  - share text ("Directions to X https://maps.app.goo.gl/...") -> just the URL
+  //  - Facebook/Messenger l.php?u=... and Google /url?q=... wrappers -> the inner URL
+  function normalizeMapsInput(raw) {
+    let s = (raw || "").trim();
+    const m = s.match(/https?:\/\/[^\s<>"']+/i);
+    if (m) s = m[0];
+    for (let k = 0; k < 3; k++) {
+      let inner = null;
+      try {
+        const u = new URL(s);
+        if (/(^|\.)(facebook|messenger)\.com$/i.test(u.hostname) && /\/l\.php$/i.test(u.pathname)) inner = u.searchParams.get("u");
+        else if (/(^|\.)google\.[a-z.]+$/i.test(u.hostname) && u.pathname === "/url") inner = u.searchParams.get("q") || u.searchParams.get("url");
+      } catch (e) {}
+      if (!inner) break;
+      s = inner.trim();
+    }
+    return s;
+  }
+
   // True for Google's short links that must be expanded to reveal the route.
   function isShortMapsLink(u) { return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps)\//i.test(u.trim()); }
 
+  // From a proxy response, get the expanded Maps URL. r.jina.ai reports it on a
+  // "Final URL:" line (most reliable); otherwise scan the body.
+  function extractExpandedUrl(txt) {
+    if (!txt) return null;
+    const fin = txt.match(/^Final URL:\s*(\S+)/m);
+    if (fin && /google\.[a-z.]+\/maps|maps\.google\./i.test(fin[1])) return fin[1];
+    return pickBestMapsUrl(txt);
+  }
+
   // Pick the most useful Google Maps URL out of a blob of expanded page text.
-  // Prefer directions (/dir/), then place/search, then any /maps/ URL.
+  // Prefer directions (/dir/ or saddr/daddr), then place/search, then any Maps URL.
+  // Skips map-tile/static-image URLs (/maps/vt, /maps/api).
   function pickBestMapsUrl(txt) {
     if (!txt) return null;
-    const all = txt.match(/https?:\/\/(?:www\.)?google\.[a-z.]+\/maps\/[^"'\s\\)\]<>]+/gi) || [];
+    const all = (txt.match(/https?:\/\/(?:www\.|maps\.)?google\.[a-z.]+\/maps(?:\/|\?)[^"'\s\\)\]<>]+/gi) || [])
+      .filter(u => !/\/maps\/(vt|api)\b/i.test(u));
     if (!all.length) return null;
     const clean = u => u.replace(/\\u0026/g, "&").replace(/&amp;/g, "&");
-    const dir = all.find(u => /\/maps\/dir\//i.test(u));
+    const dir = all.find(u => /\/maps\/dir\/|[?&]saddr=|[?&]daddr=/i.test(u));
     if (dir) return clean(dir);
     const place = all.find(u => /\/maps\/(place|search)\//i.test(u));
     if (place) return clean(place);
@@ -2074,32 +2135,33 @@
   // services rate-limit / go down intermittently, so we hit SEVERAL IN PARALLEL
   // and resolve on the first one that yields a usable Maps URL.
   function expandShortLink(shortUrl) {
-    const target = shortUrl.trim();
-    const proxies = [
-      "https://r.jina.ai/" + target,
+    // Drop share-tracking params (?g_st=ic etc.) — they don't change the target.
+    const target = shortUrl.trim().split("?")[0];
+    // r.jina.ai is the one that reliably works (tested: CORS OK + "Final URL:" line);
+    // it retries with backoff on rate limits. The others are one-shot parallel backups.
+    const backups = [
       "https://api.codetabs.com/v1/proxy/?quest=" + target,
-      "https://api.allorigins.win/raw?url=" + encodeURIComponent(target),
-      "https://corsproxy.io/?url=" + encodeURIComponent(target),
-      "https://thingproxy.freeboard.io/fetch/" + target
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(target)
     ];
     const tryOne = (url) => {
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
-      const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 20000) : null;
       return fetch(url, { signal: ctrl ? ctrl.signal : undefined })
         .then(r => r.ok ? r.text() : "")
-        .then(txt => { if (timer) clearTimeout(timer); return pickBestMapsUrl(txt); })
+        .then(txt => { if (timer) clearTimeout(timer); return extractExpandedUrl(txt); })
         .catch(() => { if (timer) clearTimeout(timer); return null; });
     };
-    // Resolve with the first proxy that returns a usable URL; null only if all fail.
+    const attempts = [jinaFetch(target, 4).then(extractExpandedUrl)].concat(backups.map(tryOne));
+    // Resolve with the first attempt that returns a usable URL; null only if all fail.
     return new Promise((resolve) => {
-      let pending = proxies.length;
+      let pending = attempts.length;
       let done = false;
-      proxies.forEach(p => {
-        tryOne(p).then(found => {
+      attempts.forEach(p => {
+        p.then(found => {
           if (done) return;
           if (found) { done = true; resolve(found); return; }
           if (--pending === 0) resolve(null);
-        });
+        }, () => { if (!done && --pending === 0) resolve(null); });
       });
     });
   }
@@ -2136,50 +2198,177 @@
   // Re-apply (or clear) real road times for the CURRENT preview. Safe to call any
   // time after a preview is built; used on first build and when the toggle / avoid
   // options / key change. Updates the status line and reschedules.
+  // Order of sources per leg:
+  //   1) Google Maps' own drive time (via r.jina.ai) — matches what Google shows,
+  //      traffic included, honors avoid tolls/highways.
+  //   2) OpenRouteService road routing (+ traffic buffer %) for legs Google didn't answer.
+  //   3) Straight-line speed estimate for anything left.
+  let realRunId = 0;   // ignore results from an older run if options change mid-fetch
   function refreshRealTimes() {
     if (!linkStops.length) return;
     const found = document.getElementById("linkFound");
     const wantReal = document.getElementById("linkReal").checked;
     const orsKey = (document.getElementById("linkOrsKey").value || "").trim();
-    const hasCoords = linkStops.some(s => s.lat != null);
+    const runId = ++realRunId;
 
     if (!wantReal) {
       // Toggle off: drop any real-time results and fall back to the speed estimate.
       let changed = false;
-      linkStops.forEach(s => { if (s.real) { s.real = false; changed = true; } });
+      linkStops.forEach(s => { if (s.real) { s.real = false; s.src = null; changed = true; } });
       if (changed) recomputeEstimateLegs();
       rescheduleLink();
       return;
     }
-    if (!orsKey) { found.textContent = "Enter your OpenRouteService key to use real road times."; return; }
+    const legs = linkStops.length - 1;
+    if (legs < 1) { rescheduleLink(); return; }
+    // Fresh run: clear previous real results so avoid-option changes re-fetch everything.
+    linkStops.forEach(s => { s.real = false; s.src = null; s.baseMin = null; });
+    lastOrsError = "";
 
-    // If stops are names only (e.g. ?origin=...&destination=...), geocode them first
-    // so routing has coordinates to work with.
-    const needGeo = linkStops.some(s => s.lat == null && s.name);
-    const prep = needGeo
-      ? (found.textContent = "Looking up stop locations\u2026", geocodeMissing(orsKey))
-      : Promise.resolve(0);
-
-    prep.then(() => {
-      if (!linkStops.some(s => s.lat != null)) {
-        found.textContent = "Couldn\u2019t find coordinates for these places" + (lastOrsError ? " (" + lastOrsError + ")" : "") +
-          " \u2014 using the speed estimate. Try a link with pins/coordinates.";
+    found.textContent = "Getting Google Maps drive times\u2026";
+    applyGoogleTimes(runId, (done) => {
+      if (runId === realRunId) found.textContent = "Getting Google Maps drive times\u2026 (" + done + "/" + legs + ")";
+    }).then(gN => {
+      if (runId !== realRunId) return;
+      const finish = (oN) => {
+        if (runId !== realRunId) return;
+        const left = legs - gN - oN;
+        const tb = Math.max(0, Number(document.getElementById("linkTraffic").value) || 0);
+        const parts = [];
+        if (gN) parts.push("Google Maps times for " + gN + " leg" + (gN === 1 ? "" : "s"));
+        if (oN) parts.push("road-network estimate" + (tb ? " +" + tb + "% traffic" : "") + " for " + oN);
+        if (left) parts.push("speed estimate for " + left + (lastOrsError ? " (" + lastOrsError + ")" : ""));
+        found.textContent = (parts.length ? parts.join(", ") : "Couldn\u2019t get real drive times") +
+          ". Edit any drive time to override.";
         rescheduleLink();
-        return;
-      }
-      found.textContent = "Fetching real road times\u2026";
-      applyRealRouteTimes(orsKey).then(n => {
-        const nStops = linkStops.length;
-        if (n > 0) {
-          found.textContent = "Using real road times for " + n + " leg" + (n === 1 ? "" : "s") +
-            " (" + nStops + " stops). Edit any drive time to override.";
-        } else {
-          found.textContent = "Couldn\u2019t get real road times" + (lastOrsError ? " (" + lastOrsError + ")" : "") +
-            " \u2014 using the speed estimate instead.";
-        }
-        rescheduleLink();
-      });
+      };
+      if (gN === legs || !orsKey) { finish(0); return; }
+      found.textContent = "Google didn\u2019t answer for " + (legs - gN) + " leg" + (legs - gN === 1 ? "" : "s") + " \u2014 trying road network\u2026";
+      const needGeo = linkStops.some(s => s.lat == null && s.name);
+      (needGeo ? geocodeMissing(orsKey) : Promise.resolve(0))
+        .then(() => applyRealRouteTimes(orsKey, true))
+        .then(finish, () => finish(0));
     });
+  }
+
+  // How to name a stop for Google: the place name if we have one (Google resolves
+  // names better than our geocoded coords), else "lat,lng".
+  function googleStopQuery(s) {
+    const nm = (s.name || "").trim();
+    if (nm && !/^-?\d{1,3}\.\d+,\s*-?\d{1,3}\.\d+$/.test(nm)) return nm;
+    return s.lat != null ? (s.lat + "," + s.lng) : nm;
+  }
+
+  // Parse Google's recommended route from a rendered directions page:
+  // a duration line ("2 hr 32 min") followed by a distance line ("75.9 km").
+  function parseGoogleRoute(txt) {
+    if (!txt) return null;
+    const m = txt.match(/(?:^|\n)\s*((?:\d+\s*days?\s*)?(?:\d+\s*hr\s*)?(?:\d+\s*min)?)\s*\n\s*(?:\n\s*)*([\d.,]+)\s*(km|miles?|mi|m|ft)\s*\n/);
+    if (!m || !m[1].trim()) return null;
+    const t = m[1];
+    const min = (+(t.match(/(\d+)\s*day/) || [0, 0])[1]) * 1440 +
+                (+(t.match(/(\d+)\s*hr/) || [0, 0])[1]) * 60 +
+                (+(t.match(/(\d+)\s*min/) || [0, 0])[1]);
+    let km = parseFloat(m[2].replace(/,/g, ""));
+    const u = m[3];
+    if (u === "m") km /= 1000; else if (/^mi/.test(u)) km *= 1.609; else if (u === "ft") km *= 0.000305;
+    if (!(min > 0)) return null;
+    return { min: min, km: km };
+  }
+
+  // Fetch through r.jina.ai with retry/backoff. The free tier allows ~20 req/min,
+  // so a 429 (or a 5xx / network blip) waits and retries instead of failing.
+  // Resolves the response text, or "" if every attempt failed.
+  function jinaFetch(targetUrl, tries) {
+    tries = tries || 4;
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+    const attempt = (n) => {
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 25000) : null;
+      return fetch("https://r.jina.ai/" + targetUrl, { signal: ctrl ? ctrl.signal : undefined })
+        .then(r => {
+          if (timer) clearTimeout(timer);
+          if (r.status === 429 || r.status >= 500) throw new Error("retry " + r.status);
+          return r.ok ? r.text() : "";
+        })
+        .catch(() => {
+          if (timer) clearTimeout(timer);
+          return n < tries ? wait(3000 * n).then(() => attempt(n + 1)) : "";
+        });
+    };
+    return attempt(1);
+  }
+
+  // Google leg times cached on this device (12h) so rebuilding a preview or toggling
+  // options doesn't re-ask Google (and burn the proxy's rate limit).
+  const GLEG_KEY = "itn_gleg_cache";
+  function gLegCacheGet(k) {
+    try {
+      const c = JSON.parse(localStorage.getItem(GLEG_KEY) || "{}");
+      const v = c[k];
+      return (v && Date.now() - v.t < 12 * 3600 * 1000) ? v : null;
+    } catch (e) { return null; }
+  }
+  function gLegCacheSet(k, min, km) {
+    try {
+      const c = JSON.parse(localStorage.getItem(GLEG_KEY) || "{}");
+      c[k] = { min: min, km: km, t: Date.now() };
+      const keys = Object.keys(c);
+      if (keys.length > 300) keys.sort((a, b) => c[a].t - c[b].t).slice(0, keys.length - 300).forEach(x => delete c[x]);
+      localStorage.setItem(GLEG_KEY, JSON.stringify(c));
+    } catch (e) {}
+  }
+
+  // Ask Google for each leg's drive time (via r.jina.ai, which renders the page and
+  // sends CORS headers). Runs 2 legs at a time. Returns how many legs got a time.
+  function applyGoogleTimes(runId, onProgress) {
+    const flg = "d" + (document.getElementById("linkAvoidTolls").checked ? "t" : "") +
+                      (document.getElementById("linkAvoidHwy").checked ? "h" : "");
+    const idx = [];
+    for (let i = 1; i < linkStops.length; i++) idx.push(i);
+    let ok = 0, done = 0;
+    const setLeg = (i, min, km) => {
+      linkStops[i].legMin = min;
+      linkStops[i].km = Math.round(km);
+      linkStops[i].real = true;
+      linkStops[i].src = "google";
+      linkStops[i].baseMin = null;   // Google already includes traffic — no buffer
+      ok++;
+    };
+    const one = (i) => {
+      const a = googleStopQuery(linkStops[i - 1]), b = googleStopQuery(linkStops[i]);
+      const finish = () => { done++; if (onProgress) onProgress(done); };
+      if (!a || !b) { finish(); return Promise.resolve(); }
+      const ck = a + "|" + b + "|" + flg;
+      const cached = gLegCacheGet(ck);
+      if (cached) { if (runId === realRunId) setLeg(i, cached.min, cached.km); finish(); return Promise.resolve(); }
+      const g = "https://www.google.com/maps?saddr=" + encodeURIComponent(a) + "&daddr=" + encodeURIComponent(b) + "&dirflg=" + flg + "&hl=en";
+      return jinaFetch(g, 4)
+        .then(txt => {
+          if (runId !== realRunId) return;
+          const p = parseGoogleRoute(txt);
+          if (!p) return;
+          gLegCacheSet(ck, p.min, p.km);
+          setLeg(i, p.min, p.km);
+        })
+        .then(finish, finish);
+    };
+    // Small worker pool (2) — keeps us under the proxy's per-minute limit.
+    let next = 0;
+    const worker = () => next < idx.length ? one(idx[next++]).then(worker) : Promise.resolve();
+    return Promise.all([worker(), worker()]).then(() => ok);
+  }
+
+  // Re-apply the traffic buffer % to already-fetched real legs (no API calls).
+  // Each real leg keeps its free-flow baseMin; legMin = baseMin * (1 + buffer%).
+  function applyTrafficBuffer() {
+    if (!linkStops.length) return;
+    const mult = 1 + (Math.max(0, Number(document.getElementById("linkTraffic").value) || 0) / 100);
+    let any = false;
+    linkStops.forEach(s => {
+      if (s.real && s.baseMin != null) { s.legMin = Math.max(1, Math.round(s.baseMin * mult)); any = true; }
+    });
+    if (any) rescheduleLink();
   }
 
   // Geocode any stop that has a name but no coordinates, using ORS geocoding
@@ -2190,26 +2379,70 @@
     linkStops.forEach((s, i) => { if (s.lat == null && s.name) todo.push(i); });
     if (!todo.length) return Promise.resolve(0);
 
-    const geoOne = (i) => {
-      const s = linkStops[i];
+    // One geocode request; resolves an array of candidate features (maybe empty).
+    const geoReq = (name, phOnly) => {
       const url = "https://api.openrouteservice.org/geocode/search?api_key=" + encodeURIComponent(key) +
-        "&text=" + encodeURIComponent(s.name) +
-        "&boundary.country=PH&size=1";
+        "&text=" + encodeURIComponent(name) + (phOnly ? "&boundary.country=PH" : "") + "&size=5";
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
       return fetch(url, { signal: ctrl ? ctrl.signal : undefined })
         .then(r => { if (timer) clearTimeout(timer); if (!r.ok) { lastOrsError = "geocode HTTP " + r.status; return null; } return r.json(); })
-        .then(j => {
-          const f = j && j.features && j.features[0];
-          const c = f && f.geometry && f.geometry.coordinates; // [lng, lat]
-          if (c && c.length === 2) { linkStops[i].lng = c[0]; linkStops[i].lat = c[1]; return true; }
-          return false;
-        })
-        .catch((e) => { if (timer) clearTimeout(timer); lastOrsError = (e && e.name === "AbortError") ? "geocode timeout" : "geocode network"; return false; });
+        .then(j => ((j && j.features) || []).map(f => ({ f: f, ph: phOnly })))
+        .catch((e) => { if (timer) clearTimeout(timer); lastOrsError = (e && e.name === "AbortError") ? "geocode timeout" : "geocode network"; return []; });
     };
-    // Sequential to stay under the free-tier rate limit.
+    const kmBetween = (a, b) => haversineKm({ lat: a[1], lng: a[0] }, { lat: b[1], lng: b[0] });
+    // Nearest already-located stop (used as a tie-breaker / sanity check).
+    const nearestKnown = (i) => {
+      for (let d = 1; d < linkStops.length; d++) {
+        const p = linkStops[i - d], n = linkStops[i + d];
+        if (p && p.lat != null) return [p.lng, p.lat];
+        if (n && n.lat != null) return [n.lng, n.lat];
+      }
+      return null;
+    };
+    // Score = how many comma-separated parts of the query appear in the result's
+    // label (so "Carranza Store, Taytay, Rizal" prefers a result in Taytay, Rizal).
+    const pickBest = (name, cands, anchor) => {
+      const parts = name.toLowerCase().split(",").map(p => p.trim()).filter(p => p.length > 1);
+      let best = null;
+      cands.forEach(c => {
+        const coords = c.f && c.f.geometry && c.f.geometry.coordinates;
+        if (!coords || coords.length !== 2) return;
+        const label = ((c.f.properties && c.f.properties.label) || "").toLowerCase();
+        let score = parts.reduce((s, p) => s + (label.indexOf(p) !== -1 ? 1 : 0), 0);
+        const dist = anchor ? kmBetween(anchor, coords) : 0;
+        if (anchor && dist > 1500) score -= 2;            // wildly far from the rest of the route
+        const cand = { coords: coords, score: score, dist: dist, ph: c.ph };
+        if (!best || cand.score > best.score ||
+            (cand.score === best.score && (anchor ? cand.dist < best.dist : (cand.ph && !best.ph)))) best = cand;
+      });
+      return best ? best.coords : null;
+    };
+    // OpenStreetMap Nominatim (no key, CORS OK) — backup when ORS geocoding is out of
+    // quota. Normalised to the same { f: {geometry, properties.label} } shape.
+    const nomiReq = (name, phOnly) => {
+      const url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5" +
+        (phOnly ? "&countrycodes=ph" : "") + "&q=" + encodeURIComponent(name);
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 15000) : null;
+      return fetch(url, { signal: ctrl ? ctrl.signal : undefined })
+        .then(r => { if (timer) clearTimeout(timer); return r.ok ? r.json() : []; })
+        .then(arr => (arr || []).map(x => ({
+          f: { geometry: { coordinates: [parseFloat(x.lon), parseFloat(x.lat)] }, properties: { label: x.display_name || "" } },
+          ph: phOnly
+        })))
+        .catch(() => { if (timer) clearTimeout(timer); return []; });
+    };
+    const geoOne = (i) => {
+      const name = linkStops[i].name;
+      return Promise.all([geoReq(name, true), geoReq(name, false), nomiReq(name, true)])
+        .then(([ph, world, nomi]) => pickBest(name, (ph || []).concat(world || [], nomi || []), nearestKnown(i)))
+        .then(c => { if (c) { linkStops[i].lng = c[0]; linkStops[i].lat = c[1]; return true; } return false; });
+    };
+    // Sequential, ~1.1s apart (Nominatim's usage policy is 1 request/second).
+    const gap = () => new Promise(r => setTimeout(r, 1100));
     return todo.reduce(
-      (chain, i) => chain.then(count => geoOne(i).then(ok => count + (ok ? 1 : 0))),
+      (chain, i, k) => chain.then(count => (k ? gap() : Promise.resolve()).then(() => geoOne(i)).then(ok => count + (ok ? 1 : 0))),
       Promise.resolve(0)
     );
   }
@@ -2237,7 +2470,7 @@
   // Uses the POST endpoint: it's the only one that supports avoid_features, and
   // ORS sends CORS headers so the browser request works. (The GET endpoint 404s
   // when given an options param, which is why avoid routes failed before.)
-  function applyRealRouteTimes(key) {
+  function applyRealRouteTimes(key, onlyMissing) {
     lastOrsError = "";
     const avoid = [];
     if (document.getElementById("linkAvoidTolls").checked) avoid.push("tollways");
@@ -2246,18 +2479,23 @@
     const legs = [];
     for (let i = 1; i < linkStops.length; i++) {
       const a = linkStops[i - 1], b = linkStops[i];
+      if (onlyMissing && b.src === "google") continue;   // Google already answered this leg
       if (a.lat != null && a.lng != null && b.lat != null && b.lng != null) legs.push(i);
     }
     if (!legs.length) return Promise.resolve(0);
 
     const ORS_URL = "https://api.openrouteservice.org/v2/directions/driving-car";
 
+    const trafficMult = 1 + (Math.max(0, Number(document.getElementById("linkTraffic").value) || 0) / 100);
     const applyLeg = (i, j) => {
       const sum = j && j.routes && j.routes[0] && j.routes[0].summary;
       if (!sum) return false;
-      linkStops[i].legMin = Math.max(1, Math.round(sum.duration / 60));
+      const freeFlow = sum.duration / 60;           // minutes, no traffic
+      linkStops[i].baseMin = freeFlow;              // keep raw so the buffer can re-apply
+      linkStops[i].legMin = Math.max(1, Math.round(freeFlow * trafficMult));
       linkStops[i].km = Math.round(sum.distance / 1000);
       linkStops[i].real = true;
+      linkStops[i].src = "ors";
       return true;
     };
 
@@ -2338,7 +2576,9 @@
         html += '<div class="pv-row leg"><div class="pv-t">Drive</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
           '<input type="number" min="0" step="0.25" inputmode="decimal" data-legmin="' + i + '" value="' + minToHrs(s.legMin) + '" style="width:60px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:4px 6px;font-size:12px;" /> hrs' +
           (s.km != null ? ' <span style="color:var(--muted)">\u2248' + s.km + ' km</span>' : ' <span style="color:var(--muted)">(est.)</span>') +
-          (s.real ? ' <span style="color:var(--gold-bright);font-size:11px;">\uD83D\uDEE3 real route</span>' : '') +
+          (s.real ? (s.src === "google"
+            ? ' <span style="color:var(--green);font-size:11px;">\u2713 Google Maps</span>'
+            : ' <span style="color:var(--gold-bright);font-size:11px;">\uD83D\uDEE3 road est.</span>') : '') +
           '</div></div>';
       }
       const timed = stopEntries[i];
@@ -2357,7 +2597,7 @@
     totalLine.textContent = "Driving: " + minsToText(driveMin) + "  \u00b7  Stops: " + minsToText(stayMin);
     wrap.appendChild(totalLine);
     wrap.querySelectorAll("[data-legmin]").forEach(inp => {
-      inp.onchange = () => { const i = Number(inp.getAttribute("data-legmin")); if (linkStops[i]) { linkStops[i].legMin = hrsToMin(inp.value); linkStops[i].real = false; rescheduleLink(); } };
+      inp.onchange = () => { const i = Number(inp.getAttribute("data-legmin")); if (linkStops[i]) { linkStops[i].legMin = hrsToMin(inp.value); linkStops[i].real = false; linkStops[i].src = null; rescheduleLink(); } };
     });
     wrap.querySelectorAll("[data-staymin]").forEach(inp => {
       inp.onchange = () => { const i = Number(inp.getAttribute("data-staymin")); if (linkStops[i]) { linkStops[i].stayMin = hrsToMin(inp.value); rescheduleLink(); } };
@@ -2984,6 +3224,8 @@
   });
   document.getElementById("linkAvoidTolls").addEventListener("change", refreshRealTimes);
   document.getElementById("linkAvoidHwy").addEventListener("change", refreshRealTimes);
+  // Traffic buffer just rescales already-fetched real legs — no API calls needed.
+  document.getElementById("linkTraffic").addEventListener("change", applyTrafficBuffer);
   document.getElementById("scanCamBtn").onclick = () => document.getElementById("scanCamInput").click();
   document.getElementById("scanUpBtn").onclick = () => document.getElementById("scanUpInput").click();
   document.getElementById("scanCamInput").addEventListener("change", (e) => { handleScanImage(e.target.files[0]); e.target.value = ""; });
