@@ -659,6 +659,10 @@
           <input id="linkTraffic" type="number" inputmode="numeric" min="0" step="5" value="40" />
           <div class="scan-note">Real road times are free-flow (no live traffic). Drive times come from Google Maps first (traffic already included). This % is only added to legs Google couldn't answer, which fall back to a free-flow road estimate. 0 = no buffer.</div>
         </div>
+        <div class="field"><label>Jina API key (optional)</label>
+          <input id="linkJinaKey" type="text" autocomplete="off" spellcheck="false" placeholder="jina_... (saved on this device only)" />
+          <div class="scan-note">Lets the app get Google Maps drive times even when the free proxy is busy or blocked. Free at <b>jina.ai/api-dashboard</b> &rarr; API Keys. Saved only in this browser &mdash; never in the code.</div>
+        </div>
         <div class="field"><label>OpenRouteService API key</label>
           <input id="linkOrsKey" type="text" placeholder="Paste your free ORS key (saved on this device)" />
           <div class="scan-note">A built-in key is already filled in, so this just works. To use your own (free at <b>openrouteservice.org</b> &rarr; Dashboard), paste it here &mdash; it's saved on this device and overrides the default.</div>
@@ -808,10 +812,14 @@
   // without pasting a key each time. NOTE: this repo is public, so this key is
   // visible in source — it's a personal free key; regenerate at openrouteservice.org
   // if the quota gets abused. The key field in the Import modal still overrides it.
+  // Default Jina key (r.jina.ai) so Google Maps drive times work without typing a key.
+  // Public repo => visible in source; it's a free personal key — regenerate at
+  // jina.ai/api-dashboard if its tokens get abused. The modal field still overrides it.
+  const DEFAULT_JINA_KEY = "jina_6dc64f879a414c1ab7972f23eaf4fa30BWM_e0YgIHVDG802Rqj7dADNzDeL";
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 170;
+  const APP_VERSION = 171;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -1900,6 +1908,7 @@
     document.getElementById("linkAvoidTolls").checked = false;
     document.getElementById("linkAvoidHwy").checked = false;
     document.getElementById("linkTraffic").value = "40";
+    document.getElementById("linkJinaKey").value = (function(){ try { return localStorage.getItem("itn_jina_key") || ""; } catch (e) { return ""; } })();
     syncLinkRealUI();
     const days = datesInRange(t.start, t.end);
     document.getElementById("linkDay").innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
@@ -2276,6 +2285,7 @@
     linkStops.forEach(s => { s.real = false; s.src = null; s.baseMin = null; });
     lastOrsError = "";
     jinaBlocked = false;
+    jinaKeyBad = false;
 
     found.textContent = "Getting Google Maps drive times\u2026";
     applyGoogleTimes(runId, (done) => {
@@ -2287,7 +2297,8 @@
         const left = legs - gN - oN;
         const tb = Math.max(0, Number(document.getElementById("linkTraffic").value) || 0);
         const parts = [];
-        if (!gN && jinaBlocked) parts.push("Google times unavailable right now");
+        if (jinaKeyBad) parts.push("Jina key was rejected (check it)");
+        if (!gN && jinaBlocked) parts.push("Google times unavailable right now" + (getJinaKey() ? "" : " \u2014 add a Jina key to avoid this"));
         if (gN) parts.push("Google Maps times for " + gN + " leg" + (gN === 1 ? "" : "s"));
         if (oN) parts.push("road-network estimate" + (tb ? " +" + tb + "% traffic" : "") + " for " + oN);
         if (left) parts.push("speed estimate for " + left + (lastOrsError ? " (" + lastOrsError + ")" : ""));
@@ -2302,6 +2313,27 @@
         .then(() => applyRealRouteTimes(orsKey, true))
         .then(finish, () => finish(0));
     });
+  }
+
+  // "lat,lng" for stop i if we can know it without a network call: its own coords,
+  // or a Plus Code in its name (full code directly; short code recovered using the
+  // nearest stop that has coords as the reference point). Null otherwise.
+  function stopCoordsQuery(i) {
+    const s = linkStops[i];
+    if (!s) return null;
+    if (s.lat != null && s.lng != null) return (+s.lat).toFixed(6) + "," + (+s.lng).toFixed(6);
+    const pc = findPlusCode(s.name);
+    if (!pc) return null;
+    let c = null;
+    if (pc.indexOf("+") >= 8) c = olcDecode(pc);
+    else {
+      for (let d = 1; d < linkStops.length && !c; d++) {
+        const r = linkStops[i - d] && linkStops[i - d].lat != null ? linkStops[i - d] :
+                  (linkStops[i + d] && linkStops[i + d].lat != null ? linkStops[i + d] : null);
+        if (r) c = olcRecover(pc, r.lat, r.lng);
+      }
+    }
+    return c ? c[0].toFixed(6) + "," + c[1].toFixed(6) : null;
   }
 
   // How to name a stop for Google: the place name if we have one (Google resolves
@@ -2335,15 +2367,29 @@
   // Set when r.jina.ai refuses (403) — e.g. its periodic block on anonymous
   // google.com access. Used only to explain the fallback in the status line.
   let jinaBlocked = false;
+  let jinaKeyBad = false;   // the saved Jina key was rejected (401) — we fall back to no key
+  // The user's own Jina key (optional), from the modal field or this device's storage.
+  function getJinaKey() {
+    const el = document.getElementById("linkJinaKey");
+    let k = el ? (el.value || "").trim() : "";
+    if (!k) { try { k = (localStorage.getItem("itn_jina_key") || "").trim(); } catch (e) {} }
+    return k || DEFAULT_JINA_KEY;
+  }
   function jinaFetch(targetUrl, tries) {
     tries = tries || 4;
     const wait = (ms) => new Promise(r => setTimeout(r, ms));
     const attempt = (n) => {
       const ctrl = ("AbortController" in window) ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), 25000) : null;
-      return fetch("https://r.jina.ai/" + targetUrl, { signal: ctrl ? ctrl.signal : undefined })
+      // With a key: "Authorization: Bearer <key>" (higher limits, not hit by the
+      // anonymous block). Tested: jina allows this header from our origin (CORS OK).
+      const key = jinaKeyBad ? "" : getJinaKey();
+      const opts = { signal: ctrl ? ctrl.signal : undefined };
+      if (key) opts.headers = { "Authorization": "Bearer " + key };
+      return fetch("https://r.jina.ai/" + targetUrl, opts)
         .then(r => {
           if (timer) clearTimeout(timer);
+          if (r.status === 401 && key) { jinaKeyBad = true; throw new Error("bad key"); }  // retry without the key
           if (r.status === 429 || r.status >= 500) throw new Error("retry " + r.status);
           if (r.status === 403) { jinaBlocked = true; return ""; }   // blocked: don't retry, fall back fast
           return r.ok ? r.text() : "";
@@ -2399,12 +2445,16 @@
       const ck = a + "|" + b + "|" + flg;
       const cached = gLegCacheGet(ck);
       if (cached) { if (runId === realRunId) setLeg(i, cached.min, cached.km); finish(); return Promise.resolve(); }
-      const g = "https://www.google.com/maps?saddr=" + encodeURIComponent(a) + "&daddr=" + encodeURIComponent(b) + "&dirflg=" + flg + "&hl=en";
-      return jinaFetch(g, 4)
-        .then(txt => {
-          if (runId !== realRunId) return;
-          const p = parseGoogleRoute(txt);
-          if (!p) return;
+      const gUrl = (x, y) => "https://www.google.com/maps?saddr=" + encodeURIComponent(x) + "&daddr=" + encodeURIComponent(y) + "&dirflg=" + flg + "&hl=en";
+      // Retry query using plain coordinates. Google answers coords->coords reliably,
+      // but not e.g. coords -> "5MXP+G9V, Maragondon" (iPhone share links).
+      const ca = stopCoordsQuery(i - 1), cb = stopCoordsQuery(i);
+      const alt = (ca && cb && (ca !== a || cb !== b)) ? gUrl(ca, cb) : null;
+      const tryUrl = (url) => jinaFetch(url, 4).then(txt => (runId === realRunId) ? parseGoogleRoute(txt) : null);
+      return tryUrl(gUrl(a, b))
+        .then(p => p || (alt ? tryUrl(alt) : null))
+        .then(p => {
+          if (!p || runId !== realRunId) return;
           gLegCacheSet(ck, p.min, p.km);
           setLeg(i, p.min, p.km);
         })
@@ -3290,6 +3340,12 @@
   document.getElementById("linkOrsKey").addEventListener("change", () => {
     const k = (document.getElementById("linkOrsKey").value || "").trim();
     try { if (k) localStorage.setItem("itn_ors_key", k); else localStorage.removeItem("itn_ors_key"); } catch (e) {}
+    if (document.getElementById("linkReal").checked) refreshRealTimes();
+  });
+  // Jina key: save on this device only (never in the repo), then re-fetch Google times.
+  document.getElementById("linkJinaKey").addEventListener("change", () => {
+    const k = (document.getElementById("linkJinaKey").value || "").trim();
+    try { if (k) localStorage.setItem("itn_jina_key", k); else localStorage.removeItem("itn_jina_key"); } catch (e) {}
     if (document.getElementById("linkReal").checked) refreshRealTimes();
   });
   document.getElementById("linkAvoidTolls").addEventListener("change", refreshRealTimes);
