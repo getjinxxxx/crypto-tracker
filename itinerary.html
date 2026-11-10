@@ -656,7 +656,7 @@
           <label class="rad" style="margin:0;"><input type="checkbox" id="linkAvoidHwy" /> Avoid highways</label>
         </div>
         <div class="field"><label>Traffic buffer (%)</label>
-          <input id="linkTraffic" type="number" inputmode="numeric" min="0" step="5" value="30" />
+          <input id="linkTraffic" type="number" inputmode="numeric" min="0" step="5" value="40" />
           <div class="scan-note">Real road times are free-flow (no live traffic). Drive times come from Google Maps first (traffic already included). This % is only added to legs Google couldn't answer, which fall back to a free-flow road estimate. 0 = no buffer.</div>
         </div>
         <div class="field"><label>OpenRouteService API key</label>
@@ -811,7 +811,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 169;
+  const APP_VERSION = 170;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -1899,7 +1899,7 @@
     document.getElementById("linkReal").checked = true;
     document.getElementById("linkAvoidTolls").checked = false;
     document.getElementById("linkAvoidHwy").checked = false;
-    document.getElementById("linkTraffic").value = "30";
+    document.getElementById("linkTraffic").value = "40";
     syncLinkRealUI();
     const days = datesInRange(t.start, t.end);
     document.getElementById("linkDay").innerHTML = days.map((d, i) => '<option value="' + d + '"' + (d === state.ui.openDate ? ' selected' : '') + '>Day ' + (i + 1) + ' \u2014 ' + dateLabel(d) + '</option>').join("");
@@ -1935,7 +1935,7 @@
       // ---- Format 1b: classic saddr/daddr link (maps.google.com/?saddr=A&daddr=B+to:C) ----
       if (params && (params.get("saddr") || params.get("daddr"))) {
         const asStop2 = (raw) => {
-          const name = (raw || "").replace(/\s{2,}/g, " ").trim();
+          const name = fixPlusCode((raw || "").replace(/\s{2,}/g, " ").trim());
           if (!name) return null;
           const cm = name.match(/^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$/);
           if (cm) return { name: name, lat: parseFloat(cm[1]), lng: parseFloat(cm[2]) };
@@ -2020,7 +2020,58 @@
   }
   function decodeName(s) {
     try { s = decodeURIComponent(s); } catch (e) {}
-    return s.replace(/\+/g, " ").replace(/\s{2,}/g, " ").trim();
+    return fixPlusCode(s.replace(/\+/g, " ").replace(/\s{2,}/g, " ").trim());
+  }
+
+  // ---------- Plus Codes (Open Location Code) ----------
+  // Google often names a place by its Plus Code ("5MXP+G9V, Maragondon"). URL
+  // decoding turns that "+" into a space, which breaks the code — put it back.
+  const OLC_ALPHA = "23456789CFGHJMPQRVWX";
+  function fixPlusCode(s) {
+    return (s || "").replace(/\b([23456789CFGHJMPQRVWX]{4,8}) ([23456789CFGHJMPQRVWX]{2,3})\b/g, "$1+$2");
+  }
+  // The Plus Code inside a name, or null.
+  function findPlusCode(s) {
+    const m = (s || "").match(/\b([23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{0,3})/);
+    return m ? m[1] : null;
+  }
+  // Decode a FULL code (8 chars before "+") to its center [lat, lng].
+  function olcDecode(code) {
+    const c = code.replace("+", "").replace(/0+$/, "").toUpperCase();
+    const res = [20, 1, 0.05, 0.0025, 0.000125];
+    let lat = -90, lng = -180, step = 20;
+    for (let p = 0; p * 2 < c.length && p < 5; p++) {
+      step = res[p];
+      lat += OLC_ALPHA.indexOf(c[p * 2]) * step;
+      if (c[p * 2 + 1]) lng += OLC_ALPHA.indexOf(c[p * 2 + 1]) * step;
+    }
+    return [lat + step / 2, lng + step / 2];
+  }
+  // First `len` chars (pairs) of the full code for a location — used to rebuild short codes.
+  function olcEncodePrefix(lat, lng, len) {
+    lat = Math.min(89.9999, Math.max(-90, lat)) + 90;
+    lng = (((lng + 180) % 360) + 360) % 360;
+    const res = [20, 1, 0.05, 0.0025];
+    let out = "";
+    for (let p = 0; p < 4 && out.length < len; p++) {
+      const a = Math.floor(lat / res[p]), b = Math.floor(lng / res[p]);
+      lat -= a * res[p]; lng -= b * res[p];
+      out += OLC_ALPHA[a] + OLC_ALPHA[b];
+    }
+    return out.slice(0, len);
+  }
+  // Recover a SHORT code ("5MXP+G9V") using a nearby reference point (the town).
+  function olcRecover(shortCode, refLat, refLng) {
+    const sep = shortCode.indexOf("+");
+    if (sep >= 8) return olcDecode(shortCode);
+    const pad = 8 - sep;
+    const resolution = Math.pow(20, 2 - pad / 2), half = resolution / 2;
+    let [lat, lng] = olcDecode(olcEncodePrefix(refLat, refLng, pad) + shortCode);
+    if (refLat + half < lat && lat - resolution >= -90) lat -= resolution;
+    else if (refLat - half > lat && lat + resolution <= 90) lat += resolution;
+    if (refLng + half < lng) lng -= resolution;
+    else if (refLng - half > lng) lng += resolution;
+    return [lat, lng];
   }
   function haversineKm(a, b) {
     if (a.lat == null || b.lat == null) return null;
@@ -2224,6 +2275,7 @@
     // Fresh run: clear previous real results so avoid-option changes re-fetch everything.
     linkStops.forEach(s => { s.real = false; s.src = null; s.baseMin = null; });
     lastOrsError = "";
+    jinaBlocked = false;
 
     found.textContent = "Getting Google Maps drive times\u2026";
     applyGoogleTimes(runId, (done) => {
@@ -2235,6 +2287,7 @@
         const left = legs - gN - oN;
         const tb = Math.max(0, Number(document.getElementById("linkTraffic").value) || 0);
         const parts = [];
+        if (!gN && jinaBlocked) parts.push("Google times unavailable right now");
         if (gN) parts.push("Google Maps times for " + gN + " leg" + (gN === 1 ? "" : "s"));
         if (oN) parts.push("road-network estimate" + (tb ? " +" + tb + "% traffic" : "") + " for " + oN);
         if (left) parts.push("speed estimate for " + left + (lastOrsError ? " (" + lastOrsError + ")" : ""));
@@ -2279,6 +2332,9 @@
   // Fetch through r.jina.ai with retry/backoff. The free tier allows ~20 req/min,
   // so a 429 (or a 5xx / network blip) waits and retries instead of failing.
   // Resolves the response text, or "" if every attempt failed.
+  // Set when r.jina.ai refuses (403) — e.g. its periodic block on anonymous
+  // google.com access. Used only to explain the fallback in the status line.
+  let jinaBlocked = false;
   function jinaFetch(targetUrl, tries) {
     tries = tries || 4;
     const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -2289,6 +2345,7 @@
         .then(r => {
           if (timer) clearTimeout(timer);
           if (r.status === 429 || r.status >= 500) throw new Error("retry " + r.status);
+          if (r.status === 403) { jinaBlocked = true; return ""; }   // blocked: don't retry, fall back fast
           return r.ok ? r.text() : "";
         })
         .catch(() => {
@@ -2435,6 +2492,19 @@
     };
     const geoOne = (i) => {
       const name = linkStops[i].name;
+      // Plus Code: exact location without any geocoder guesswork. A full code decodes
+      // directly; a short one ("5MXP+G9V, Maragondon") needs the town as a reference.
+      const pc = findPlusCode(name);
+      if (pc) {
+        const set = (c) => { linkStops[i].lat = c[0]; linkStops[i].lng = c[1]; return true; };
+        if (pc.indexOf("+") >= 8) return Promise.resolve(set(olcDecode(pc)));
+        const town = name.replace(pc, "").replace(/^[\s,]+|[\s,]+$/g, "").replace(/,\s*,/g, ",");
+        const near = nearestKnown(i);
+        const fromRef = (ref) => ref ? set(olcRecover(pc, ref[1], ref[0])) : false;
+        if (!town) return Promise.resolve(fromRef(near));
+        return Promise.all([geoReq(town, true), nomiReq(town, true)])
+          .then(([a, b]) => fromRef(pickBest(town, (a || []).concat(b || []), near) || near));
+      }
       return Promise.all([geoReq(name, true), geoReq(name, false), nomiReq(name, true)])
         .then(([ph, world, nomi]) => pickBest(name, (ph || []).concat(world || [], nomi || []), nearestKnown(i)))
         .then(c => { if (c) { linkStops[i].lng = c[0]; linkStops[i].lat = c[1]; return true; } return false; });
