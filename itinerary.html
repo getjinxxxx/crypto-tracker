@@ -819,7 +819,7 @@
   const DEFAULT_ORS_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImNlNjZlYTk2MDhhMjQ2MjhhNWI5ODNlMjM0YTEyOWZhIiwiaCI6Im11cm11cjY0In0=";
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 171;
+  const APP_VERSION = 172;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -1953,6 +1953,11 @@
         const sa = params.get("saddr"); if (sa) { const s = asStop2(sa); if (s) stops.push(s); }
         const da = params.get("daddr");
         if (da) da.split(/\s*\bto:\s*/i).forEach(d => { const s = asStop2(d); if (s) stops.push(s); });
+        // iPhone links carry Google's exact coords per stop in geocode=A;B;C (same order).
+        const geo = decodeGeocodeParam(params.get("geocode"));
+        if (geo.length === stops.length) {
+          stops.forEach((s, k) => { if (geo[k] && s.lat == null) { s.lat = geo[k][0]; s.lng = geo[k][1]; } });
+        }
         if (stops.length) return stops;
       }
     }
@@ -2030,6 +2035,38 @@
   function decodeName(s) {
     try { s = decodeURIComponent(s); } catch (e) {}
     return fixPlusCode(s.replace(/\+/g, " ").replace(/\s{2,}/g, " ").trim());
+  }
+
+  // Avoid options stored in a Maps link, or null if the link doesn't say.
+  //  - iPhone/classic: dirflg=d[t][h]  (t = avoid tolls, h = avoid highways)
+  //  - PC /dir/ data:  !2m..!1b1 (avoid highways) !2b1 (avoid tolls), inside the !4m route block
+  function linkAvoidFlags(url) {
+    let u = url || "";
+    try { u = decodeURIComponent(u); } catch (e) {}
+    const df = u.match(/[?&]dirflg=([a-z]+)/i);
+    if (df) return { tolls: /t/i.test(df[1]), hwy: /h/i.test(df[1]) };
+    if (/\/maps\/dir\//i.test(u) && /\/data=/.test(u)) {
+      const opt = u.match(/!2m\d+((?:!\db[01])+)/);
+      if (opt) return { tolls: /!2b1/.test(opt[1]), hwy: /!1b1/.test(opt[1]) };
+      return { tolls: false, hwy: false };   // /dir/ link with no avoid block = no avoids
+    }
+    return null;
+  }
+
+  // Google's geocode= param: ";"-separated base64 protobufs, one per stop. Each
+  // starts with field 2 (0x15) = lat*1e6 and field 3 (0x1d) = lng*1e6, as signed
+  // little-endian int32. Returns [[lat,lng] | null, ...] (empty array if absent).
+  function decodeGeocodeParam(g) {
+    if (!g) return [];
+    return g.split(";").map(part => {
+      try {
+        const bin = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+        if (bin.length < 10 || bin.charCodeAt(0) !== 0x15 || bin.charCodeAt(5) !== 0x1d) return null;
+        const i32 = (o) => (bin.charCodeAt(o) | (bin.charCodeAt(o + 1) << 8) | (bin.charCodeAt(o + 2) << 16) | (bin.charCodeAt(o + 3) << 24));
+        const lat = i32(1) / 1e6, lng = i32(6) / 1e6;
+        return (Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng)) ? [lat, lng] : null;
+      } catch (e) { return null; }
+    });
   }
 
   // ---------- Plus Codes (Open Location Code) ----------
@@ -2231,6 +2268,13 @@
     const t = findTrip(state.ui.openTripId); if (!t) return;
     const stops = parseMapsLink(url);
     if (stops.length < 1) { err.textContent = "Couldn't read any stops from that link. Paste a Google Maps directions (/maps/dir/) link, or a place/search link."; return; }
+    // Use the link's own route options (avoid tolls / highways) so times match what
+    // Google showed for that link. You can still change the checkboxes afterwards.
+    const flags = linkAvoidFlags(url);
+    if (flags) {
+      document.getElementById("linkAvoidTolls").checked = flags.tolls;
+      document.getElementById("linkAvoidHwy").checked = flags.hwy;
+    }
     const speed = Math.max(5, Number(document.getElementById("linkSpeed").value) || 60);
     const anyCoords = stops.some(s => s.lat != null);
     const DEFAULT_LEG_MIN = 45;
@@ -2670,19 +2714,26 @@
   // Rebuild linkParsed (stops + legs with arrival & end times) from linkStops + start, then render.
   function rescheduleLink() {
     let clock = document.getElementById("linkStart").value || "08:00";
+    // `abs` = minutes since midnight of the target day, NOT wrapped, so a long route
+    // (e.g. 43 hr) knows which trip day each entry lands on (dayOff = 0, 1, 2...).
+    let abs = toMin(clock);
+    const dayOf = (m) => Math.floor(m / 1440);
     const out = [];
     linkStops.forEach((s, i) => {
       if (i > 0) {
         const km = s.km, legMin = Math.max(0, Number(s.legMin) || 0);
         const durTxt = "~" + minsToText(legMin) + (km != null ? " (\u2248" + km + " km)" : " (est.)");
-        out.push({ kind: "leg", label: "Drive", durationText: durTxt, fromText: linkStops[i - 1].name, toText: s.name });
+        // A leg sits on the day it departs.
+        out.push({ kind: "leg", label: "Drive", durationText: durTxt, fromText: linkStops[i - 1].name, toText: s.name, _dayOff: dayOf(abs) });
         clock = addMinutes(clock, legMin);
+        abs += legMin;
       }
       const arrive = clock;
       const stay = Math.max(0, Number(s.stayMin) || 0);
       const end = stay > 0 ? addMinutes(arrive, stay) : "";
-      out.push({ kind: "stop", time: arrive, endTime: end, approx: true, typeId: "", title: s.name, note: "", category: "Transport", cost: 0, inRoute: true });
+      out.push({ kind: "stop", time: arrive, endTime: end, approx: true, typeId: "", title: s.name, note: "", category: "Transport", cost: 0, inRoute: true, _dayOff: dayOf(abs) });
       clock = addMinutes(clock, stay);
+      abs += stay;
     });
     linkParsed = out;
     renderLinkPreview(findTrip(state.ui.openTripId));
@@ -2702,7 +2753,7 @@
           '</div></div>';
       }
       const timed = stopEntries[i];
-      const tLabel = timed ? timeDisplay(timed) : "";
+      const tLabel = timed ? (timeDisplay(timed) + (timed._dayOff ? " (Day +" + timed._dayOff + ")" : "")) : "";
       html += '<div class="pv-row"><span class="pv-dot" style="background:transparent;border:1px solid var(--line)"></span>' +
         '<div class="pv-t">' + esc(tLabel) + '</div>' +
         '<div style="flex:1;min-width:0;">' + esc(s.name) +
@@ -2726,10 +2777,20 @@
   function confirmLinkInsert() {
     const t = findTrip(state.ui.openTripId); if (!t || !linkParsed.length) return;
     const day = document.getElementById("linkDay").value;
-    if (document.getElementById("linkReplace").checked) t.items = t.items.filter(it => it.date !== day);
+    // Long routes spill into following trip days; anything past the trip's last
+    // day stays on the last day (in order) so nothing is lost.
+    const dateFor = (e) => {
+      const d = addDays(day, e._dayOff || 0);
+      return (t.end && cmpDate(d, t.end) > 0) ? t.end : d;
+    };
+    const covered = {};
+    linkParsed.forEach(e => { covered[dateFor(e)] = true; });
+    if (document.getElementById("linkReplace").checked) t.items = t.items.filter(it => !covered[it.date]);
     linkParsed.forEach(e => {
-      const base = e.kind === "leg" ? { id: uid("i_"), date: day } : { id: uid("i_"), date: day, done: false };
-      t.items.push(Object.assign(base, e, { date: day }));
+      const d = dateFor(e);
+      const base = e.kind === "leg" ? { id: uid("i_"), date: d } : { id: uid("i_"), date: d, done: false };
+      const clean = Object.assign({}, e); delete clean._dayOff;
+      t.items.push(Object.assign(base, clean, { date: d }));
     });
     state.ui.openDate = day;
     closeLinkModal(); persist(); renderTripDetail(t);
