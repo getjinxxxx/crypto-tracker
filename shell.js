@@ -12,7 +12,7 @@
   window.__shellLoaded = true;
 
   var FILE = (location.pathname.split("/").pop() || "home.html").toLowerCase();
-  var APP_VERSION = 144; // keep in sync with version.json
+  var APP_VERSION = 173; // keep in sync with version.json
 
   var NAV = [
     { group: "Main" },
@@ -26,6 +26,7 @@
     { href: "soa.html", label: "Statement of Account" },
     { href: "itinerary.html", label: "Itinerary" },
     { href: "kanban.html", label: "Kanban" },
+    { href: "fittrack.html", label: "FitTrack AI" },
     { group: "Account" },
     { href: "#lock", label: "Lock" }
   ];
