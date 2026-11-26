@@ -222,9 +222,9 @@
   .exi .ms { position: absolute; inset: 14%; width: 72%; height: 72%; }
   .exi .ms .b { fill: #cfd8d5; } .exi .ms .h { fill: #1fb81f; }
   .exi img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; }
-  .exi img.f1 { animation: exflip 2s steps(1, end) infinite; }
-  @keyframes exflip { 0%, 49.99% { opacity: 0; } 50%, 100% { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .exi img.f1 { display: none; } }
+  /* GIF-style 2-frame loop: a JS interval toggles html.exf every 1s (survives re-renders, not affected by iOS Reduce Motion); frame 1 shows only once loaded */
+  .exi img.f1 { opacity: 0; }
+  html.exf .exi img.f1.ok { opacity: 1; }
   .mbadge { position: absolute; right: -4px; bottom: -4px; width: 26px; height: 26px; border-radius: 9px; background: #0a1f1c; border: 2px solid #06231f; display: flex; align-items: center; justify-content: center; z-index: 2; }
   .mbadge .ms { width: 18px; height: 18px; } .mbadge .ms .b { fill: #5c6e6a; } .mbadge .ms .h { fill: var(--neon); }
   .exrow .info { flex: 1; min-width: 0; }
@@ -244,6 +244,12 @@
   /* Exercise sheet */
   #modalHost .md.sheet { padding-top: 8px; position: relative; }
   .sh-handle { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.25); margin: 0 auto 12px; }
+  /* Sticky top bar on exercise views: back / grab handle (swipe down closes) / close */
+  .sh-top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; margin: -8px -16px 8px; padding: 8px 12px 6px; background: #0b2a2a; touch-action: none; }
+  .sh-top .sh-handle { margin: 0; flex: none; width: 56px; }
+  .sh-ic { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font-size: 20px; line-height: 1; padding: 0; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .sh-ic.ph { visibility: hidden; }
+  #modalHost .ov { cursor: pointer; } #modalHost .md { cursor: auto; }
   .sh-hero { text-align: center; }
   .sh-hero .exi.sh-img { width: 120px; height: 120px; margin: 0 auto; border-radius: 22px; }
   .sh-hero .exi.sh-big { width: 100%; max-width: 300px; height: 240px; margin: 0 auto; border-radius: 18px; }
@@ -426,7 +432,7 @@
   function geminiKey() { try { return (localStorage.getItem("ft_gemini_key") || "").trim() || DEFAULT_GEMINI_KEY; } catch (e) { return DEFAULT_GEMINI_KEY; } }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 175;
+  const APP_VERSION = 176;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -709,12 +715,17 @@
   function muscleSvg(m) {
     return '<svg class="ms" viewBox="0 0 24 24" aria-hidden="true"><g class="b"><circle cx="12" cy="3.4" r="2.1"/><rect x="7.2" y="6" width="9.6" height="9.4" rx="2.4"/><rect x="4" y="6.6" width="2.6" height="10" rx="1.3"/><rect x="17.4" y="6.6" width="2.6" height="10" rx="1.3"/><rect x="8" y="15.6" width="3.6" height="7.8" rx="1.6"/><rect x="12.4" y="15.6" width="3.6" height="7.8" rx="1.6"/></g><g class="h">' + (MS_REGION[m] || MS_REGION.core) + "</g></svg>";
   }
-  function exImgHtml(exId, cls) {
+  function exImgHtml(exId, cls, lazy) {
     const e = getEx(exId), f = EX_IMG[exId];
     let h = '<div class="exi ' + (cls || "") + '">' + muscleSvg(e.primary);
-    if (f && !e.custom) h += '<img class="f0" loading="lazy" alt="" src="' + FEDB + f + '/0.jpg" onerror="exImgErr(this)"><img class="f1" loading="lazy" alt="" src="' + FEDB + f + '/1.jpg" onerror="exImgErr(this)">';
+    const ld = lazy ? ' loading="lazy"' : "";
+    if (f && !e.custom) h += '<img class="f0"' + ld + ' alt="" src="' + FEDB + f + '/0.jpg" onerror="exImgErr(this)"><img class="f1' + (EX_IMG_OK[f] ? " ok" : "") + '"' + ld + ' alt="" src="' + FEDB + f + '/1.jpg" onload="exImgOk(this,\'' + f + '\')" onerror="exImgErr(this)">';
     return h + "</div>";
   }
+  const EX_IMG_OK = {}; // folders whose frame 1 has loaded once (re-rendered rows animate immediately)
+  function exImgOk(img, f) { EX_IMG_OK[f] = 1; img.classList.add("ok"); }
+  let exFrameTimer = null;
+  function startExFrames() { clearInterval(exFrameTimer); exFrameTimer = setInterval(() => document.documentElement.classList.toggle("exf"), 1000); }
   function exImgErr(img) { const w = img.parentNode; if (w) w.querySelectorAll("img").forEach((i) => i.remove()); }
   const EQUIPMENT = ["barbell", "dumbbell", "machine", "cable", "bodyweight", "bands"];
   const PAIN_AREAS = ["shoulder", "elbow", "wrist", "lower_back", "hip", "knee", "ankle", "neck"];
@@ -795,11 +806,15 @@
     (profile.painAreas || []).forEach((a) => (PAIN_AVOID[a] || []).forEach((id) => avoid.add(id)));
     return allExercises().filter((e) => eq.has(e.equipment) && !avoid.has(e.id));
   }
-  function pickEx(avail, slot, usedProg, usedDay, profile) {
+  function pickEx(avail, slot, usedProg, usedDay, profile, prev) {
     let c = avail.filter((e) => e.primary === slot.m && !usedDay.has(e.id));
     if (profile.experience === "beginner") { const nb = c.filter((e) => e.difficulty !== "advanced"); if (nb.length) c = nb; }
     if (slot.cat) { const cc = c.filter((e) => e.category === (slot.cat === "C" ? "compound" : "isolation")); if (cc.length) c = cc; }
     const fresh = c.filter((e) => !usedProg.has(e.id)); if (fresh.length) c = fresh;
+    if (prev) { // "Generate new" must not rebuild the identical program; keep a slot's preferred movement (e.g. lateral raise) if avoiding would drop all of them
+      const isPref = (e) => (slot.pref || []).indexOf(e.id) >= 0, nw = c.filter((e) => !prev.has(e.id));
+      if (nw.length && (nw.some(isPref) || !c.some(isPref))) c = nw;
+    }
     const pref = slot.pref || [];
     c.sort((a, b) => {
       const pa = pref.indexOf(a.id), pb = pref.indexOf(b.id);
@@ -832,12 +847,12 @@
     push: () => [{ m: "chest", cat: "C" }, { m: "shoulders", cat: "C" }, { m: "chest", cat: "C" }, { m: "shoulders", cat: "I", pref: ["lat_raise", "cable_lat_raise"] }, { m: "triceps", cat: "I" }, { m: "triceps", cat: "I" }],
     pull: () => [{ m: "back", cat: "C" }, { m: "back", cat: "C" }, { m: "back", cat: "C" }, { m: "shoulders", cat: "I", pref: ["rear_delt_fly", "face_pull"] }, { m: "biceps", cat: "I" }, { m: "biceps", cat: "I" }]
   };
-  function buildDay(name, kind, v, avail, usedProg, profile) {
+  function buildDay(name, kind, v, avail, usedProg, profile, prev) {
     const maxEx = profile.sessionMinutes <= 45 ? 5 : profile.sessionMinutes <= 60 ? 6 : 8;
     let slots = SLOT_SETS[kind](v);
     if (slots.length > maxEx) slots = slots.slice(0, maxEx);
     const usedDay = new Set(), picked = [];
-    slots.forEach((s) => { const e = pickEx(avail, s, usedProg, usedDay, profile); if (e) { picked.push(e); usedDay.add(e.id); usedProg.add(e.id); } });
+    slots.forEach((s) => { const e = pickEx(avail, s, usedProg, usedDay, profile, prev); if (e) { picked.push(e); usedDay.add(e.id); usedProg.add(e.id); } });
     if (picked.length < 4) { // fallback fill: any available exercise for muscles of this day
       const muscles = new Set(slots.map((s) => s.m));
       avail.filter((e) => muscles.has(e.primary) && !usedDay.has(e.id)).concat(avail.filter((e) => !usedDay.has(e.id))).forEach((e) => { if (picked.length < 4 && !usedDay.has(e.id)) { picked.push(e); usedDay.add(e.id); } });
@@ -846,16 +861,18 @@
     return { id: uid(), name: name, exercises: picked.map((e) => prescribe(e, profile)) };
   }
   function autoSplit(dpw) { return dpw <= 3 ? "fullbody" : dpw === 4 ? "upperlower" : "ppl"; }
-  function generateProgram(profile, split) {
+  function generateProgram(profile, split, prevProg) {
     split = split && split !== "auto" ? split : autoSplit(profile.daysPerWeek);
     const avail = availableEx(profile), usedProg = new Set();
+    // Exercises of the program being replaced are deprioritized so a regenerate (e.g. PPL -> PPL) yields a different plan.
+    const prev = prevProg ? new Set([].concat.apply([], (prevProg.days || []).map((d) => d.exercises.map((x) => x.exId)))) : null;
     const n = Math.min(6, Math.max(2, profile.daysPerWeek || 3));
     const days = [];
-    if (split === "fullbody") { const L = ["A", "B", "C"]; for (let i = 0; i < Math.min(n, 3); i++) days.push(buildDay("Full Body " + L[i], "fb", i, avail, usedProg, profile)); }
-    else if (split === "upperlower") { const seq = [["Upper A", "upper"], ["Lower A", "lower"], ["Upper B", "upper"], ["Lower B", "lower"]]; seq.forEach((s, i) => days.push(buildDay(s[0], s[1], i, avail, usedProg, profile))); }
+    if (split === "fullbody") { const L = ["A", "B", "C"]; for (let i = 0; i < Math.min(n, 3); i++) days.push(buildDay("Full Body " + L[i], "fb", i, avail, usedProg, profile, prev)); }
+    else if (split === "upperlower") { const seq = [["Upper A", "upper"], ["Lower A", "lower"], ["Upper B", "upper"], ["Lower B", "lower"]]; seq.forEach((s, i) => days.push(buildDay(s[0], s[1], i, avail, usedProg, profile, prev))); }
     else if (split === "ppl") {
       const seq = [["Push A", "push"], ["Pull A", "pull"], ["Legs A", "lower"], ["Push B", "push"], ["Pull B", "pull"], ["Legs B", "lower"]];
-      for (let i = 0; i < Math.min(n, 6); i++) days.push(buildDay(seq[i][0], seq[i][1], i, avail, usedProg, profile));
+      for (let i = 0; i < Math.min(n, 6); i++) days.push(buildDay(seq[i][0], seq[i][1], i, avail, usedProg, profile, prev));
     } else { for (let i = 0; i < n; i++) days.push({ id: uid(), name: "Day " + (i + 1), exercises: [] }); }
     return { id: uid(), name: SPLIT_LABEL[split] + " (" + days.length + "-day)", split: split, createdAt: Date.now(), active: true, archivedAt: null, parentId: null, days: days };
   }
@@ -1391,17 +1408,18 @@
   function libListHtml() {
     const q = nav.libQ.toLowerCase().trim();
     const list = allExercises().filter((e) => (!nav.libM || e.primary === nav.libM) && (!nav.libE || e.equipment === nav.libE) && (!q || e.name.toLowerCase().indexOf(q) >= 0 || e.primary.indexOf(q) >= 0));
-    return list.length ? list.map((e) => '<div class="li">' + '<div class="thumb" style="position:relative;flex:none;width:52px;height:52px">' + exImgHtml(e.id) + '<span class="mbadge">' + muscleSvg(e.primary) + '</span></div>' + '<div class="grow"><button class="lk t" data-act="ex-view" data-id="' + esc(e.id) + '">' + esc(e.name) + '</button><div class="sub">' + cap(e.primary) + " &bull; " + cap(e.equipment) + " &bull; " + e.repMin + "&ndash;" + e.repMax + " reps</div></div></div>").join("") : '<div class="sub">No matches.</div>';
+    return list.length ? list.map((e) => '<div class="li">' + '<div class="thumb" style="position:relative;flex:none;width:52px;height:52px">' + exImgHtml(e.id, "", true) + '<span class="mbadge">' + muscleSvg(e.primary) + '</span></div>' + '<div class="grow"><button class="lk t" data-act="ex-view" data-id="' + esc(e.id) + '">' + esc(e.name) + '</button><div class="sub">' + cap(e.primary) + " &bull; " + cap(e.equipment) + " &bull; " + e.repMin + "&ndash;" + e.repMax + " reps</div></div></div>").join("") : '<div class="sub">No matches.</div>';
   }
   function showExercise(id) {
     const e = getEx(id), bs = bestSets()[id], lp = lastPerformance(id);
     const alts = (e.alts || []).map(getEx);
-    openModal('<div class="sh-hero">' + exImgHtml(id, "sh-big") + '</div><h2>' + esc(e.name) + '</h2><div class="sub">' + cap(e.primary) + (e.secondary.length ? " (+ " + e.secondary.join(", ") + ")" : "") + " &bull; " + cap(e.equipment) + " &bull; " + e.category + " &bull; " + e.difficulty + "</div>" +
+    openModal(shTopHtml(false) + '<div class="sh-hero">' + exImgHtml(id, "sh-big") + '</div><h2>' + esc(e.name) + '</h2><div class="sub">' + cap(e.primary) + (e.secondary.length ? " (+ " + e.secondary.join(", ") + ")" : "") + " &bull; " + cap(e.equipment) + " &bull; " + e.category + " &bull; " + e.difficulty + "</div>" +
       '<p>' + esc(e.instructions || "No instructions.") + '</p><div class="sub">Recommended range: ' + e.repMin + "&ndash;" + e.repMax + " reps</div>" +
       (e.video ? '<div class="mt"><a class="lk" href="' + esc(e.video) + '" target="_blank" rel="noopener">Watch video</a></div>' : "") +
       (lp ? '<div class="sub mt">Last (' + fmtShort(lp.date) + "): " + esc(fmtSets(lp.sets)) + (bs ? " &bull; best est. 1RM " + r1(bs.e1rm) + " kg" : "") + "</div>" : "") +
       (alts.length ? '<h2 class="sec">Alternatives</h2><div class="chips">' + alts.map((a) => '<button class="chip" data-act="ex-view" data-id="' + esc(a.id) + '">' + esc(a.name) + "</button>").join("") + "</div>" : "") +
       '<div class="row mt2">' + (e.custom ? '<button class="btn danger sm" data-act="cx-del" data-id="' + esc(e.id) + '">Delete exercise</button>' : "") + '<div class="spacer"></div><button class="btn sec" data-act="modal-close">Close</button></div>');
+    modalRoot().classList.add("sheet");
   }
 
   // Program editor (saves as a new version)
@@ -1747,6 +1765,9 @@
     nav.sheet = { dayId: day.id, exId: exKey, panel: "" };
     openModal(""); modalRoot().classList.add("sheet"); renderSheet();
   }
+  function shTopHtml(back) { // back arrow returns from HOW TO / REPLACE / REST to the sheet; X closes
+    return '<div class="sh-top">' + (back ? '<button class="sh-ic" data-act="sh-back" aria-label="Back to exercise">\u2039</button>' : '<span class="sh-ic ph"></span>') + '<div class="sh-handle" aria-hidden="true"></div><button class="sh-ic" data-act="modal-close" aria-label="Close">\u2715</button></div>';
+  }
   function renderSheet() {
     const c = shCtx(), md = modalRoot(); if (!md) return;
     if (!c) { nav.sheet = null; closeModal(); return; }
@@ -1754,7 +1775,7 @@
     const hist = exHistory(x.exId);
     const f2 = (v) => (num(v) == null ? 0 : num(v)).toFixed(2);
     const chip = (k, label, cls) => '<button class="shchip ' + (cls || "") + (pn === k ? " on" : "") + '" data-act="sh-chip" data-p="' + k + '">' + label + "</button>";
-    let h = '<div class="sh-handle"></div><div class="sh-hero">' + exImgHtml(x.exId, "sh-img") + '<div class="nm">' + esc(e.name) + '</div><div class="sub">' + cap(e.primary || "") + "</div></div>" +
+    let h = shTopHtml(!!pn) + '<div class="sh-hero">' + exImgHtml(x.exId, "sh-img") + '<div class="nm">' + esc(e.name) + '</div><div class="sub">' + cap(e.primary || "") + "</div></div>" +
       '<div class="sh-chips">' + chip("how", "\u25B7 How to") + chip("replace", "\u21C5 Replace") + chip("rest", "\u23F1 " + fmtDur(x.restSec)) + '<button class="shchip red" data-act="sh-del">\uD83D\uDDD1 Delete exercise</button></div>';
     if (pn === "how") h += '<div class="sh-panel"><div class="sh-hero">' + exImgHtml(x.exId, "sh-big") + '</div><p style="margin:10px 0 0">' + esc(e.instructions || "No instructions.") + "</p></div>";
     else if (pn === "replace") { const cands = replaceCandidates(x.exId, state.profile).slice(0, 12); h += '<div class="sh-panel"><div class="sub">Replace for this program slot only. Logged history keeps the old name.</div>' + (cands.length ? cands.map((a) => '<div class="li"><div class="grow"><div class="t">' + esc(a.name) + '</div><div class="sub">' + cap(a.primary) + " &bull; " + cap(a.equipment) + '</div></div><button class="btn sm" data-act="sh-pick" data-id="' + esc(a.id) + '">Choose</button></div>').join("") : '<div class="sub">No alternatives available.</div>') + "</div>"; }
@@ -1792,6 +1813,7 @@
   function shAct(a, d) {
     const c = shCtx(); if (!c) return; const x = shEnsure(c), s = nav.sheet;
     if (a === "sh-chip") { s.panel = s.panel === d.p ? "" : d.p; renderSheet(); }
+    else if (a === "sh-back") { s.panel = ""; renderSheet(); }
     else if (a === "sh-addset") { const l = x.tgt[x.tgt.length - 1]; x.tgt.push({ reps: l ? l.reps : x.repMax, kg: l ? l.kg : 0 }); x.sets = x.tgt.length; shSave(true); }
     else if (a === "sh-rmset") { if (x.tgt.length > 1) { x.tgt.splice(+d.i, 1); x.sets = x.tgt.length; shSave(true); } }
     else if (a === "sh-warm") { x.warm = x.warm ? null : { reps: 8, kg: Math.round(Math.max.apply(null, x.tgt.map((t) => t.kg || 0)) * 0.5 / 2.5) * 2.5 }; shSave(true); }
@@ -1934,13 +1956,13 @@
       case "train-sub": nav.train = d.sub; renderAll(); break;
       case "ex-view": showExercise(d.id); break;
       case "ex-sheet": if (ev && ev.target && ev.target.closest(".dots3") && el.classList.contains("exrow")) break; openExerciseSheet(d.id); break;
-      case "sh-chip": case "sh-addset": case "sh-rmset": case "sh-warm": case "sh-pick": case "sh-del": case "sh-start": shAct(a, d); break;
+      case "sh-chip": case "sh-back": case "sh-addset": case "sh-rmset": case "sh-warm": case "sh-pick": case "sh-del": case "sh-start": shAct(a, d); break;
       case "plan-day": nav.planDay = d.day; renderAll(); break;
       case "plan-compact": nav.planCompact = !nav.planCompact; renderAll(); break;
       case "plan-menu": openPlanMenu(); break;
       case "plan-edit": closeModal(); nav.editor = clone(activeProgram()); renderAll(); window.scrollTo(0, 0); break;
       case "prog-gen": openModal('<h2>Generate a new program</h2><div class="sub">Uses your profile, equipment and limitations. The current program is kept as a previous version.</div><label class="lbl">Split</label>' + selectHtml("gsplit", [["auto", "Auto (" + SPLIT_LABEL[autoSplit(state.profile.daysPerWeek)] + ")"], ["fullbody", "Full Body"], ["upperlower", "Upper / Lower"], ["ppl", "Push / Pull / Legs"], ["custom", "Custom (empty days)"]], "auto", 'id="gsplit"') + '<div class="row mt2"><button class="btn sec" data-act="modal-close">Cancel</button><div class="spacer"></div><button class="btn" data-act="prog-gen-go">Generate</button></div>'); break;
-      case "prog-gen-go": { const np = generateProgram(state.profile, $("#gsplit").value); saveProgramVersion(np); closeModal(); nav.train = "program"; renderAll(); toast("New program created."); if (np.split === "custom") { nav.editor = clone(activeProgram()); renderAll(); } break; }
+      case "prog-gen-go": { const np = saveProgramVersion(generateProgram(state.profile, $("#gsplit").value, activeProgram())); nav.planDay = np.days.length ? np.days[0].id : null; nav.sheet = null; closeModal(); nav.train = "program"; renderAll(); window.scrollTo(0, 0); toast("New program created."); if (np.split === "custom") { nav.editor = clone(activeProgram()); renderAll(); } break; }
       case "prog-edit": nav.editor = clone(activeProgram()); renderAll(); window.scrollTo(0, 0); break;
       case "ed-cancel": nav.editor = null; renderAll(); break;
       case "ed-save": { const probs = validateProgram(nav.editor, state.profile); saveProgramVersion(nav.editor); nav.editor = null; renderAll(); toast("Saved as a new version." + (probs.length ? " Check: " + probs[0] : "")); break; }
@@ -2031,13 +2053,23 @@
     else if (t.id === "photoIn" && t.files && t.files[0]) resizePhoto(t.files[0], (data) => { nav.pendingPhoto = data; const pv = $("#photoPrev"); if (pv) pv.innerHTML = '<img src="' + data + '" alt="Photo preview" style="max-width:120px;border-radius:10px" />'; });
   });
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && $("#modalHost .ov")) closeModal(); });
+  // Swipe down on an exercise view's top bar (grab handle) closes it
+  let shDrag = null;
+  document.addEventListener("touchstart", (ev) => {
+    const t = ev.target; if (!t.closest || !t.closest("#modalHost .sh-top") || t.closest("button")) return;
+    const md = modalRoot(); if (md) { shDrag = { y: ev.touches[0].clientY, dy: 0, md: md }; md.style.transition = "none"; }
+  }, { passive: true });
+  document.addEventListener("touchmove", (ev) => { if (!shDrag) return; shDrag.dy = Math.max(0, ev.touches[0].clientY - shDrag.y); shDrag.md.style.transform = "translateY(" + shDrag.dy + "px)"; }, { passive: true });
+  const shDragEnd = () => { if (!shDrag) return; const d = shDrag; shDrag = null; if (d.dy > 70) closeModal(); else { d.md.style.transition = "transform .2s"; d.md.style.transform = ""; } };
+  document.addEventListener("touchend", shDragEnd, { passive: true });
+  document.addEventListener("touchcancel", shDragEnd, { passive: true });
 
   // ---------- Wire up ----------
   function boot() {
     loadState();
     if (activeSession()) { nav.workoutOpen = true; state.ui.tab = "plan"; }
     renderAll(); fbInit(); checkForUpdate(); setInterval(checkForUpdate, 60000);
-    setInterval(tick, 1000); startReminderLoop();
+    setInterval(tick, 1000); startReminderLoop(); startExFrames();
   }
   document.getElementById("lockBtn").onclick = unlock;
   document.getElementById("lockInput").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
