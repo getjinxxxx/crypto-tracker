@@ -273,6 +273,26 @@
   .sh-stats b { display: block; font-size: 16px; }
   .sh-hist { margin-top: 6px; font-size: 13px; } .sh-hist .hr { padding: 8px 0; border-top: 1px solid var(--line); } .sh-hist .hd { color: var(--muted); font-size: 12px; }
   .shstart { position: sticky; bottom: 0; margin-top: 84px; padding-top: 8px; background: linear-gradient(180deg, transparent, var(--panel) 40%); }
+  /* Equipment availability sheet (explicit colors; theme.css overrides vars) */
+  .eq-ttl { font-size: 17px; font-weight: 900; letter-spacing: .06em; color: #f2f2f7; text-align: center; margin: 4px 0 2px; }
+  .eq-sub { text-align: center; font-size: 13px; color: #b9c8c5; margin-bottom: 12px; }
+  .eq-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .eq-chip { min-height: 44px; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 800; cursor: pointer; background: #0f3a36; color: #f2f2f7; border: 2px solid #39e639; }
+  .eq-chip.off { background: #2a1417; color: #ffb4b4; border: 2px solid #ff6b6b; text-decoration: line-through; }
+  .eq-all { display: block; width: 100%; min-height: 46px; margin-top: 12px; border-radius: 999px; background: transparent; color: #39e639; border: 1px solid #39e639; font-weight: 800; font-size: 14px; letter-spacing: .04em; cursor: pointer; }
+  .eq-h { margin: 16px 0 6px; font-size: 13px; font-weight: 900; letter-spacing: .1em; color: #f5c542; }
+  .eq-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-top: 6px; border-radius: 14px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.14); }
+  .eq-row .eq-nm { flex: 1; min-width: 0; font-size: 14px; color: #f2f2f7; line-height: 1.35; }
+  .eq-row .eq-from { color: #b9c8c5; text-decoration: line-through; }
+  .eq-row .eq-to { color: #39e639; font-weight: 800; }
+  .eq-row .eq-to.skip { color: #ffb4b4; }
+  .eq-sw { flex: none; width: 44px; height: 44px; border-radius: 50%; background: #0f3a36; color: #f2f2f7; border: 1px solid #39e639; font-size: 20px; cursor: pointer; }
+  .eq-ok { margin-top: 12px; font-size: 13px; color: #b9c8c5; text-align: center; }
+  .eq-go { position: sticky; bottom: 0; margin-top: 16px; padding-top: 8px; background: linear-gradient(180deg, transparent, #04120f 40%); }
+  .eq-go button { width: 100%; min-height: 54px; border: none; border-radius: 999px; background: #39e639; color: #03200a; font-weight: 900; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .eq-pk .t { color: #f2f2f7; font-weight: 700; } .eq-pk .s { color: #b9c8c5; font-size: 12px; }
+  .eq-pk button.c { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 999px; background: #39e639; color: #03200a; border: none; font-weight: 800; cursor: pointer; }
+  .eq-pk button.c.sk { background: transparent; color: #ffb4b4; border: 1px solid #ff6b6b; }
   .shstart button { width: 100%; min-height: 54px; border: none; border-radius: 999px; background: var(--neon); color: var(--neon-ink); font-weight: 900; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
 
   /* Modal + toast */
@@ -355,6 +375,43 @@
   .msg.a { border-radius: 18px; }
   .foot { text-transform: uppercase; letter-spacing: .06em; font-size: 10px; font-weight: 700; padding: 0 12px; }
   .foot #footVer { color: var(--neon); }
+
+  /* v177 contrast fixes: theme.css (loaded later by shell.js) forces its purple palette with !important.
+     html:root outranks its :root, so FitTrack's own teal/neon palette wins again. */
+  html:root { color-scheme: dark;
+    --bg: #04120f !important; --panel: rgba(255,255,255,.06) !important; --panel-2: rgba(0,0,0,.32) !important; --line: rgba(255,255,255,.1) !important;
+    --text: #f2f2f7 !important; --muted: #a7b5b2 !important; --gold: #39e639 !important; --gold-bright: #f5c542 !important;
+    --accent: #6ea2ff !important; --green: #34d399 !important; --red: #ff6b6b !important; }
+  /* Text-style buttons (exercise / workout / food / measurement names) had the UA white button face behind light text */
+  button.lk, a.lk { background: none !important; border: none; padding: 0; margin: 0; font: inherit; text-align: left; -webkit-appearance: none; appearance: none; }
+  button.lk { color: #f2f2f7; -webkit-text-fill-color: currentColor; }
+  button.lk.t { font-weight: 700; font-size: 14px; line-height: 1.3; }
+  button.lk .sub { color: var(--muted); }
+  /* Buttons: theme.css paints every .btn with its purple gradient */
+  :is(#app, #modalHost, #restBar) .btn { background: var(--neon) !important; color: var(--neon-ink) !important; border: none !important; border-radius: 999px !important; box-shadow: none !important; letter-spacing: .05em !important; font-weight: 900 !important; }
+  :is(#app, #modalHost, #restBar) .btn.sec { background: rgba(255,255,255,.1) !important; color: #f2f2f7 !important; }
+  :is(#app, #modalHost, #restBar) .btn.danger { background: transparent !important; color: var(--danger) !important; border: 1px solid var(--danger) !important; }
+  #topbar .title { background: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; color: #f2f2f7 !important; -webkit-text-fill-color: #f2f2f7; }
+  /* Native fields: readable on iOS Safari (text fill, placeholder, dark pickers) */
+  :is(#app, #modalHost, #lock) :is(input, select, textarea) { color-scheme: dark; color: #f2f2f7 !important; -webkit-text-fill-color: #f2f2f7; background-color: rgba(0,0,0,.32) !important; border: 1px solid rgba(255,255,255,.14) !important; caret-color: var(--neon); }
+  :is(#app, #modalHost, #lock) :is(input, select, textarea):focus { border-color: var(--neon) !important; box-shadow: 0 0 0 3px rgba(57,230,57,.18) !important; }
+  :is(input, textarea)::placeholder { color: #93a8a3; -webkit-text-fill-color: #93a8a3; opacity: 1; }
+  select option, select optgroup { background-color: #0b2a2a; color: #f2f2f7; }
+  input[type=date]::-webkit-datetime-edit, input[type=time]::-webkit-datetime-edit { color: #f2f2f7; -webkit-text-fill-color: #f2f2f7; }
+  input[type=date]::-webkit-calendar-picker-indicator, input[type=time]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: .8; }
+  input[type=file] { color: #f2f2f7; }
+  #modalHost .md { color: #f2f2f7; }
+  .tag.G { color: #a9c7ff; }
+
+  /* Full-screen exercise image zoom (2-frame animation, pinch allowed) */
+  .exi[data-zid] { cursor: zoom-in; }
+  #zoomHost { position: fixed; inset: 0; z-index: 9600; background: rgba(0,6,5,.94); display: none; align-items: center; justify-content: center; padding: calc(64px + env(safe-area-inset-top)) 12px calc(24px + env(safe-area-inset-bottom)); touch-action: pinch-zoom; }
+  #zoomHost.on { display: flex; }
+  #zoomHost .zm-box { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 640px; }
+  #zoomHost .exi.zm-img { width: 100%; height: min(70vh, calc((100vw - 24px) * .72), 470px); border-radius: 20px; touch-action: pinch-zoom; }
+  #zoomHost .exi.zm-img .ms { inset: 20%; width: 60%; height: 60%; }
+  #zoomHost .zm-nm { color: #f2f2f7; font-weight: 800; font-size: 16px; text-align: center; }
+  #zoomHost .zm-x { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.12); color: #f2f2f7; font-size: 22px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
 </style>
 </head>
 <body class="locked">
@@ -396,6 +453,7 @@
     <button data-act="tab" data-tab="profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4-6 8-6s7 1.5 8 6"/></svg>Profile</button>
   </nav>
   <div id="modalHost"></div>
+  <div id="zoomHost" role="dialog" aria-modal="true" aria-label="Exercise image" data-act="zoom-bg"></div>
   <div id="toast" role="status"></div>
 
 <script>
@@ -432,7 +490,7 @@
   function geminiKey() { try { return (localStorage.getItem("ft_gemini_key") || "").trim() || DEFAULT_GEMINI_KEY; } catch (e) { return DEFAULT_GEMINI_KEY; } }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 176;
+  const APP_VERSION = 178;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -717,7 +775,7 @@
   }
   function exImgHtml(exId, cls, lazy) {
     const e = getEx(exId), f = EX_IMG[exId];
-    let h = '<div class="exi ' + (cls || "") + '">' + muscleSvg(e.primary);
+    let h = '<div class="exi ' + (cls || "") + '" data-zid="' + esc(exId) + '">' + muscleSvg(e.primary);
     const ld = lazy ? ' loading="lazy"' : "";
     if (f && !e.custom) h += '<img class="f0"' + ld + ' alt="" src="' + FEDB + f + '/0.jpg" onerror="exImgErr(this)"><img class="f1' + (EX_IMG_OK[f] ? " ok" : "") + '"' + ld + ' alt="" src="' + FEDB + f + '/1.jpg" onload="exImgOk(this,\'' + f + '\')" onerror="exImgErr(this)">';
     return h + "</div>";
@@ -727,6 +785,16 @@
   let exFrameTimer = null;
   function startExFrames() { clearInterval(exFrameTimer); exFrameTimer = setInterval(() => document.documentElement.classList.toggle("exf"), 1000); }
   function exImgErr(img) { const w = img.parentNode; if (w) w.querySelectorAll("img").forEach((i) => i.remove()); }
+  // Full-screen image zoom; pushes a history entry so Back closes it and returns to the same view
+  function openZoom(exId) {
+    const z = document.getElementById("zoomHost"); if (!z) return;
+    z.innerHTML = '<button class="zm-x" data-act="zoom-close" aria-label="Close image">\u2715</button><div class="zm-box">' + exImgHtml(exId, "zm-img") + '<div class="zm-nm">' + esc(getEx(exId).name) + "</div></div>";
+    z.classList.add("on"); document.body.classList.add("modal-open");
+    try { history.pushState({ ftZoom: 1 }, ""); } catch (e) {}
+  }
+  function hideZoom() { const z = document.getElementById("zoomHost"); if (!z || !z.classList.contains("on")) return; z.classList.remove("on"); z.innerHTML = ""; if (!document.querySelector("#modalHost .ov")) document.body.classList.remove("modal-open"); }
+  function closeZoom() { if (history.state && history.state.ftZoom) history.back(); else hideZoom(); }
+  window.addEventListener("popstate", hideZoom);
   const EQUIPMENT = ["barbell", "dumbbell", "machine", "cable", "bodyweight", "bands"];
   const PAIN_AREAS = ["shoulder", "elbow", "wrist", "lower_back", "hip", "knee", "ankle", "neck"];
   // Exercises to avoid when the user reports an area as painful/limited.
@@ -1437,20 +1505,89 @@
   function pickList(host, items, act, attrs) { host.innerHTML = items.length ? items.map((e) => '<div class="li"><div class="grow"><div class="t">' + esc(e.name) + '</div><div class="sub">' + cap(e.primary) + " &bull; " + cap(e.equipment) + '</div></div><button class="btn sm" data-act="' + act + '" data-id="' + esc(e.id) + '">Choose</button></div>').join("") : '<div class="sub">No matches.</div>'; }
 
   // ---------- Workout runtime ----------
-  function startWorkout(dayId) {
+  function startWorkout(dayId) { // asks which equipment is free today, then begins (substitutions are session-only)
     if (activeSession()) { nav.workoutOpen = true; state.ui.tab = "plan"; renderAll(); return; }
     const prog = activeProgram(), day = prog && prog.days.find((d) => d.id === dayId);
     if (!day || !day.exercises.length) { toast("This day has no exercises yet."); return; }
+    openEquip(dayId);
+  }
+  function beginWorkout(dayId, subs) {
+    if (activeSession()) { nav.workoutOpen = true; state.ui.tab = "plan"; renderAll(); return; }
+    subs = subs || {};
+    const prog = activeProgram(), day = prog && prog.days.find((d) => d.id === dayId);
+    if (!day || !day.exercises.length) { toast("This day has no exercises yet."); return; }
     const s = { id: uid(), programId: prog.id, programVersionName: prog.name, dayId: day.id, name: day.name, date: todayStr(), startedAt: Date.now(), endedAt: null, durationSec: 0, status: "in_progress", notes: "", exercises: [] };
-    day.exercises.forEach((x) => {
+    s.replaced = [];
+    day.exercises.forEach((x0) => {
+      const sb = subs[x0.exId], x = sb && sb !== "skip" ? { exId: sb, sets: x0.sets, repMin: x0.repMin, repMax: x0.repMax, restSec: x0.restSec } : x0; // replacement keeps sets/rep range; uses its own history
       const ex = getEx(x.exId), lp = lastPerformance(x.exId), sg = suggestOverload(x.exId, x), sets = [];
       for (let i = 0; i < x.sets; i++) { const prev = lp ? (lp.sets[i] || lp.sets[lp.sets.length - 1]) : null; const tg = Array.isArray(x.tgt) && x.tgt[i] && x.tgt[i].kg > 0 ? x.tgt[i].kg : null; sets.push({ n: i + 1, kg: tg != null ? tg : prev ? kgNum(prev.kg) : "", reps: "", rir: "", done: false, ts: null }); }
-      s.exercises.push({ exId: x.exId, name: ex.name, targetRepMin: x.repMin, targetRepMax: x.repMax, targetSets: x.sets, restSec: x.restSec, skipped: false, completed: false, notes: "", painFlag: false, techniqueFlag: false, difficulty: "ok",
+      s.exercises.push({ exId: x.exId, name: ex.name, targetRepMin: x.repMin, targetRepMax: x.repMax, targetSets: x.sets, restSec: x.restSec, skipped: sb === "skip", completed: false, notes: "", painFlag: false, techniqueFlag: false, difficulty: "ok",
         suggestion: { action: sg.action, kg: sg.kg, reason: sg.reason, status: sg.action === "maintain" ? "info" : "pending" }, sets: sets });
+      if (sb === "skip") { const le = s.exercises[s.exercises.length - 1]; le.skipReason = "equipment"; s.replaced.push({ from: getEx(x0.exId).name, to: null }); }
+      else if (sb) { const le = s.exercises[s.exercises.length - 1]; le.replacedFrom = { id: x0.exId, name: getEx(x0.exId).name }; s.replaced.push({ from: getEx(x0.exId).name, to: ex.name }); }
     });
     state.sessions.push(s); nav.workoutOpen = true; state.ui.tab = "plan"; save(); renderAll(); window.scrollTo(0, 0);
   }
-  function renderWorkout() {
+  // ---------- Equipment availability check (session-only substitutions; program never modified) ----------
+  const EQ_KEY = "ft_equip_off", EQ_LABEL = { barbell: "Barbell", dumbbell: "Dumbbell", cable: "Cable", machine: "Machine", bodyweight: "Bodyweight", bands: "Bands" };
+  function eqLoadOff() { try { const j = JSON.parse(localStorage.getItem(EQ_KEY) || "null"); return j && j.d === todayStr() && Array.isArray(j.off) ? j.off : []; } catch (e) { return []; } }
+  function eqSaveOff(off) { try { localStorage.setItem(EQ_KEY, JSON.stringify({ d: todayStr(), off: off })); } catch (e) { /* storage unavailable */ } }
+  function eqDay() { const q = nav.equip, p = activeProgram(); return q && p ? p.days.find((d) => d.id === q.dayId) : null; }
+  function eqTypes(day) { const seen = []; day.exercises.forEach((x) => { const q = getEx(x.exId).equipment; if (q && seen.indexOf(q) < 0) seen.push(q); }); return seen.sort((a, b) => { const ia = EQUIPMENT.indexOf(a), ib = EQUIPMENT.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); }); }
+  function eqCands(x, day, used) { // same primary muscle, listed alternatives first, equipment available, not already in this day
+    const cur = getEx(x.exId), off = nav.equip.off, inDay = day.exercises.map((z) => z.exId);
+    const ok = (e) => e && e.id !== x.exId && e.primary === cur.primary && off.indexOf(e.equipment) < 0 && inDay.indexOf(e.id) < 0 && (!used || used.indexOf(e.id) < 0);
+    const alt = (cur.alts || []).map((id) => getEx(id)).filter((e) => e && e.name !== e.id && ok(e));
+    const same = allExercises().filter((e) => ok(e) && alt.indexOf(e) < 0);
+    return alt.concat(same);
+  }
+  function eqPlan(day) { // { exId: replacementId | "skip" } for exercises whose equipment is unavailable
+    const q = nav.equip, subs = {}, used = [];
+    day.exercises.forEach((x) => {
+      if (q.off.indexOf(getEx(x.exId).equipment) < 0) return;
+      const pk = q.pick[x.exId];
+      if (pk === "skip") { subs[x.exId] = "skip"; return; }
+      if (pk && q.off.indexOf(getEx(pk).equipment) < 0 && used.indexOf(pk) < 0) { subs[x.exId] = pk; used.push(pk); return; }
+      const c = eqCands(x, day, used)[0]; subs[x.exId] = c ? c.id : "skip"; if (c) used.push(c.id);
+    });
+    return subs;
+  }
+  function openEquip(dayId) {
+    nav.equip = { dayId: dayId, off: eqLoadOff(), pick: {}, pickFor: null };
+    openModal(""); modalRoot().classList.add("sheet"); renderEquip();
+  }
+  function renderEquip() {
+    const md = modalRoot(), day = eqDay(), q = nav.equip; if (!md || !day || !q) return;
+    const top = '<div class="sh-top">' + (q.pickFor ? '<button class="sh-ic" data-act="eq-back" aria-label="Back">\u2039</button>' : '<span class="sh-ic ph"></span>') + '<div class="sh-handle" aria-hidden="true"></div><button class="sh-ic" data-act="modal-close" aria-label="Close">\u2715</button></div>';
+    const subs = eqPlan(day), keys = Object.keys(subs);
+    let h = top;
+    if (q.pickFor) {
+      const x = day.exercises.find((z) => z.exId === q.pickFor), cur = subs[q.pickFor];
+      h += '<div class="eq-ttl">PILI NG KAPALIT</div><div class="eq-sub">' + esc(getEx(q.pickFor).name) + '</div>';
+      const used = keys.filter((k) => k !== q.pickFor && subs[k] !== "skip").map((k) => subs[k]);
+      eqCands(x, day, used).forEach((e) => { h += '<div class="eq-row eq-pk"><div class="eq-nm"><div class="t">' + esc(e.name) + (e.id === cur ? " \u2713" : "") + '</div><div class="s">' + cap(e.primary) + " \u2022 " + cap(e.equipment) + '</div></div><button class="c" data-act="eq-set" data-id="' + esc(q.pickFor) + '" data-to="' + esc(e.id) + '">Choose</button></div>'; });
+      h += '<div class="eq-row eq-pk"><div class="eq-nm"><div class="t">Skip this exercise</div></div><button class="c sk" data-act="eq-set" data-id="' + esc(q.pickFor) + '" data-to="skip">Skip</button></div>';
+      md.innerHTML = h; return;
+    }
+    h += '<div class="eq-ttl">ANONG EQUIPMENT ANG FREE TODAY?</div><div class="eq-sub">' + esc(day.name) + ' \u00b7 ' + day.exercises.length + ' exercises</div><div class="eq-chips">' +
+      eqTypes(day).map((t) => { const off = q.off.indexOf(t) >= 0; return '<button class="eq-chip' + (off ? " off" : "") + '" data-act="eq-tog" data-eq="' + esc(t) + '" aria-pressed="' + (!off) + '">' + (off ? "\u2717 " : "\u2713 ") + esc(EQ_LABEL[t] || cap(t)) + "</button>"; }).join("") + '</div>' +
+      '<button class="eq-all" data-act="eq-all">Lahat available</button>';
+    if (keys.length) {
+      h += '<div class="eq-h">PAPALITAN</div>' + keys.map((k) => '<div class="eq-row"><div class="eq-nm"><span class="eq-from">' + esc(getEx(k).name) + '</span> \u2192 ' + (subs[k] === "skip" ? '<span class="eq-to skip">Skip</span>' : '<span class="eq-to">' + esc(getEx(subs[k]).name) + '</span>') + '</div><button class="eq-sw" data-act="eq-pick" data-id="' + esc(k) + '" aria-label="Pumili ng ibang kapalit para sa ' + esc(getEx(k).name) + '">\u21C5</button></div>').join("");
+    }
+    h += '<div class="eq-ok">\u2713 ' + (day.exercises.length - keys.length) + ' exercises walang pagbabago</div><div class="eq-go"><button data-act="eq-go">Start workout</button></div>';
+    md.innerHTML = h;
+  }
+  function eqAct(a, d) {
+    const q = nav.equip, day = eqDay(); if (!q || !day) { closeModal(); return; }
+    if (a === "eq-tog") { const i = q.off.indexOf(d.eq); if (i >= 0) q.off.splice(i, 1); else q.off.push(d.eq); eqSaveOff(q.off); q.pick = {}; renderEquip(); }
+    else if (a === "eq-all") { q.off = []; eqSaveOff([]); closeModal(); nav.equip = null; beginWorkout(day.id, {}); }
+    else if (a === "eq-pick") { q.pickFor = d.id; renderEquip(); }
+    else if (a === "eq-back") { q.pickFor = null; renderEquip(); }
+    else if (a === "eq-set") { q.pick[d.id] = d.to; q.pickFor = null; renderEquip(); }
+    else if (a === "eq-go") { const subs = eqPlan(day), id = day.id; closeModal(); nav.equip = null; beginWorkout(id, subs); }
+  }  function renderWorkout() {
     const s = activeSession();
     let h = '<div class="wk-head"><div class="grow"><div class="t" style="font-size:16px;font-weight:800">' + esc(s.name) + '</div><div class="sub">' + fmtDate(s.date) + '</div></div><div class="spacer"></div><span class="wk-timer" id="wkTimer">' + fmtDur((Date.now() - s.startedAt) / 1000) + '</span><button class="btn sec sm" data-act="wk-leave">Close</button><button class="btn sm" data-act="wk-finish">Finish</button></div>';
     s.exercises.forEach((e, ei) => {
@@ -1465,6 +1602,7 @@
       }
       h += '<div class="card ex' + (e.skipped ? " skipped" : "") + '"><div class="row between"><div><div class="t" style="font-size:16px">' + esc(e.name) + '</div><div class="sub">Target ' + e.targetRepMin + "&ndash;" + e.targetRepMax + " reps &bull; " + e.targetSets + " sets &bull; rest " + e.restSec + 's</div></div><button class="btn sec sm" data-act="wk-skip" data-ei="' + ei + '">' + (e.skipped ? "Unskip" : "Skip") + "</button></div>" +
         '<div class="sub mt">' + (lp ? "Last: " + esc(fmtSets(lp.sets)) + " (" + fmtShort(lp.date) + ")" : "Last: no history yet") + "</div>";
+      if (e.replacedFrom) h += '<div class="sub mt">Replaced ' + esc(e.replacedFrom.name) + ' (equipment unavailable)</div>'; else if (e.skipReason) h += '<div class="sub mt">Skipped: equipment unavailable</div>';
       if (!e.skipped) {
         h += sgh + '<div class="sets mt"><div class="sr hd"><div>Set</div><div>kg</div><div>Reps</div><div>RIR</div><div>Done</div></div>' +
           e.sets.map((x, si) => '<div class="sr' + (x.done ? " done" : "") + '"><div class="n">' + x.n + '</div><input type="number" inputmode="decimal" step="0.5" min="0" data-wf="kg" data-ei="' + ei + '" data-si="' + si + '" value="' + esc(x.kg) + '" aria-label="Set ' + x.n + ' kg" /><input type="number" inputmode="numeric" min="0" placeholder="' + e.targetRepMin + '" data-wf="reps" data-ei="' + ei + '" data-si="' + si + '" value="' + esc(x.reps) + '" aria-label="Set ' + x.n + ' reps" /><input type="number" inputmode="numeric" min="0" max="10" placeholder="RIR" data-wf="rir" data-ei="' + ei + '" data-si="' + si + '" value="' + esc(x.rir) + '" aria-label="Set ' + x.n + ' reps in reserve" /><input type="checkbox" data-wf="done" data-ei="' + ei + '" data-si="' + si + '"' + (x.done ? " checked" : "") + ' aria-label="Set ' + x.n + ' done" /></div>').join("") +
@@ -1659,18 +1797,18 @@
   function drawLine(cv, pts, target, unit) {
     const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 300, h = cv.clientHeight || 170;
     cv.width = w * dpr; cv.height = h * dpr; const g = cv.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
-    g.font = "11px sans-serif"; g.fillStyle = "#8e8e93";
+    g.font = "11px sans-serif"; g.fillStyle = "#a7b5b2";
     if (!pts.length) { g.fillText("No data yet", 10, 20); return; }
     const ys = pts.map((p) => p.y).concat(target != null ? [target] : []);
     let mn = Math.min.apply(null, ys), mx = Math.max.apply(null, ys); if (mn === mx) { mn -= 1; mx += 1; } const padv = (mx - mn) * 0.12; mn -= padv; mx += padv;
     const L = 38, R = 12, T = 10, B = 22, x0 = pts[0].x, x1 = pts[pts.length - 1].x;
     const X = (x) => (x1 === x0 ? (L + w - R) / 2 : L + ((x - x0) / (x1 - x0)) * (w - L - R)), Y = (y) => T + (1 - (y - mn) / (mx - mn)) * (h - T - B);
-    g.strokeStyle = "#2a2a30"; g.lineWidth = 1;
+    g.strokeStyle = "rgba(255,255,255,.1)"; g.lineWidth = 1;
     for (let i = 0; i < 4; i++) { const yy = T + (i / 3) * (h - T - B); g.beginPath(); g.moveTo(L, yy); g.lineTo(w - R, yy); g.stroke(); g.fillText(r1(mx - (i / 3) * (mx - mn)) + "", 2, yy + 4); }
-    if (target != null) { g.strokeStyle = "#34d399"; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(L, Y(target)); g.lineTo(w - R, Y(target)); g.stroke(); g.setLineDash([]); g.fillStyle = "#34d399"; g.fillText("goal " + target, L + 4, Y(target) - 4); g.fillStyle = "#8e8e93"; }
+    if (target != null) { g.strokeStyle = "#34d399"; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(L, Y(target)); g.lineTo(w - R, Y(target)); g.stroke(); g.setLineDash([]); g.fillStyle = "#34d399"; g.fillText("goal " + target, L + 4, Y(target) - 4); g.fillStyle = "#a7b5b2"; }
     g.strokeStyle = "#f5c542"; g.lineWidth = 2; g.beginPath(); pts.forEach((p, i) => { if (i) g.lineTo(X(p.x), Y(p.y)); else g.moveTo(X(p.x), Y(p.y)); }); g.stroke();
     g.fillStyle = "#f5c542"; pts.forEach((p) => { g.beginPath(); g.arc(X(p.x), Y(p.y), 3, 0, 6.3); g.fill(); });
-    g.fillStyle = "#8e8e93"; g.fillText(fmtShort(ymd(new Date(x0))), L, h - 6); const lt = fmtShort(ymd(new Date(x1))); g.fillText(lt, w - R - g.measureText(lt).width, h - 6);
+    g.fillStyle = "#a7b5b2"; g.fillText(fmtShort(ymd(new Date(x0))), L, h - 6); const lt = fmtShort(ymd(new Date(x1))); g.fillText(lt, w - R - g.measureText(lt).width, h - 6);
   }
   function afterRender() {
     (nav.charts || []).forEach((c) => {
@@ -1819,7 +1957,7 @@
     else if (a === "sh-warm") { x.warm = x.warm ? null : { reps: 8, kg: Math.round(Math.max.apply(null, x.tgt.map((t) => t.kg || 0)) * 0.5 / 2.5) * 2.5 }; shSave(true); }
     else if (a === "sh-pick") { x.exId = d.id; delete x.tgt; delete x.warm; s.exId = d.id; s.panel = ""; shSave(true); toast("Exercise replaced in this plan."); }
     else if (a === "sh-del") { if (confirm("Remove this exercise from the plan? Logged history is kept.")) { c.d.exercises.splice(c.i, 1); nav.sheet = null; save(); closeModal(); renderAll(true); } }
-    else if (a === "sh-start") { const day = c.d.id; nav.sheet = null; closeModal(); startWorkout(day); }
+    else if (a === "sh-start") { const day = c.d.id; nav.sheet = null; closeModal(); startWorkout(day); } // opens the equipment check
   }
   function topWeight(h) { return Math.max.apply(null, h.sets.map((s) => num(s.kg) || 0)); }
   function planProgress(exId) { // { cur, first, diff } from logged history; null without history
@@ -1931,7 +2069,10 @@
       case "inbox": openInbox(); break;
       case "inbox-clear": state.inbox = []; save(); closeModal(); updateBadge(); break;
       case "modal-bg": if (ev.target === el) closeModal(); break;
+      case "eq-tog": case "eq-all": case "eq-go": case "eq-pick": case "eq-set": case "eq-back": eqAct(a, d); break;
       case "modal-close": closeModal(); break;
+      case "zoom-bg": if (ev.target === el || ev.target.classList.contains("zm-box")) closeZoom(); break;
+      case "zoom-close": closeZoom(); break;
       // onboarding
       case "ob-next": { obCollect(); const m = obValid(); if (m) { toast(m); break; } nav.ob.step++; renderAll(); window.scrollTo(0, 0); break; }
       case "ob-back": obCollect(); nav.ob.step = Math.max(0, nav.ob.step - 1); renderAll(); break;
@@ -2027,7 +2168,11 @@
       }
     }
   }
-  document.addEventListener("click", (ev) => { const el = ev.target.closest("[data-act]"); if (el) act(el.dataset.act, el, ev); });
+  document.addEventListener("click", (ev) => {
+    const zi = ev.target.closest && ev.target.closest(".exi[data-zid]");
+    if (zi && !zi.closest("#zoomHost") && !zi.closest(".exrow")) { ev.preventDefault(); openZoom(zi.dataset.zid); return; }
+    const el = ev.target.closest("[data-act]"); if (el) act(el.dataset.act, el, ev);
+  });
   document.addEventListener("input", (ev) => {
     const t = ev.target;
     if (t.dataset && t.dataset.sh) return shField(t);
@@ -2052,7 +2197,7 @@
     else if (t.id === "libe") { nav.libE = t.value; $("#libList").innerHTML = libListHtml(); }
     else if (t.id === "photoIn" && t.files && t.files[0]) resizePhoto(t.files[0], (data) => { nav.pendingPhoto = data; const pv = $("#photoPrev"); if (pv) pv.innerHTML = '<img src="' + data + '" alt="Photo preview" style="max-width:120px;border-radius:10px" />'; });
   });
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && $("#modalHost .ov")) closeModal(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key !== "Escape") return; if ($("#zoomHost.on")) closeZoom(); else if ($("#modalHost .ov")) closeModal(); });
   // Swipe down on an exercise view's top bar (grab handle) closes it
   let shDrag = null;
   document.addEventListener("touchstart", (ev) => {
