@@ -528,44 +528,53 @@
   }
 
   /* ---------- "Due this cutoff" card + list highlight (explicit colors, theme-proof) ---------- */
-  #cutoffCard { background: #1f1a08; border: 2px solid #f5c542; border-radius: 14px; padding: 12px;
-    margin: 0 0 12px; color: #f2f2f7; box-shadow: 0 0 14px rgba(245,197,66,.35); }
-  #cutoffCard .cc-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800;
-    color: #f5c542; letter-spacing: .3px; }
+  #cutoffCard { background: #1b1d26; border: 1px solid #2e313d; border-left: 4px solid #8f8cf5; border-radius: 12px; padding: 12px;
+    margin: 0 0 12px; color: #f2f2f7; }
+  #cutoffCard .cc-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+    color: #e4e6ee; letter-spacing: .4px; text-transform: uppercase; }
   #cutoffCard .cc-title span.t { flex: 1; min-width: 0; }
-  #cutoffCard .cc-gear { background: transparent; border: 1px solid #5a4a14; color: #f5c542; border-radius: 8px;
-    font-size: 15px; padding: 2px 8px; cursor: pointer; }
-  #cutoffCard .cc-total { font-size: 26px; font-weight: 800; color: #ffffff; margin: 6px 0 0; font-variant-numeric: tabular-nums; }
-  #cutoffCard .cc-sub { font-size: 12px; color: #d8d3bd; margin-bottom: 8px; }
-  #cutoffCard .cc-sec { font-size: 11px; font-weight: 800; color: #ff8a8a; margin: 8px 0 2px; text-transform: uppercase; }
-  #cutoffCard .cc-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 0;
-    border-top: 1px solid #3a3210; font-size: 14px; }
-  #cutoffCard .cc-row .nm { color: #f2f2f7; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #cutoffCard .cc-row .dt { color: #f5c542; font-weight: 700; font-size: 12px; margin-right: 6px; }
-  #cutoffCard .cc-row .am { color: #ffffff; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
-  #cutoffCard .cc-row .st { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #f5c542; }
-  #cutoffCard .cc-row.over .nm, #cutoffCard .cc-row.over .am, #cutoffCard .cc-row.over .dt, #cutoffCard .cc-row.over .st { color: #ff6b6b; }
-  #cutoffCard .cc-row.paid .nm, #cutoffCard .cc-row.paid .am { color: #9a9a9f; text-decoration: line-through; }
-  #cutoffCard .cc-row.paid .st { color: #34d399; }
-  #cutoffCard .cc-act { text-align: right; }
-  #cutoffCard .cc-pay { background: #f5c542; color: #000; border: none; border-radius: 8px; font-weight: 800;
-    font-size: 12px; padding: 6px 12px; min-height: 30px; cursor: pointer; }
-  #cutoffCard .cc-empty { color: #d8d3bd; font-size: 14px; padding: 10px 0 4px; }
-  #cutoffCard .cc-next { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #5a4a14; font-size: 13px;
-    font-weight: 700; color: #f2f2f7; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
-  #cutoffCard .cc-set { margin-top: 8px; padding: 8px; background: #2a2310; border-radius: 10px; font-size: 12px; color: #f2f2f7; }
-  #cutoffCard .cc-set label { display: block; margin: 4px 0 2px; color: #d8d3bd; }
-  #cutoffCard .cc-set input { width: 100%; background: #16161a; color: #f2f2f7; border: 1px solid #5a4a14;
+  #cutoffCard .cc-gear, #cutoffCard .cc-min { background: transparent; border: 1px solid #3a3e4d; color: #c9ccd8; border-radius: 8px;
+    font-size: 16px; min-width: 36px; min-height: 36px; padding: 0 8px; cursor: pointer; }
+  #cutoffCard .cc-total { font-size: 26px; font-weight: 800; color: #ffffff; margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+  #cutoffCard .cc-sub { font-size: 12px; color: #a9aebd; margin-bottom: 8px; }
+  #cutoffCard .cc-sec { font-size: 12px; font-weight: 600; color: #ff9a9a; margin: 6px 0 2px; }
+  #cutoffCard .cc-row { display: flex; align-items: center; gap: 8px; padding: 0 0 0 0; min-height: 40px;
+    border-top: 1px solid #2a2d38; font-size: 14px; }
+  #cutoffCard .cc-row .dt { color: #a9aebd; font-size: 12px; min-width: 44px; }
+  #cutoffCard .cc-row .nm { color: #f2f2f7; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #cutoffCard .cc-row .am { color: #ffffff; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  #cutoffCard .cc-row.over .am, #cutoffCard .cc-row.over .dt { color: #ff9a9a; }
+  #cutoffCard .cc-row.paid .nm, #cutoffCard .cc-row.paid .am, #cutoffCard .cc-row.paid .dt { color: #9096a8; font-weight: 500; }
+  #cutoffCard .cc-circle { width: 36px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 0; padding: 0; cursor: pointer; }
+  #cutoffCard .cc-circle i { display: block; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #8b91a5; box-sizing: border-box; }
+  #cutoffCard .cc-circle.done { cursor: default; }
+  #cutoffCard .cc-circle.done i { border-color: #34d399; background: #34d399; color: #0b1f17; font-style: normal; font-size: 14px; font-weight: 800;
+    line-height: 18px; text-align: center; }
+  #cutoffCard .cc-empty { color: #a9aebd; font-size: 14px; padding: 10px 0 4px; }
+  #cutoffCard .cc-next { margin-top: 8px; border-top: 1px solid #2a2d38; font-size: 13px; min-height: 40px; align-items: center;
+    font-weight: 500; color: #c9ccd8; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  #cutoffCard .cc-set { margin-top: 8px; padding: 8px; background: #23252f; border-radius: 10px; font-size: 12px; color: #f2f2f7; }
+  #cutoffCard .cc-set label { display: block; margin: 4px 0 2px; color: #a9aebd; }
+  #cutoffCard .cc-set input { width: 100%; background: #16161a; color: #f2f2f7; border: 1px solid #3a3e4d;
     border-radius: 8px; padding: 8px; font-size: 16px; }
-  #cutoffCard .cc-set button { margin-top: 8px; background: #f5c542; color: #000; border: none; border-radius: 8px;
-    font-weight: 800; padding: 8px 14px; font-size: 13px; }
-  .cut-badge { display: inline-block; background: #f5c542; color: #000; font-size: 10px; font-weight: 800;
-    padding: 1px 7px; border-radius: 999px; margin-left: 4px; white-space: nowrap; }
-  .cut-badge.over { background: #c62828; color: #fff; }
-  .bd-row.cut-due { box-shadow: inset 3px 0 0 #f5c542, 0 0 10px rgba(245,197,66,.35); background: rgba(245,197,66,.10); border-radius: 8px; }
-  .bd-row.cut-over { box-shadow: inset 3px 0 0 #ff4d4d, 0 0 10px rgba(255,77,77,.35); background: rgba(255,77,77,.10); border-radius: 8px; }
-  .debt-item.cut-card-due { border-left: 3px solid #f5c542 !important; padding-left: 4px; }
-  .debt-item.cut-card-over { border-left: 3px solid #ff4d4d !important; padding-left: 4px; }
+  #cutoffCard .cc-set button { margin-top: 8px; background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 8px;
+    font-weight: 700; padding: 8px 14px; font-size: 13px; min-height: 36px; }
+  #cutoffCard.min { padding: 4px 8px 4px 12px; }
+  #cutoffCard .cc-minrow { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e4e6ee; }
+  #cutoffCard .cc-minrow span { flex: 1; min-width: 0; }
+  #ccToast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #2a2d3a; color: #f2f2f7; border: 1px solid #3a3e4d;
+    border-radius: 10px; padding: 4px 6px 4px 14px; font-size: 13px; z-index: 9999; display: flex; align-items: center; gap: 10px; }
+  #ccToast button { background: transparent; border: 0; color: #b9b6ff; font-weight: 700; min-height: 36px; padding: 0 10px; cursor: pointer; }
+  .cut-badge { display: inline-block; background: transparent; color: #b9b6ff; border: 1px solid #8f8cf5; font-size: 10px; font-weight: 700;
+    padding: 0 7px; border-radius: 999px; margin-left: 4px; white-space: nowrap; }
+  .cc-bolt { font-style: normal; color: transparent; text-shadow: 0 0 0 #b9b6ff; }
+  .cut-badge.over .cc-bolt { text-shadow: 0 0 0 #ff9a9a; }
+  .cut-badge.over { background: transparent; color: #ff9a9a; border-color: #ff9a9a; }
+  .bd-row.cut-due { box-shadow: inset 3px 0 0 #8f8cf5; border-radius: 8px; }
+  .bd-row.cut-over { box-shadow: inset 3px 0 0 #ff9a9a; border-radius: 8px; }
+  .debt-item.cut-card-due { border-left: 3px solid #8f8cf5 !important; padding-left: 4px; }
+  .debt-item.cut-card-over { border-left: 3px solid #ff9a9a !important; padding-left: 4px; }
 </style>
 </head>
 <body class="locked">
@@ -3000,18 +3009,26 @@
   function shortDate(s) { const [y, m, d] = parseIso(s); return MONTH_NAMES[m].slice(0, 3) + " " + d; }
   function cutBadgeHtml(o) {
     if (!o) return "";
-    return ' <span class="cut-badge' + (o.over ? " over" : "") + '">\u26A1 ' + (o.over ? "Overdue " : "Due ") + shortDate(o.date) + '</span>';
+    return ' <span class="cut-badge' + (o.over ? " over" : "") + '"><i class="cc-bolt">\u26A1</i> ' + (o.over ? "Overdue " : "Due ") + shortDate(o.date) + '</span>';
   }
   function rangeLabel(r) { return shortDate(r.start) + " \u2013 " + shortDate(r.end); }
   function sumDue(list) { return list.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0); }
-  function cutRowHtml(o) {
-    const st = o.paid ? "Paid" : (o.over ? "Overdue" : "Unpaid");
+  function cutRowHtml(o, noAct) {
+    const circ = o.paid ? '<span class="cc-circle done" title="Paid"><i>\u2713</i></span>'
+      : (noAct ? '<span class="cc-circle" style="cursor:default"></span>' : '<button class="cc-circle" title="Mark paid" aria-label="Mark paid" data-ccpay="' + escH(o.id) + '|' + o.key + '|' + o.pi + '"><i></i></button>');
     return '<div class="cc-row ' + (o.paid ? "paid" : (o.over ? "over" : "")) + '">' +
-      '<div class="nm"><span class="dt">' + shortDate(o.date) + '</span>' + escH(o.name) + '</div>' +
-      '<div class="am">' + peso(o.amount) + '</div>' +
-      '<div class="st">' + st + '</div>' +
-      '<div class="cc-act">' + (o.paid ? "" : '<button class="cc-pay" data-ccpay="' + escH(o.id) + '|' + o.key + '|' + o.pi + '">Mark paid</button>') + '</div>' +
-      '</div>';
+      '<span class="dt">' + shortDate(o.date) + '</span>' +
+      '<span class="nm">' + escH(o.name) + '</span>' +
+      '<span class="am">' + peso(o.amount) + '</span>' + circ + '</div>';
+  }
+  function cutMin() { try { return localStorage.getItem("debtCutoffMin") === "1"; } catch (e) { return false; } }
+  function ccToast(msg, undo) {
+    let t = document.getElementById("ccToast"); if (t) t.remove();
+    t = document.createElement("div"); t.id = "ccToast";
+    t.innerHTML = '<span>' + msg + '</span><button type="button">Undo</button>';
+    t.querySelector("button").onclick = function () { t.remove(); undo(); };
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, 5000);
   }
   function renderCutoffCard() {
     const el = document.getElementById("cutoffCard");
@@ -3020,22 +3037,29 @@
     const total = sumDue(c.list), overTotal = sumDue(c.over);
     const daysLeft = daysBetweenIso(c.today, c.P.end);
     const paidCnt = c.list.filter(o => o.paid).length;
-    let h = '<div class="cc-title"><span class="t">\u26A1 DUE THIS CUTOFF \u00b7 ' + rangeLabel(c.P) + '</span>' +
-      '<button class="cc-gear" id="ccGear" title="Cutoff days">\u2699</button></div>';
+    if (cutMin()) {
+      el.className = "min";
+      el.innerHTML = '<div class="cc-minrow"><span><i class="cc-bolt">\u26A1</i> Due this cutoff \u00b7 ' + peso(total) + ' \u00b7 ' + Math.max(0, daysLeft) + ' day' + (daysLeft === 1 ? "" : "s") + '</span>' +
+        '<button class="cc-min" id="ccMin" title="Expand" aria-label="Expand">+</button></div>';
+      return;
+    }
+    el.className = "";
+    let h = '<div class="cc-title"><span class="t"><i class="cc-bolt">\u26A1</i> Due this cutoff \u00b7 ' + rangeLabel(c.P) + '</span>' +
+      '<button class="cc-gear" id="ccGear" title="Cutoff days">\u2699</button>' +
+      '<button class="cc-min" id="ccMin" title="Minimize" aria-label="Minimize">\u2014</button></div>';
     if (cutSetOpen) {
       h += '<div class="cc-set"><label>1st cutoff day (1\u201328)</label><input type="number" inputmode="numeric" id="ccA" min="1" max="28" value="' + cd.a + '">' +
         '<label>2nd cutoff day (0 = end of month)</label><input type="number" inputmode="numeric" id="ccB" min="0" max="31" value="' + cd.b + '">' +
         '<button id="ccSave">Save</button></div>';
     }
     h += '<div class="cc-total">' + peso(total) + '</div>' +
-      '<div class="cc-sub">' + c.list.length + ' bill' + (c.list.length === 1 ? "" : "s") + (paidCnt ? " (" + paidCnt + " paid)" : "") +
-      ' \u00b7 ' + (daysLeft <= 0 ? "ends today" : daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left") + '</div>';
+      '<div class="cc-sub">' + c.list.length + ' bill' + (c.list.length === 1 ? "" : "s") + ' \u00b7 ' + paidCnt + ' paid \u00b7 ' + (daysLeft <= 0 ? "ends today" : daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left") + '</div>';
     if (c.over.length) {
-      h += '<div class="cc-sec">Overdue from earlier \u00b7 ' + peso(overTotal) + '</div>' + c.over.map(cutRowHtml).join("");
+      h += '<div class="cc-sec">\u258C Overdue \u00b7 ' + peso(overTotal) + '</div>' + c.over.map(o => cutRowHtml(o)).join("");
     }
-    h += c.list.length ? c.list.map(cutRowHtml).join("") : '<div class="cc-empty">Nothing due this cutoff</div>';
-    h += '<div class="cc-next" id="ccNext"><span>' + (cutNextOpen ? "\u25BC" : "\u25B6") + ' Next cutoff (' + rangeLabel(c.N) + ')</span><span>' + peso(sumDue(c.next)) + '</span></div>';
-    if (cutNextOpen) h += c.next.length ? c.next.map(cutRowHtml).join("").replace(/<div class="cc-act">.*?<\/div>/g, '<div class="cc-act"></div>') : '<div class="cc-empty">Nothing due next cutoff</div>';
+    h += c.list.length ? c.list.map(o => cutRowHtml(o)).join("") : '<div class="cc-empty">Nothing due this cutoff</div>';
+    h += '<div class="cc-next" id="ccNext"><span>' + (cutNextOpen ? "\u25BE" : "\u25B8") + ' Next cutoff (' + rangeLabel(c.N) + ')</span><span>' + peso(sumDue(c.next)) + '</span></div>';
+    if (cutNextOpen) h += c.next.length ? c.next.map(o => cutRowHtml(o, true)).join("") : '<div class="cc-empty">Nothing due next cutoff</div>';
     el.innerHTML = h;
   }
   // Mark an occurrence paid using the same fields the row checkbox / plan checkbox set.
@@ -3062,8 +3086,18 @@
       const pay = t.closest && t.closest("[data-ccpay]");
       if (pay) {
         const parts = pay.getAttribute("data-ccpay").split("|");
+        const dd = state.debts.find(x => x.id === parts[0]);
+        const snap = dd ? JSON.stringify(dd) : null;
         markCutPaid(parts[0], parts[1], parseInt(parts[2], 10));
+        if (snap) ccToast("Marked paid", function () {
+          const i = state.debts.findIndex(x => x.id === parts[0]);
+          if (i >= 0) { state.debts[i] = JSON.parse(snap); saveState(); renderAll(); }
+        });
         return;
+      }
+      if (t.closest && t.closest("#ccMin")) {
+        try { localStorage.setItem("debtCutoffMin", cutMin() ? "0" : "1"); } catch (er) {}
+        renderCutoffCard(); return;
       }
       if (t.closest && t.closest("#ccGear")) { cutSetOpen = !cutSetOpen; renderCutoffCard(); return; }
       if (t.closest && t.closest("#ccNext")) { cutNextOpen = !cutNextOpen; renderCutoffCard(); return; }
@@ -3078,7 +3112,7 @@
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 180;
+  const APP_VERSION = 181;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
