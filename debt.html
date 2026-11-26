@@ -448,7 +448,7 @@
   @media (min-width: 900px) {
     #app:not(.hidden) { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
     #app > .topbar, #app > .view-toggle, #app > #cutoffToggle, #app > .month-bar,
-    #app > .summary, #app > #debtList { grid-column: 1 / -1; }
+    #app > .summary, #app > #debtList, #app > #cutoffCard { grid-column: 1 / -1; }
     #app > .card { margin-bottom: 0; }
   }
 
@@ -526,6 +526,46 @@
     .term-row { padding: 9px 10px; margin-top: 8px; }
     .edit-panel { margin-top: 6px; }
   }
+
+  /* ---------- "Due this cutoff" card + list highlight (explicit colors, theme-proof) ---------- */
+  #cutoffCard { background: #1f1a08; border: 2px solid #f5c542; border-radius: 14px; padding: 12px;
+    margin: 0 0 12px; color: #f2f2f7; box-shadow: 0 0 14px rgba(245,197,66,.35); }
+  #cutoffCard .cc-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 800;
+    color: #f5c542; letter-spacing: .3px; }
+  #cutoffCard .cc-title span.t { flex: 1; min-width: 0; }
+  #cutoffCard .cc-gear { background: transparent; border: 1px solid #5a4a14; color: #f5c542; border-radius: 8px;
+    font-size: 15px; padding: 2px 8px; cursor: pointer; }
+  #cutoffCard .cc-total { font-size: 26px; font-weight: 800; color: #ffffff; margin: 6px 0 0; font-variant-numeric: tabular-nums; }
+  #cutoffCard .cc-sub { font-size: 12px; color: #d8d3bd; margin-bottom: 8px; }
+  #cutoffCard .cc-sec { font-size: 11px; font-weight: 800; color: #ff8a8a; margin: 8px 0 2px; text-transform: uppercase; }
+  #cutoffCard .cc-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 0;
+    border-top: 1px solid #3a3210; font-size: 14px; }
+  #cutoffCard .cc-row .nm { color: #f2f2f7; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #cutoffCard .cc-row .dt { color: #f5c542; font-weight: 700; font-size: 12px; margin-right: 6px; }
+  #cutoffCard .cc-row .am { color: #ffffff; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+  #cutoffCard .cc-row .st { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #f5c542; }
+  #cutoffCard .cc-row.over .nm, #cutoffCard .cc-row.over .am, #cutoffCard .cc-row.over .dt, #cutoffCard .cc-row.over .st { color: #ff6b6b; }
+  #cutoffCard .cc-row.paid .nm, #cutoffCard .cc-row.paid .am { color: #9a9a9f; text-decoration: line-through; }
+  #cutoffCard .cc-row.paid .st { color: #34d399; }
+  #cutoffCard .cc-act { text-align: right; }
+  #cutoffCard .cc-pay { background: #f5c542; color: #000; border: none; border-radius: 8px; font-weight: 800;
+    font-size: 12px; padding: 6px 12px; min-height: 30px; cursor: pointer; }
+  #cutoffCard .cc-empty { color: #d8d3bd; font-size: 14px; padding: 10px 0 4px; }
+  #cutoffCard .cc-next { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #5a4a14; font-size: 13px;
+    font-weight: 700; color: #f2f2f7; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  #cutoffCard .cc-set { margin-top: 8px; padding: 8px; background: #2a2310; border-radius: 10px; font-size: 12px; color: #f2f2f7; }
+  #cutoffCard .cc-set label { display: block; margin: 4px 0 2px; color: #d8d3bd; }
+  #cutoffCard .cc-set input { width: 100%; background: #16161a; color: #f2f2f7; border: 1px solid #5a4a14;
+    border-radius: 8px; padding: 8px; font-size: 16px; }
+  #cutoffCard .cc-set button { margin-top: 8px; background: #f5c542; color: #000; border: none; border-radius: 8px;
+    font-weight: 800; padding: 8px 14px; font-size: 13px; }
+  .cut-badge { display: inline-block; background: #f5c542; color: #000; font-size: 10px; font-weight: 800;
+    padding: 1px 7px; border-radius: 999px; margin-left: 4px; white-space: nowrap; }
+  .cut-badge.over { background: #c62828; color: #fff; }
+  .bd-row.cut-due { box-shadow: inset 3px 0 0 #f5c542, 0 0 10px rgba(245,197,66,.35); background: rgba(245,197,66,.10); border-radius: 8px; }
+  .bd-row.cut-over { box-shadow: inset 3px 0 0 #ff4d4d, 0 0 10px rgba(255,77,77,.35); background: rgba(255,77,77,.10); border-radius: 8px; }
+  .debt-item.cut-card-due { border-left: 3px solid #f5c542 !important; padding-left: 4px; }
+  .debt-item.cut-card-over { border-left: 3px solid #ff4d4d !important; padding-left: 4px; }
 </style>
 </head>
 <body class="locked">
@@ -547,6 +587,9 @@
       <div class="page-title">Debt Tracker</div>
       <a class="home-link" href="soa.html" style="margin-left:auto" title="Statement of Account per payday">&#128196; SOA</a>
     </div>
+
+    <!-- DUE THIS CUTOFF (rendered by renderCutoffCard) -->
+    <div id="cutoffCard"></div>
 
     <!-- EASY / DETAILED VIEW TOGGLE -->
     <div class="view-toggle">
@@ -1185,9 +1228,10 @@
       if (p.key !== viewMonth) return;
       const payLabel = monthLabel(p.key).split(" ")[0] + " " + p.payday; // e.g. "Oct 28"
       const which = d.plan.findIndex(x => x === p) + 1;
-      html += '<div class="bd-row' + (p.paid ? " bd-paid" : "") + '" style="padding-left:14px">' +
+      const pocc = p.paid ? null : cutData.map[d.id + "|" + p.key + "|" + pi];
+      html += '<div class="bd-row' + (p.paid ? " bd-paid" : "") + (pocc ? (pocc.over ? " cut-over" : " cut-due") : "") + '" style="padding-left:14px">' +
         '<input type="checkbox" class="bd-check" data-plan="' + d.id + ':' + pi + '"' + (p.paid ? " checked" : "") + '>' +
-        '<span class="bd-label"><span class="due-tag u-up">' + payLabel + '</span> ' +
+        '<span class="bd-label"><span class="due-tag u-up">' + payLabel + '</span>' + cutBadgeHtml(pocc) + ' ' +
           '<span class="bd-date">payday ' + which + ' of ' + totalPaydays + '</span></span>' +
         '<span class="bd-amt">' + peso(num(p.amount)) + '</span>' +
         '</div>';
@@ -1228,9 +1272,10 @@
     if (!isTermChecked(d) && part > 0 && part < amtShown - 0.009) {
       partTag = ' <span class="part-tag detail-only">\u20b1' + part.toLocaleString("en-US", { maximumFractionDigits: 2 }) + ' paid</span>';
     }
-    return '<div class="bd-row' + (paidNow ? " bd-paid" : "") + '">' +
+    const cutOcc = cutInfoFor(d);
+    return '<div class="bd-row' + (paidNow ? " bd-paid" : "") + (cutOcc && !paidNow ? (cutOcc.over ? " cut-over" : " cut-due") : "") + '">' +
       '<input type="checkbox" class="bd-check" data-item="' + d.id + '"' + (paidNow ? " checked" : "") + '>' +
-      '<span class="bd-label">' + label + termTag + dueTag + partTag + (dt ? ' <span class="bd-date detail-only">' + dt + '</span>' : '') + (d.dueDay ? ' <span class="due-simple">due ' + d.dueDay + '</span>' : '') + '</span>' +
+      '<span class="bd-label">' + label + (paidNow ? "" : cutBadgeHtml(cutOcc)) + termTag + dueTag + partTag + (dt ? ' <span class="bd-date detail-only">' + dt + '</span>' : '') + (d.dueDay ? ' <span class="due-simple">due ' + d.dueDay + '</span>' : '') + '</span>' +
       '<span class="bd-amt">' + peso(amtShown) + '</span>' +
       stopBtn +
       '<button class="bd-edit" data-edit="' + d.id + '" title="Edit / pay">\u270E</button>' +
@@ -1305,7 +1350,9 @@
     }
 
     const open = cardOpen[cardKey] !== false; // expanded by default
-    return '<div class="debt-item' + (paidOff ? " paid-off" : "") + '">' +
+    const cutOccs = items.filter(d => !isPaidThisMonth(d)).map(cutInfoFor).filter(Boolean);
+    const cutCls = cutOccs.length ? (cutOccs.some(o => o.over) ? " cut-card-over" : " cut-card-due") : "";
+    return '<div class="debt-item' + (paidOff ? " paid-off" : "") + cutCls + '">' +
       '<div class="debt-head">' +
         '<div class="d-name" data-cardtoggle="' + encodeURIComponent(cardKey) + '" style="cursor:pointer">' +
           '<span class="cat-chev" style="font-size:10px;color:var(--muted)">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + title + planTag + '</div>' +
@@ -2208,6 +2255,8 @@
 
   function renderAll() {
     maybeAutoJump();
+    computeCutoff();
+    renderCutoffCard();
     renderMonthBar();
     renderSummary();
     renderList();
@@ -2839,8 +2888,197 @@
     startApp();
   }
 
+  // ---------- Due this cutoff ----------
+  // Pay periods: (B+1 of prev month)..A and A+1..B (A = 1st cutoff day, default 13; B = 2nd cutoff day, default 28; 0 = end of month).
+  // Due dates come from the data the app already tracks: d.dueDay (day of month, for every active month of a
+  // monthly/recurring/installment debt) and plan entries (p.payday in p.key). Debts with no due date are skipped.
+  // Settings live in localStorage ("debtCutoffDays"), like the other per-device view settings.
+  var cutData = { today: "", P: null, N: null, over: [], list: [], next: [], map: {} };
+  var cutNextOpen = false, cutSetOpen = false;
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function isoD(y, m0, d) { const t = new Date(y, m0, d); return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate()); }
+  function dimOf(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
+  function parseIso(s) { return [parseInt(s.slice(0, 4), 10), parseInt(s.slice(5, 7), 10) - 1, parseInt(s.slice(8, 10), 10)]; }
+  function addDaysIso(s, n) { const [y, m, d] = parseIso(s); return isoD(y, m, d + n); }
+  function daysBetweenIso(a, b) {
+    const [ay, am, ad] = parseIso(a), [by, bm, bd] = parseIso(b);
+    return Math.round((new Date(by, bm, bd, 12) - new Date(ay, am, ad, 12)) / 86400000);
+  }
+  function loadCutDays() {
+    // Owner's cutoffs: 13th and 28th (pay periods 29th..13th and 14th..28th).
+    let a = 13, b = 28;
+    try {
+      const j = JSON.parse(localStorage.getItem("debtCutoffDays") || "null");
+      if (j) { a = Math.round(Number(j.a)); b = Math.round(Number(j.b)); }
+    } catch (e) {}
+    if (!(a >= 1 && a <= 28)) a = 13;
+    if (!(b === 0 || (b > a && b <= 31))) b = 28;
+    return { a: a, b: b };
+  }
+  function cutEndDay(cd, y, m0) { const D = dimOf(y, m0); return cd.b ? Math.min(cd.b, D) : D; }
+  function periodOf(s) {
+    const cd = loadCutDays(), [y, m0, x] = parseIso(s);
+    const c2 = cutEndDay(cd, y, m0);
+    if (x <= cd.a) {
+      const pm = new Date(y, m0 - 1, 1), py = pm.getFullYear(), pmo = pm.getMonth();
+      const pc2 = cutEndDay(cd, py, pmo);
+      return { start: pc2 >= dimOf(py, pmo) ? isoD(y, m0, 1) : isoD(py, pmo, pc2 + 1), end: isoD(y, m0, cd.a) };
+    }
+    if (x <= c2) return { start: isoD(y, m0, cd.a + 1), end: isoD(y, m0, c2) };
+    return { start: isoD(y, m0, c2 + 1), end: isoD(y, m0 + 1, cd.a) };
+  }
+  function debtDisplayName(d) {
+    const nm = (d.name && d.name.trim()) ? d.name.trim() : "";
+    if (d.category === "person" && d.person) return d.person + (nm ? " \u00b7 " + nm : "");
+    return nm || d.person || catLabel(d.category);
+  }
+  function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  // All dated payments falling inside [start, end] (inclusive ISO dates).
+  function occurrencesIn(start, end) {
+    const out = [];
+    let key = monthKey(start);
+    const lastKey = monthKey(end);
+    for (let guard = 0; key <= lastKey && guard < 80; guard++, key = addMonths(key, 1)) {
+      const [y, m0] = parseKey(key), D = dimOf(y, m0);
+      state.debts.forEach(d => {
+        if (hasPlan(d)) {
+          d.plan.forEach((p, pi) => {
+            if (p.key !== key) return;
+            const date = isoD(y, m0, Math.min(Math.max(1, Math.round(num(p.payday)) || 1), D));
+            if (date < start || date > end) return;
+            const full = num(p.amount);
+            if (full <= 0) return;
+            out.push({ id: d.id, key: key, pi: pi, date: date, name: debtDisplayName(d), full: full,
+              amount: p.paid ? full : full, paid: !!p.paid, over: false, recurring: false });
+          });
+          return;
+        }
+        if (!(d.dueDay >= 1 && d.dueDay <= 31) || !isActiveIn(d, key)) return;
+        const date = isoD(y, m0, Math.min(d.dueDay, D));
+        if (date < start || date > end) return;
+        const multi = d.recurring || d.terms > 1;
+        const full = (d.terms > 1 && !d.recurring) ? num(d.amount) / d.terms : num(d.amount);
+        if (full <= 0) return;
+        const checked = multi ? !!(d.paidTerms && d.paidTerms[key]) : !!d.paid;
+        const part = multi ? (num((d.paidAmt || {})[key]) || 0) : (num(d.paidOnce) || 0);
+        const paid = checked || part >= full - 0.009;
+        out.push({ id: d.id, key: key, pi: -1, date: date, name: debtDisplayName(d), full: full,
+          amount: paid ? full : Math.max(0, full - part), paid: paid, over: false, recurring: !!d.recurring });
+      });
+    }
+    out.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.name < b.name ? -1 : 1));
+    return out;
+  }
+  function computeCutoff() {
+    const now = new Date();
+    const today = isoD(now.getFullYear(), now.getMonth(), now.getDate());
+    const P = periodOf(today), N = periodOf(addDaysIso(P.end, 1));
+    const list = occurrencesIn(P.start, P.end);
+    const next = occurrencesIn(N.start, N.end);
+    // Overdue from earlier periods: unpaid, finite debts any age (max 24 months), recurring only the last 2 months.
+    const [ty, tm] = parseIso(today);
+    const lookback = isoD(ty, tm - 24, 1), recurFrom = isoD(ty, tm - 2, 1);
+    const over = occurrencesIn(lookback, addDaysIso(P.start, -1)).filter(o => !o.paid && (!o.recurring || o.date >= recurFrom));
+    over.forEach(o => { o.over = true; });
+    list.forEach(o => { o.over = !o.paid && o.date < today; });
+    const map = {};
+    over.concat(list).forEach(o => { if (!o.paid) map[o.id + "|" + o.key + "|" + o.pi] = o; });
+    cutData = { today: today, P: P, N: N, over: over, list: list, next: next, map: map };
+  }
+  function cutInfoFor(d) {
+    if (hasPlan(d)) {
+      let hit = null;
+      d.plan.forEach((p, pi) => {
+        if (p.key !== viewMonth) return;
+        const o = cutData.map[d.id + "|" + p.key + "|" + pi];
+        if (o && (!hit || (o.over && !hit.over))) hit = o;
+      });
+      return hit;
+    }
+    return cutData.map[d.id + "|" + viewMonth + "|-1"] || null;
+  }
+  function shortDate(s) { const [y, m, d] = parseIso(s); return MONTH_NAMES[m].slice(0, 3) + " " + d; }
+  function cutBadgeHtml(o) {
+    if (!o) return "";
+    return ' <span class="cut-badge' + (o.over ? " over" : "") + '">\u26A1 ' + (o.over ? "Overdue " : "Due ") + shortDate(o.date) + '</span>';
+  }
+  function rangeLabel(r) { return shortDate(r.start) + " \u2013 " + shortDate(r.end); }
+  function sumDue(list) { return list.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0); }
+  function cutRowHtml(o) {
+    const st = o.paid ? "Paid" : (o.over ? "Overdue" : "Unpaid");
+    return '<div class="cc-row ' + (o.paid ? "paid" : (o.over ? "over" : "")) + '">' +
+      '<div class="nm"><span class="dt">' + shortDate(o.date) + '</span>' + escH(o.name) + '</div>' +
+      '<div class="am">' + peso(o.amount) + '</div>' +
+      '<div class="st">' + st + '</div>' +
+      '<div class="cc-act">' + (o.paid ? "" : '<button class="cc-pay" data-ccpay="' + escH(o.id) + '|' + o.key + '|' + o.pi + '">Mark paid</button>') + '</div>' +
+      '</div>';
+  }
+  function renderCutoffCard() {
+    const el = document.getElementById("cutoffCard");
+    if (!el) return;
+    const c = cutData, cd = loadCutDays();
+    const total = sumDue(c.list), overTotal = sumDue(c.over);
+    const daysLeft = daysBetweenIso(c.today, c.P.end);
+    const paidCnt = c.list.filter(o => o.paid).length;
+    let h = '<div class="cc-title"><span class="t">\u26A1 DUE THIS CUTOFF \u00b7 ' + rangeLabel(c.P) + '</span>' +
+      '<button class="cc-gear" id="ccGear" title="Cutoff days">\u2699</button></div>';
+    if (cutSetOpen) {
+      h += '<div class="cc-set"><label>1st cutoff day (1\u201328)</label><input type="number" inputmode="numeric" id="ccA" min="1" max="28" value="' + cd.a + '">' +
+        '<label>2nd cutoff day (0 = end of month)</label><input type="number" inputmode="numeric" id="ccB" min="0" max="31" value="' + cd.b + '">' +
+        '<button id="ccSave">Save</button></div>';
+    }
+    h += '<div class="cc-total">' + peso(total) + '</div>' +
+      '<div class="cc-sub">' + c.list.length + ' bill' + (c.list.length === 1 ? "" : "s") + (paidCnt ? " (" + paidCnt + " paid)" : "") +
+      ' \u00b7 ' + (daysLeft <= 0 ? "ends today" : daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left") + '</div>';
+    if (c.over.length) {
+      h += '<div class="cc-sec">Overdue from earlier \u00b7 ' + peso(overTotal) + '</div>' + c.over.map(cutRowHtml).join("");
+    }
+    h += c.list.length ? c.list.map(cutRowHtml).join("") : '<div class="cc-empty">Nothing due this cutoff</div>';
+    h += '<div class="cc-next" id="ccNext"><span>' + (cutNextOpen ? "\u25BC" : "\u25B6") + ' Next cutoff (' + rangeLabel(c.N) + ')</span><span>' + peso(sumDue(c.next)) + '</span></div>';
+    if (cutNextOpen) h += c.next.length ? c.next.map(cutRowHtml).join("").replace(/<div class="cc-act">.*?<\/div>/g, '<div class="cc-act"></div>') : '<div class="cc-empty">Nothing due next cutoff</div>';
+    el.innerHTML = h;
+  }
+  // Mark an occurrence paid using the same fields the row checkbox / plan checkbox set.
+  function markCutPaid(id, key, pi) {
+    const d = state.debts.find(x => x.id === id);
+    if (!d) return;
+    if (pi >= 0) {
+      if (!hasPlan(d) || !d.plan[pi]) return;
+      d.plan[pi].paid = true;
+    } else if (d.recurring || d.terms > 1) {
+      if (!d.paidTerms) d.paidTerms = {};
+      if (!d.paidAmt) d.paidAmt = {};
+      d.paidTerms[key] = true; delete d.paidAmt[key];
+    } else {
+      d.paid = true; d.paidOnce = 0;
+    }
+    saveState(); renderAll();
+  }
+  (function () {
+    const el = document.getElementById("cutoffCard");
+    if (!el) return;
+    el.addEventListener("click", (e) => {
+      const t = e.target;
+      const pay = t.closest && t.closest("[data-ccpay]");
+      if (pay) {
+        const parts = pay.getAttribute("data-ccpay").split("|");
+        markCutPaid(parts[0], parts[1], parseInt(parts[2], 10));
+        return;
+      }
+      if (t.closest && t.closest("#ccGear")) { cutSetOpen = !cutSetOpen; renderCutoffCard(); return; }
+      if (t.closest && t.closest("#ccNext")) { cutNextOpen = !cutNextOpen; renderCutoffCard(); return; }
+      if (t.closest && t.closest("#ccSave")) {
+        let a = Math.round(num(document.getElementById("ccA").value)), b = Math.round(num(document.getElementById("ccB").value));
+        if (!(a >= 1 && a <= 28)) a = 15;
+        if (!(b === 0 || (b > a && b <= 31))) b = 0;
+        try { localStorage.setItem("debtCutoffDays", JSON.stringify({ a: a, b: b })); } catch (er) {}
+        cutSetOpen = false; renderAll();
+      }
+    });
+  })();
+
   // ---------- Auto-update ----------
-  const APP_VERSION = 148;
+  const APP_VERSION = 180;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
