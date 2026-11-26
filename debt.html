@@ -213,6 +213,26 @@
   .summary .srow .val.paid { color: var(--green); }
   .summary .srow .val.gold { color: var(--gold-bright); }
   .summary .big { font-size: 24px; font-weight: 800; }
+  /* Take-home left after debts (explicit colors: theme.css may override the CSS vars) */
+  .summary .th-sec { margin-top: 8px; padding-top: 8px; border-top: 1px solid #2e313d; }
+  .th-head { display: flex; align-items: center; gap: 8px; }
+  .th-head .th-ttl { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: #c9ccd8; text-transform: uppercase; letter-spacing: .4px; }
+  .th-min { background: transparent; border: 1px solid #3a3e4d; color: #c9ccd8; border-radius: 8px; min-width: 32px; height: 28px; font-size: 16px; line-height: 1; cursor: pointer; }
+  .th-in-wrap { display: flex; align-items: center; gap: 6px; }
+  .th-in-wrap span { color: #a9aebd; font-size: 12px; }
+  #thInput { width: 130px; background: #16161a; color: #f2f2f7; border: 1px solid #3a3e4d; border-radius: 8px; padding: 6px 8px; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+  #thInput:disabled { background: #232329; color: #a9aebd; border-color: #2e313d; cursor: not-allowed; opacity: 1; -webkit-text-fill-color: #a9aebd; }
+  .th-note { font-size: 11px; color: #a9aebd; line-height: 1.4; margin: 2px 0 4px; }
+  .th-total { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; margin-top: 4px; border-top: 1px solid #2e313d; font-size: 15px; font-weight: 800; }
+  .th-total .th-lbl { color: #f2f2f7; }
+  .th-total .th-amt { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .th-ok { color: #34d399; }
+  .th-neg { color: #ff8a8a; }
+  .th-minline { display: none; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-top: 6px; }
+  .th-minline span { flex: 1; min-width: 0; }
+  .th-sec.min .th-body { display: none; }
+  .th-sec.min .th-minline { display: flex; }
+  .th-sec.min .th-head { display: none; }
 
   .card {
     background: var(--panel); border: 1px solid var(--line);
@@ -626,6 +646,18 @@
       <div class="srow"><div class="lbl">Paid this month</div><div class="val paid" id="sumMonthPaid">PHP 0.00</div></div>
       <div class="srow"><div class="lbl">Remaining this month</div><div class="val gold" id="sumMonthRemaining">PHP 0.00</div></div>
       <div class="srow"><div class="lbl">Total remaining (all debts)</div><div class="val owed" id="sumTotalRemaining">PHP 0.00</div></div>
+      <div class="th-sec" id="thSec">
+        <div class="th-head"><span class="th-ttl">Take-home left</span><button type="button" class="th-min" id="thMin" title="Minimize" aria-label="Minimize">&minus;</button></div>
+        <div class="th-body">
+          <div class="srow"><div class="lbl">Take-home per cutoff</div><div class="th-in-wrap"><span>PHP</span><input type="text" inputmode="decimal" id="thInput" placeholder="0.00" aria-label="Take-home per cutoff (PHP)" /></div></div>
+          <div class="th-note" id="thSrc"></div>
+          <div class="srow"><div class="lbl" id="thLbl">Take-home</div><div class="val" id="thVal">PHP 0.00</div></div>
+          <div class="srow"><div class="lbl">- Bills this cutoff</div><div class="val owed" id="thBills">PHP 0.00</div></div>
+          <div class="th-total"><span class="th-lbl">LEFT AFTER DEBTS</span><span class="th-amt th-ok" id="thLeft">PHP 0.00</span></div>
+          <div class="th-note">Take-home minus all bills due this cutoff.</div>
+        </div>
+        <div class="th-minline"><span id="thMinTxt">Left after debts - PHP 0.00</span><button type="button" class="th-min" id="thExp" title="Expand" aria-label="Expand">+</button></div>
+      </div>
     </div>
 
     <!-- SALARY VS DEBT -->
@@ -1023,6 +1055,7 @@
   // like paidTerms, which would otherwise crash isPaidThisMonth and freeze the view).
   function sanitizeState() {
     if (!state.shareIds) state.shareIds = {};
+    if (state.takeHome == null) state.takeHome = ""; // manual take-home per cutoff (used only when no salary data)
     if (!Array.isArray(state.debts)) state.debts = [];
     // Sinking funds: separate "save up for" goals, not tied to any month.
     if (!Array.isArray(state.funds)) state.funds = [];
@@ -1213,7 +1246,72 @@
     document.getElementById("sumMonthPaid").textContent = peso(monthPaid);
     document.getElementById("sumMonthRemaining").textContent = peso(Math.max(0, monthDue - monthPaid));
     document.getElementById("sumTotalRemaining").textContent = peso(totalRemaining);
+    renderTakeHome(monthDue);
   }
+
+  // ---------- Take-home left after debts (same pure logic is duplicated in home.html) ----------
+  // Source: Salary module history (salaryHistoryV1, latest saved net per cutoff: "1st" = 13th, "2nd" = 28th).
+  // If a cutoff has no saved net, the other cutoff's value is used. No salary data -> manual value.
+  function thPick(hist, manual, cut) {
+    const pick = c => {
+      let best = null;
+      (Array.isArray(hist) ? hist : []).forEach(h => {
+        if (h && h.cutoff === c && num(h.net) > 0 && (!best || String(h.period || "") > String(best.period || ""))) best = h;
+      });
+      return best ? num(best.net) : 0;
+    };
+    const a = pick("1st"), b = pick("2nd");
+    if (a > 0 || b > 0) {
+      const v1 = a > 0 ? a : b, v2 = b > 0 ? b : a;
+      return { src: "salary", v1: v1, v2: v2, value: cut === "1st" ? v1 : cut === "2nd" ? v2 : v1 + v2 };
+    }
+    const m = Math.max(0, num(manual));
+    return { src: "manual", v1: m, v2: m, value: cut === "all" ? m * 2 : m };
+  }
+  function thMin() { try { return localStorage.getItem("debtTakeHomeMin") === "1"; } catch (e) { return false; } }
+  function renderTakeHome(billsDue) {
+    const sec = document.getElementById("thSec");
+    if (!sec) return;
+    const cut = cutoffFilter;
+    const r = thPick(loadSalaryHistory(), state.takeHome, cut);
+    const left = r.value - billsDue;
+    const cls = left >= 0 ? "th-amt th-ok" : "th-amt th-neg";
+    const inp = document.getElementById("thInput");
+    const shownOne = (cut === "all") ? (new Date().getDate() <= 13 ? r.v1 : r.v2) : (cut === "1st" ? r.v1 : r.v2);
+    if (r.src === "salary") {
+      inp.disabled = true;
+      inp.value = shownOne.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      document.getElementById("thSrc").textContent = "From Salary module";
+    } else {
+      inp.disabled = false;
+      if (document.activeElement !== inp) inp.value = state.takeHome || "";
+      document.getElementById("thSrc").textContent = "No salary saved yet \u2014 enter your take-home per cutoff.";
+    }
+    const lbl = cut === "1st" ? "13th" : cut === "2nd" ? "28th" : "13th + 28th";
+    document.getElementById("thLbl").textContent = "Take-home (" + lbl + ")";
+    document.getElementById("thVal").textContent = peso(r.value);
+    document.getElementById("thBills").textContent = peso(billsDue);
+    const el = document.getElementById("thLeft");
+    el.textContent = peso(left); el.className = cls;
+    const mt = document.getElementById("thMinTxt");
+    mt.textContent = "Left after debts - " + peso(left); mt.className = left >= 0 ? "th-ok" : "th-neg";
+    sec.classList.toggle("min", thMin());
+  }
+  (function () {
+    const inp = document.getElementById("thInput");
+    if (inp) inp.addEventListener("input", () => {
+      state.takeHome = inp.value.replace(/[^0-9.]/g, "");
+      saveState();
+      renderSummary();
+    });
+    const tog = () => {
+      try { localStorage.setItem("debtTakeHomeMin", thMin() ? "0" : "1"); } catch (e) {}
+      document.getElementById("thSec").classList.toggle("min", thMin());
+    };
+    const b1 = document.getElementById("thMin"), b2 = document.getElementById("thExp");
+    if (b1) b1.onclick = tog;
+    if (b2) b2.onclick = tog;
+  })();
 
   // The "card" groups items by person (person category) or by label (others).
   function cardKeyOf(d) {
@@ -3112,7 +3210,7 @@
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 181;
+  const APP_VERSION = 182;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {

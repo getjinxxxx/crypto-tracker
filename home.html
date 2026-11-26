@@ -245,7 +245,7 @@
   }
 
   // ---------- Version / update chip (dashboard right side; no bottom banner) ----------
-  const APP_VERSION = 173;
+  const APP_VERSION = 182;
   function setVersionChipIdle() {
     const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION;
     const chip = document.getElementById("versionChip");
@@ -368,6 +368,60 @@
     });
     return total;
   }
+  // ---------- Left after debts (same pure logic as debt.html) ----------
+  // Current cutoff = pay period containing today: 29th..13th = "13th", 14th..28th = "28th".
+  // Take-home: Salary module (latest saved net per cutoff) else manual value saved on the debt page.
+  function ladPick(hist, manual, cut) {
+    const pick = c => {
+      let best = null;
+      (Array.isArray(hist) ? hist : []).forEach(h => {
+        if (h && h.cutoff === c && num(h.net) > 0 && (!best || String(h.period || "") > String(best.period || ""))) best = h;
+      });
+      return best ? num(best.net) : 0;
+    };
+    const a = pick("1st"), b = pick("2nd");
+    if (a > 0 || b > 0) { const v1 = a > 0 ? a : b, v2 = b > 0 ? b : a; return { value: cut === "1st" ? v1 : v2 }; }
+    return { value: Math.max(0, num(String(manual == null ? "" : manual).replace(/[^0-9.]/g, ""))) };
+  }
+  function ladBills(st, key, cut) {
+    const [ky, km] = [parseInt(key.slice(0, 4), 10), parseInt(key.slice(5, 7), 10) - 1];
+    const now = new Date(), nowKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+    let total = 0;
+    st.debts.forEach(d => {
+      const hasPlan = Array.isArray(d.plan) && d.plan.length > 0;
+      const terms = Math.max(1, num(d.terms)), amt = num(d.amount);
+      let active, per;
+      if (hasPlan) {
+        const es = d.plan.filter(p => p.key === key);
+        active = es.length > 0; per = es.reduce((s, p) => s + num(p.amount), 0);
+      } else {
+        const sk = d.startMonth || nowKey;
+        const idx = (ky - parseInt(sk.slice(0, 4), 10)) * 12 + (km - (parseInt(sk.slice(5, 7), 10) - 1));
+        active = idx < 0 ? false : (d.recurring ? (!d.endMonth || key <= d.endMonth) : idx < terms);
+        per = (terms > 1 && !d.recurring) ? amt / terms : amt;
+      }
+      if (!active) return;
+      const dd = num(d.dueDay);
+      if (dd >= 1 && dd <= 31 && ((dd <= 13) ? "1st" : "2nd") !== cut) return;
+      total += per;
+    });
+    return total;
+  }
+  function leftAfterDebts() {
+    const st = DASH.debt || localState("debtTrackerV3");
+    if (!st || !Array.isArray(st.debts)) return null;
+    const now = new Date(), day = now.getDate();
+    const cut = (day >= 14 && day <= 28) ? "2nd" : "1st";
+    const mo = (day > 28) ? now.getMonth() + 1 : now.getMonth();
+    const t = new Date(now.getFullYear(), mo, 1);
+    const key = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0");
+    const hist = (DASH.salary && Array.isArray(DASH.salary.history)) ? DASH.salary.history : localState("salaryHistoryV1");
+    const tk = ladPick(hist, st.takeHome, cut).value;
+    const bills = ladBills(st, key, cut);
+    return { cut: cut === "1st" ? "13th" : "28th", takeHome: tk, bills: bills, left: tk - bills };
+  }
+  function ladMin() { try { return localStorage.getItem("homeTakeHomeMin") === "1"; } catch (e) { return false; } }
+  function toggleLadMin() { try { localStorage.setItem("homeTakeHomeMin", ladMin() ? "0" : "1"); } catch (e) {} renderDashboard(); }
   function receivablesOutstanding() {
     const st = DASH.receivables || localState("receivablesV1");
     if (!st || !Array.isArray(st.debts)) return null;
@@ -418,7 +472,7 @@
     ];
     const shown = valuesShown();
     const mask = v => (v === "\u2014") ? v : "\u2022\u2022\u2022\u2022\u2022\u2022";
-    document.getElementById("stats").innerHTML = cards.map(c =>
+    let html = cards.map(c =>
       '<div class="stat">' +
         '<div class="s-top"><div class="s-label">' + c.label + '</div></div>' +
         '<div class="s-val">' + (shown ? c.val : mask(c.val)) + '</div>' +
@@ -426,6 +480,25 @@
         sparkline(c.seed, c.color) +
       '</div>'
     ).join("");
+    const lad = leftAfterDebts();
+    if (lad) {
+      const col = lad.left >= 0 ? "#34d399" : "#ff8a8a";
+      const amt = (lad.left < 0 ? "-" : "") + fmtPeso(Math.abs(lad.left));
+      const dots = "\u2022\u2022\u2022\u2022\u2022\u2022";
+      const btn = '<button type="button" onclick="event.stopPropagation();toggleLadMin()" aria-label="' + (ladMin() ? "Expand" : "Minimize") + '" title="' + (ladMin() ? "Expand" : "Minimize") + '" style="background:transparent;border:1px solid #3a3e4d;color:#c9ccd8;border-radius:8px;min-width:30px;height:26px;font-size:15px;line-height:1;cursor:pointer;">' + (ladMin() ? "+" : "\u2212") + '</button>';
+      if (ladMin()) {
+        html += '<div class="stat" id="ladTile" onclick="location.href=\'debt.html\'" style="cursor:pointer;padding:10px 16px;">' +
+          '<div class="s-top" style="align-items:center;gap:8px;"><div style="flex:1;min-width:0;font-size:14px;font-weight:700;color:' + col + ';">Left after debts - ' + (shown ? amt : dots) + '</div>' + btn + '</div></div>';
+      } else {
+        html += '<div class="stat" id="ladTile" onclick="location.href=\'debt.html\'" style="cursor:pointer;">' +
+          '<div class="s-top" style="gap:8px;"><div class="s-label" style="color:#a9aebd;">Left after debts (' + lad.cut + ' cutoff)</div>' + btn + '</div>' +
+          '<div class="s-val" style="color:' + col + ';">' + (shown ? amt : dots) + '</div>' +
+          '<div class="s-sub" style="color:#a9aebd;">' + (shown ? (fmtPeso(lad.takeHome) + ' take-home \u2212 ' + fmtPeso(lad.bills) + ' due') : 'take-home \u2212 due') + '</div>' +
+          sparkline(lad.left >= 0 ? 13 : 17, col) +
+        '</div>';
+      }
+    }
+    document.getElementById("stats").innerHTML = html;
     const eye = document.getElementById("eyeBtn");
     if (eye) eye.textContent = (shown ? "Hide amounts" : "Show amounts");
 
