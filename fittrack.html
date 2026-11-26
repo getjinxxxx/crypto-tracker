@@ -144,7 +144,7 @@
   .dot.on { background: var(--green); border-color: var(--green); }
   .badge-s { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px; }
   .badge-s.ok { background: rgba(52,211,153,.16); color: var(--green); }
-  .badge-s.inc { background: rgba(255,107,107,.16); color: var(--danger); }
+  .badge-s.inc { background: rgba(255,107,107,.16); color: #ffb4b4; }
   .badge-s.prog { background: rgba(245,197,66,.16); color: var(--gold-bright); }
   .insight { border-left: 3px solid var(--gold); padding: 4px 0 4px 10px; }
 
@@ -235,6 +235,31 @@
   .ptag.up { color: var(--neon); } .ptag.down { color: var(--danger); }
   .exrow .dots3 { flex: none; width: 36px; height: 40px; border: none; background: none; color: var(--muted); font-size: 22px; cursor: pointer; }
   .tl.compact .exrow .meta { display: none; }
+  /* Reusable exercise thumbnails (animated image + muscle badge) and equipment icons */
+  .thumb { position: relative; flex: none; width: 52px; height: 52px; }
+  .thumb .exi { width: 100%; height: 100%; }
+  .thumb.sm, .thumb.sm .exi { width: 40px; height: 40px; }
+  .thumb.sm .exi { border-radius: 12px; }
+  .thumb.sm .mbadge { width: 18px; height: 18px; border-radius: 6px; border-width: 1px; right: -3px; bottom: -3px; }
+  .thumb.sm .mbadge .ms { width: 12px; height: 12px; }
+  .thumb.xs, .thumb.xs .exi { width: 30px; height: 30px; }
+  .thumb.xs .exi { border-radius: 9px; }
+  .thumb.xs .mbadge { display: none; }
+  .thumb.dim { opacity: .5; }
+  .thstrip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+  .thstrip .more { font-size: 12px; color: #b9c8c5; font-weight: 800; }
+  .eqi { display: inline-block; width: 28px; height: 28px; flex: none; position: relative; }
+  .eqi svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+  .eqtag { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+  .eqtag .eqi { width: 16px; height: 16px; }
+  .exrow .rep, .rptag { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .04em; color: #f5c542; background: rgba(245,197,66,.14); border-radius: 999px; padding: 2px 8px; margin-bottom: 3px; }
+  .rptag.sk { color: #ffb4b4; background: rgba(255,107,107,.16); }
+  .nxt { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .nxt .sub { margin: 0; }
+  .eqf { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; padding: 2px; scrollbar-width: none; }
+  .eqf button { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.22); background: #0f3a36; color: #f2f2f7; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .eqf button .eqi { width: 20px; height: 20px; }
+  .eqf button.on { border-color: #39e639; color: #39e639; }
   .startbtn { position: fixed; left: 50%; transform: translateX(-50%); width: calc(100% - 28px); max-width: 560px; bottom: calc(var(--tabh) + 24px + env(safe-area-inset-bottom)); z-index: 350; min-height: 54px; border: none; border-radius: 999px; background: var(--neon); color: var(--neon-ink); font-weight: 900; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; box-shadow: 0 8px 24px rgba(57,230,57,.3); }
   .startgap { height: 70px; }
   /* Force teal gradient + header room (theme.css sets !important on html/body) */
@@ -279,6 +304,16 @@
   .eq-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
   .eq-chip { min-height: 44px; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 800; cursor: pointer; background: #0f3a36; color: #f2f2f7; border: 2px solid #39e639; }
   .eq-chip.off { background: #2a1417; color: #ffb4b4; border: 2px solid #ff6b6b; text-decoration: line-through; }
+  .eq-chip { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 92px; padding: 8px 12px 6px; border-radius: 18px; font-size: 13px; }
+  .eq-chip .eqi { width: 34px; height: 34px; }
+  .eq-chip.off .eqi { opacity: .55; }
+  .eq-chip.off .eqi::after { content: ""; position: absolute; left: -2px; right: -2px; top: 50%; height: 3px; background: #ff6b6b; border-radius: 2px; transform: rotate(-40deg); }
+  .eq-pair { display: flex; align-items: center; gap: 4px; flex: none; }
+  .eq-pair .eq-arr { color: #b9c8c5; font-size: 14px; }
+  .eq-skipbox { width: 40px; height: 40px; border-radius: 12px; border: 1px dashed #ff6b6b; color: #ffb4b4; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; }
+  .eq-orig { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; color: #b9c8c5; font-size: 13px; }
+  .eq-row .eq-nm .eq-from { display: block; font-size: 12px; }
+  .eq-row .eq-nm .eq-to { display: block; }
   .eq-all { display: block; width: 100%; min-height: 46px; margin-top: 12px; border-radius: 999px; background: transparent; color: #39e639; border: 1px solid #39e639; font-weight: 800; font-size: 14px; letter-spacing: .04em; cursor: pointer; }
   .eq-h { margin: 16px 0 6px; font-size: 13px; font-weight: 900; letter-spacing: .1em; color: #f5c542; }
   .eq-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-top: 6px; border-radius: 14px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.14); }
@@ -490,7 +525,7 @@
   function geminiKey() { try { return (localStorage.getItem("ft_gemini_key") || "").trim() || DEFAULT_GEMINI_KEY; } catch (e) { return DEFAULT_GEMINI_KEY; } }
 
   // ---------- Auto-update (manual banner only; never auto-reload) ----------
-  const APP_VERSION = 178;
+  const APP_VERSION = 179;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   async function checkForUpdate() {
     setFooterVersion();
@@ -785,6 +820,22 @@
   let exFrameTimer = null;
   function startExFrames() { clearInterval(exFrameTimer); exFrameTimer = setInterval(() => document.documentElement.classList.toggle("exf"), 1000); }
   function exImgErr(img) { const w = img.parentNode; if (w) w.querySelectorAll("img").forEach((i) => i.remove()); }
+  // Reusable thumbnail: animated 2-frame image + muscle badge (tap to zoom); sz "", "sm", "xs"; extra class e.g. "dim"
+  function exThumb(exId, sz) { return '<div class="thumb ' + (sz || "") + '">' + exImgHtml(exId, "", true) + '<span class="mbadge">' + muscleSvg(getEx(exId).primary) + "</span></div>"; }
+  // Self-drawn equipment icons (24x24 line art)
+  const EQ_SVG = {
+    barbell: '<path d="M2 12h20M5.5 7v10M8.5 5v14M15.5 5v14M18.5 7v10"/>',
+    dumbbell: '<path d="M7 6.5v11M17 6.5v11M4 9v6M20 9v6M7 12h10"/>',
+    cable: '<path d="M3 3v18M3 6h7.4"/><circle cx="12" cy="6" r="1.6"/><path d="M12 7.6V15M9.5 15h5l-.8 5h-3.4z"/>',
+    machine: '<rect x="3.5" y="3" width="5" height="14" rx="1"/><path d="M3.5 7h5M3.5 11h5M8.5 5h8v4M16.5 9v5M11 14h10M6 17v4M3 21h8"/>',
+    bodyweight: '<circle cx="12" cy="4.6" r="2.2"/><path d="M12 7.5v7M6 10.5l6-2.2 6 2.2M9 21l3-6.5 3 6.5"/>',
+    bands: '<path d="M4 9c0-2.6 3.6-4 8-4s8 1.4 8 4-3.6 4-8 4-8-1.4-8-4zM4 9v7a2 2 0 004 0v-3M20 9v7a2 2 0 01-4 0v-3"/>',
+    kettlebell: '<path d="M8.5 8.5a3.5 3.5 0 017 0"/><path d="M6.5 15a5.5 5.5 0 1111 0 5.5 5.5 0 01-11 0z"/><path d="M8.5 8.5l-1 2.4M15.5 8.5l1 2.4"/>',
+    bench: '<path d="M3 11h13a4 4 0 014 4v1M3 11v4h17M6 15v5M17 16v4"/>',
+    other: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4M12 15.5v.5"/>'
+  };
+  function eqIcon(t) { return '<span class="eqi" aria-hidden="true"><svg viewBox="0 0 24 24">' + (EQ_SVG[t] || EQ_SVG.other) + "</svg></span>"; }
+  function eqTag(t) { return '<span class="eqtag">' + eqIcon(t) + esc(EQ_LABEL[t] || cap(t || "other")) + "</span>"; }
   // Full-screen image zoom; pushes a history entry so Back closes it and returns to the same view
   function openZoom(exId) {
     const z = document.getElementById("zoomHost"); if (!z) return;
@@ -1434,7 +1485,7 @@
     const lastB = bodySorted().slice(-1)[0];
     let workoutCard;
     if (act) workoutCard = '<div class="card hl"><h3>Workout in progress</h3><div class="big">' + esc(act.name) + '</div><div class="sub">Started ' + new Date(act.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + '</div><button class="btn block mt" data-act="resume">Resume workout</button></div>';
-    else if (nd) workoutCard = '<div class="card hl"><h3>Today\'s workout</h3><div class="big">' + esc(nd.name) + '</div><div class="sub">' + nd.exercises.length + " exercises &bull; " + nd.exercises.map((x) => esc(getEx(x.exId).name)).slice(0, 3).join(", ") + (nd.exercises.length > 3 ? "&hellip;" : "") + '</div><button class="btn block mt" data-act="start" data-day="' + nd.id + '">Start ' + esc(nd.name) + "</button></div>";
+    else if (nd) workoutCard = '<div class="card hl"><h3>Today\'s workout</h3><div class="big">' + esc(nd.name) + '</div><div class="sub">' + nd.exercises.length + " exercises &bull; " + nd.exercises.map((x) => esc(getEx(x.exId).name)).slice(0, 3).join(", ") + (nd.exercises.length > 3 ? "&hellip;" : "") + '</div><div class="thstrip">' + nd.exercises.slice(0, 5).map((x) => exThumb(x.exId, "sm")).join("") + '</div><button class="btn block mt" data-act="start" data-day="' + nd.id + '">Start ' + esc(nd.name) + "</button></div>";
     else workoutCard = '<div class="card hl"><h3>Today\'s workout</h3><div class="sub">No program yet.</div><button class="btn block mt" data-act="tab" data-tab="plan">Set up program</button></div>';
     return '<div class="grid two">' + workoutCard +
       '<div class="card"><h3>Weight</h3><div class="big">' + kgS(cw) + (tw != null ? ' <span class="sub">&rarr; ' + kgS(tw) + "</span>" : "") + "</div>" + (tw != null ? bar(wpct, 100, "green") + '<div class="sub">' + r0(wpct) + "% of the way &bull; start " + kgS(startW) + "</div>" : '<div class="sub">Set a target weight in Settings.</div>') + "</div>" +
@@ -1443,13 +1494,13 @@
       '<div class="card"><h3>Protein today</h3><div class="big">' + r0(t.p) + ' <span class="sub">/ ' + tg.protein + " g</span></div>" + bar(t.p, tg.protein, "green") + '<div class="sub">' + (t.p >= tg.protein ? "Target reached" : r0(tg.protein - t.p) + " g to go") + "</div></div>" +
       '<div class="card"><h3>This week</h3><div class="row between"><div class="dots">' + Array.from({ length: wk.planned }, (_, i) => '<span class="dot' + (i < wk.done ? " on" : "") + '"></span>').join("") + '</div><div class="big">' + wk.done + "/" + wk.planned + "</div></div>" +
       (up ? '<div class="sub mt">Upcoming: ' + (up.date === today ? "Today" : fmtDate(up.date)) + " &bull; " + esc(up.day.name) + "</div>" : '<div class="sub mt">Pick training days in Settings to see your upcoming session.</div>') + "</div>" +
-      '<div class="card"><h3>Latest PRs</h3>' + (prs.length ? prs.map((r) => '<div class="li"><div class="grow"><div class="t">' + esc(r.name) + '</div><div class="sub">' + r.kg + " kg &times; " + r.reps + " &bull; est. 1RM " + r.e1rm + " kg</div></div><div class=\"sub\">" + fmtShort(r.date) + "</div></div>").join("") : '<div class="sub">PRs appear once an exercise beats its previous best.</div>') + "</div>" +
+      '<div class="card"><h3>Latest PRs</h3>' + (prs.length ? prs.map((r) => '<div class="li">' + exThumb(r.exId, "sm") + '<div class="grow"><div class="t">' + esc(r.name) + '</div><div class="sub">' + r.kg + " kg &times; " + r.reps + " &bull; est. 1RM " + r.e1rm + " kg</div></div><div class=\"sub\">" + fmtShort(r.date) + "</div></div>").join("") : '<div class="sub">PRs appear once an exercise beats its previous best.</div>') + "</div>" +
       '<div class="card"><h3>Recent measurements</h3>' + (lastB ? '<div class="sub">' + fmtDate(lastB.date) + " &bull; " + esc(SRC_LABEL[lastB.source] || lastB.source) + '</div><div class="mt">' + BODY_FIELDS.filter((f) => num(lastB[f[0]]) != null).map((f) => esc(f[1]) + " <b>" + lastB[f[0]] + " " + f[2] + "</b>").join(" &bull; ") + "</div>" : '<div class="sub">No measurements yet.</div>') + "</div>" +
       '<div class="card"><h3>AI insight</h3><div class="insight">' + esc(localInsight()) + '</div><div class="mt"><button class="btn sec sm" data-act="tab" data-tab="profile">Ask coach</button></div></div></div>';
   }
 
   // ---------- TRAIN ----------
-  function exRow(x) { const e = getEx(x.exId); return '<div class="li"><div class="grow"><button class="lk t" data-act="ex-view" data-id="' + esc(x.exId) + '">' + esc(e.name) + '</button><div class="sub">' + x.sets + " &times; " + x.repMin + "&ndash;" + x.repMax + " &bull; rest " + x.restSec + "s</div></div></div>"; }
+  function exRow(x) { const e = getEx(x.exId); return '<div class="li">' + exThumb(x.exId, "sm") + '<div class="grow"><button class="lk t" data-act="ex-view" data-id="' + esc(x.exId) + '">' + esc(e.name) + '</button><div class="sub">' + x.sets + " &times; " + x.repMin + "&ndash;" + x.repMax + " &bull; rest " + x.restSec + "s</div></div></div>"; }
   function sessionBadge(s) { return s.status === "completed" ? '<span class="badge-s ok">Completed</span>' : s.status === "in_progress" ? '<span class="badge-s prog">In progress</span>' : '<span class="badge-s inc">Incomplete</span>'; }
   function renderTrain() {
     if (nav.editor) return renderEditor();
@@ -1460,10 +1511,10 @@
       const list = state.sessions.slice().sort((a, b) => b.startedAt - a.startedAt);
       return seg + resume + '<div class="card mt">' + (list.length ? list.map((s) => {
         const sets = s.exercises.reduce((n, e) => n + e.sets.filter((x) => x.done).length, 0), tot = s.exercises.reduce((n, e) => n + e.sets.length, 0);
-        return '<div class="li"><div class="grow"><button class="lk t" data-act="session-view" data-id="' + s.id + '">' + esc(s.name) + '</button><div class="sub">' + fmtDate(s.date) + " &bull; " + Math.round((s.durationSec || 0) / 60) + " min &bull; " + sets + "/" + tot + " sets</div></div>" + sessionBadge(s) + "</div>";
+        return '<div class="li"><div class="grow"><button class="lk t" data-act="session-view" data-id="' + s.id + '">' + esc(s.name) + '</button><div class="sub">' + fmtDate(s.date) + " &bull; " + Math.round((s.durationSec || 0) / 60) + " min &bull; " + sets + "/" + tot + " sets</div>" + (s.exercises.length ? '<div class="thstrip">' + s.exercises.slice(0, 5).map((e) => exThumb(e.exId, "xs")).join("") + (s.exercises.length > 5 ? '<span class="more">+' + (s.exercises.length - 5) + "</span>" : "") + "</div>" : "") + "</div>" + sessionBadge(s) + "</div>";
       }).join("") : '<div class="sub">No workouts yet. Start one from the My Plan tab.</div>') + "</div>";
     }
-    if (nav.train === "library") return seg + '<div class="row mt"><input type="text" id="libq" placeholder="Search exercises" value="' + esc(nav.libQ) + '" aria-label="Search exercises" />' + '</div><div class="f2 mt"><select id="libm" aria-label="Muscle filter"><option value="">All muscles</option>' + MUSCLES.map((m) => '<option value="' + m + '"' + (nav.libM === m ? " selected" : "") + ">" + cap(m) + "</option>").join("") + '</select><select id="libe" aria-label="Equipment filter"><option value="">All equipment</option>' + EQUIPMENT.map((m) => '<option value="' + m + '"' + (nav.libE === m ? " selected" : "") + ">" + cap(m) + "</option>").join("") + '</select></div><div class="card mt" id="libList">' + libListHtml() + '</div><button class="btn sec block mt" data-act="cx-add">+ Add custom exercise</button>';
+    if (nav.train === "library") return seg + '<div class="row mt"><input type="text" id="libq" placeholder="Search exercises" value="' + esc(nav.libQ) + '" aria-label="Search exercises" />' + '</div><div class="mt"><select id="libm" aria-label="Muscle filter"><option value="">All muscles</option>' + MUSCLES.map((m) => '<option value="' + m + '"' + (nav.libM === m ? " selected" : "") + ">" + cap(m) + "</option>").join("") + '</select></div><div class="eqf" role="group" aria-label="Equipment filter"><button class="' + (nav.libE ? "" : "on") + '" data-act="lib-eq" data-eq="">All</button>' + EQUIPMENT.map((m) => '<button class="' + (nav.libE === m ? "on" : "") + '" data-act="lib-eq" data-eq="' + m + '" aria-pressed="' + (nav.libE === m) + '">' + eqIcon(m) + esc(EQ_LABEL[m] || cap(m)) + "</button>").join("") + '</div><div class="card mt" id="libList">' + libListHtml() + '</div><button class="btn sec block mt" data-act="cx-add">+ Add custom exercise</button>';
     const prog = activeProgram();
     if (!prog) return seg + resume + '<div class="card mt"><div class="sub">No active program.</div><button class="btn block mt" data-act="prog-gen">Generate a program</button></div>';
     const probs = validateProgram(prog, state.profile), arch = state.programs.filter((x) => x.archivedAt).sort((a, b) => b.createdAt - a.createdAt);
@@ -1476,16 +1527,16 @@
   function libListHtml() {
     const q = nav.libQ.toLowerCase().trim();
     const list = allExercises().filter((e) => (!nav.libM || e.primary === nav.libM) && (!nav.libE || e.equipment === nav.libE) && (!q || e.name.toLowerCase().indexOf(q) >= 0 || e.primary.indexOf(q) >= 0));
-    return list.length ? list.map((e) => '<div class="li">' + '<div class="thumb" style="position:relative;flex:none;width:52px;height:52px">' + exImgHtml(e.id, "", true) + '<span class="mbadge">' + muscleSvg(e.primary) + '</span></div>' + '<div class="grow"><button class="lk t" data-act="ex-view" data-id="' + esc(e.id) + '">' + esc(e.name) + '</button><div class="sub">' + cap(e.primary) + " &bull; " + cap(e.equipment) + " &bull; " + e.repMin + "&ndash;" + e.repMax + " reps</div></div></div>").join("") : '<div class="sub">No matches.</div>';
+    return list.length ? list.map((e) => '<div class="li">' + '<div class="thumb" style="position:relative;flex:none;width:52px;height:52px">' + exImgHtml(e.id, "", true) + '<span class="mbadge">' + muscleSvg(e.primary) + '</span></div>' + '<div class="grow"><button class="lk t" data-act="ex-view" data-id="' + esc(e.id) + '">' + esc(e.name) + '</button><div class="sub">' + cap(e.primary) + " &bull; " + eqTag(e.equipment) + " &bull; " + e.repMin + "&ndash;" + e.repMax + " reps</div></div></div>").join("") : '<div class="sub">No matches.</div>';
   }
   function showExercise(id) {
     const e = getEx(id), bs = bestSets()[id], lp = lastPerformance(id);
     const alts = (e.alts || []).map(getEx);
-    openModal(shTopHtml(false) + '<div class="sh-hero">' + exImgHtml(id, "sh-big") + '</div><h2>' + esc(e.name) + '</h2><div class="sub">' + cap(e.primary) + (e.secondary.length ? " (+ " + e.secondary.join(", ") + ")" : "") + " &bull; " + cap(e.equipment) + " &bull; " + e.category + " &bull; " + e.difficulty + "</div>" +
+    openModal(shTopHtml(false) + '<div class="sh-hero">' + exImgHtml(id, "sh-big") + '</div><h2>' + esc(e.name) + '</h2><div class="sub">' + cap(e.primary) + (e.secondary.length ? " (+ " + e.secondary.join(", ") + ")" : "") + " &bull; " + eqTag(e.equipment) + " &bull; " + e.category + " &bull; " + e.difficulty + "</div>" +
       '<p>' + esc(e.instructions || "No instructions.") + '</p><div class="sub">Recommended range: ' + e.repMin + "&ndash;" + e.repMax + " reps</div>" +
       (e.video ? '<div class="mt"><a class="lk" href="' + esc(e.video) + '" target="_blank" rel="noopener">Watch video</a></div>' : "") +
       (lp ? '<div class="sub mt">Last (' + fmtShort(lp.date) + "): " + esc(fmtSets(lp.sets)) + (bs ? " &bull; best est. 1RM " + r1(bs.e1rm) + " kg" : "") + "</div>" : "") +
-      (alts.length ? '<h2 class="sec">Alternatives</h2><div class="chips">' + alts.map((a) => '<button class="chip" data-act="ex-view" data-id="' + esc(a.id) + '">' + esc(a.name) + "</button>").join("") + "</div>" : "") +
+      (alts.length ? '<h2 class="sec">Alternatives</h2>' + alts.map((a) => '<div class="li">' + exThumb(a.id, "sm") + '<div class="grow"><button class="lk t" data-act="ex-view" data-id="' + esc(a.id) + '">' + esc(a.name) + '</button><div class="sub">' + cap(a.primary) + " &bull; " + eqTag(a.equipment) + "</div></div></div>").join("") : "") +
       '<div class="row mt2">' + (e.custom ? '<button class="btn danger sm" data-act="cx-del" data-id="' + esc(e.id) + '">Delete exercise</button>' : "") + '<div class="spacer"></div><button class="btn sec" data-act="modal-close">Close</button></div>');
     modalRoot().classList.add("sheet");
   }
@@ -1497,12 +1548,12 @@
       '<div class="sub mt">Saving keeps the old version in history. Past workouts are not changed.</div>' +
       '<label class="lbl">Program name</label><input type="text" data-ef="pname" value="' + esc(prog.name) + '" />' +
       prog.days.map((d, di) => '<div class="card mt"><div class="row"><input type="text" data-ef="dname" data-di="' + di + '" value="' + esc(d.name) + '" aria-label="Day name" /><button class="xbtn d" data-act="ed-delday" data-di="' + di + '" aria-label="Remove day">&times;</button></div>' +
-        d.exercises.map((x, xi) => '<div class="li" style="flex-wrap:wrap"><div class="grow t">' + esc(getEx(x.exId).name) + '</div><button class="xbtn" data-act="ed-up" data-di="' + di + '" data-xi="' + xi + '" aria-label="Move up">&uarr;</button><button class="xbtn" data-act="ed-down" data-di="' + di + '" data-xi="' + xi + '" aria-label="Move down">&darr;</button><button class="btn sec sm" data-act="ed-replace" data-di="' + di + '" data-xi="' + xi + '">Replace</button><button class="xbtn d" data-act="ed-del" data-di="' + di + '" data-xi="' + xi + '" aria-label="Remove exercise">&times;</button>' +
+        d.exercises.map((x, xi) => '<div class="li" style="flex-wrap:wrap">' + exThumb(x.exId, "sm") + '<div class="grow t">' + esc(getEx(x.exId).name) + '</div><button class="xbtn" data-act="ed-up" data-di="' + di + '" data-xi="' + xi + '" aria-label="Move up">&uarr;</button><button class="xbtn" data-act="ed-down" data-di="' + di + '" data-xi="' + xi + '" aria-label="Move down">&darr;</button><button class="btn sec sm" data-act="ed-replace" data-di="' + di + '" data-xi="' + xi + '">Replace</button><button class="xbtn d" data-act="ed-del" data-di="' + di + '" data-xi="' + xi + '" aria-label="Remove exercise">&times;</button>' +
           '<div class="f2" style="width:100%;grid-template-columns:repeat(4,1fr)">' + [["sets", "Sets"], ["repMin", "Min"], ["repMax", "Max"], ["restSec", "Rest s"]].map((f) => '<div><label class="lbl" style="margin:4px 0 2px">' + f[1] + '</label><input type="number" inputmode="numeric" data-ef="' + f[0] + '" data-di="' + di + '" data-xi="' + xi + '" value="' + x[f[0]] + '" /></div>').join("") + "</div></div>").join("") +
         '<button class="btn sec sm mt" data-act="ed-add" data-di="' + di + '">+ Add exercise</button></div>').join("") +
       '<button class="btn sec block mt" data-act="ed-addday">+ Add day</button>';
   }
-  function pickList(host, items, act, attrs) { host.innerHTML = items.length ? items.map((e) => '<div class="li"><div class="grow"><div class="t">' + esc(e.name) + '</div><div class="sub">' + cap(e.primary) + " &bull; " + cap(e.equipment) + '</div></div><button class="btn sm" data-act="' + act + '" data-id="' + esc(e.id) + '">Choose</button></div>').join("") : '<div class="sub">No matches.</div>'; }
+  function pickList(host, items, act, attrs) { host.innerHTML = items.length ? items.map((e) => '<div class="li">' + exThumb(e.id, "sm") + '<div class="grow"><div class="t">' + esc(e.name) + '</div><div class="sub">' + cap(e.primary) + " &bull; " + eqTag(e.equipment) + '</div></div><button class="btn sm" data-act="' + act + '" data-id="' + esc(e.id) + '">Choose</button></div>').join("") : '<div class="sub">No matches.</div>'; }
 
   // ---------- Workout runtime ----------
   function startWorkout(dayId) { // asks which equipment is free today, then begins (substitutions are session-only)
@@ -1527,10 +1578,10 @@
       if (sb === "skip") { const le = s.exercises[s.exercises.length - 1]; le.skipReason = "equipment"; s.replaced.push({ from: getEx(x0.exId).name, to: null }); }
       else if (sb) { const le = s.exercises[s.exercises.length - 1]; le.replacedFrom = { id: x0.exId, name: getEx(x0.exId).name }; s.replaced.push({ from: getEx(x0.exId).name, to: ex.name }); }
     });
-    state.sessions.push(s); nav.workoutOpen = true; state.ui.tab = "plan"; save(); renderAll(); window.scrollTo(0, 0);
+    state.sessions.push(s); nav.workoutOpen = true; nav.planDay = day.id; state.ui.tab = "plan"; save(); renderAll(); window.scrollTo(0, 0);
   }
   // ---------- Equipment availability check (session-only substitutions; program never modified) ----------
-  const EQ_KEY = "ft_equip_off", EQ_LABEL = { barbell: "Barbell", dumbbell: "Dumbbell", cable: "Cable", machine: "Machine", bodyweight: "Bodyweight", bands: "Bands" };
+  const EQ_KEY = "ft_equip_off", EQ_LABEL = { barbell: "Barbell", dumbbell: "Dumbbell", cable: "Cable", machine: "Machine", bodyweight: "Bodyweight", bands: "Bands", kettlebell: "Kettlebell", bench: "Bench" };
   function eqLoadOff() { try { const j = JSON.parse(localStorage.getItem(EQ_KEY) || "null"); return j && j.d === todayStr() && Array.isArray(j.off) ? j.off : []; } catch (e) { return []; } }
   function eqSaveOff(off) { try { localStorage.setItem(EQ_KEY, JSON.stringify({ d: todayStr(), off: off })); } catch (e) { /* storage unavailable */ } }
   function eqDay() { const q = nav.equip, p = activeProgram(); return q && p ? p.days.find((d) => d.id === q.dayId) : null; }
@@ -1564,19 +1615,19 @@
     let h = top;
     if (q.pickFor) {
       const x = day.exercises.find((z) => z.exId === q.pickFor), cur = subs[q.pickFor];
-      h += '<div class="eq-ttl">PILI NG KAPALIT</div><div class="eq-sub">' + esc(getEx(q.pickFor).name) + '</div>';
+      h += '<div class="eq-ttl">PICK A REPLACEMENT</div><div class="eq-orig">' + exThumb(q.pickFor, "sm dim") + '<span>' + esc(getEx(q.pickFor).name) + '</span></div>';
       const used = keys.filter((k) => k !== q.pickFor && subs[k] !== "skip").map((k) => subs[k]);
-      eqCands(x, day, used).forEach((e) => { h += '<div class="eq-row eq-pk"><div class="eq-nm"><div class="t">' + esc(e.name) + (e.id === cur ? " \u2713" : "") + '</div><div class="s">' + cap(e.primary) + " \u2022 " + cap(e.equipment) + '</div></div><button class="c" data-act="eq-set" data-id="' + esc(q.pickFor) + '" data-to="' + esc(e.id) + '">Choose</button></div>'; });
+      eqCands(x, day, used).forEach((e) => { h += '<div class="eq-row eq-pk">' + exThumb(e.id, "sm") + '<div class="eq-nm"><div class="t">' + esc(e.name) + (e.id === cur ? " \u2713" : "") + '</div><div class="s">' + cap(e.primary) + " \u2022 " + eqTag(e.equipment) + '</div></div><button class="c" data-act="eq-set" data-id="' + esc(q.pickFor) + '" data-to="' + esc(e.id) + '">Choose</button></div>'; });
       h += '<div class="eq-row eq-pk"><div class="eq-nm"><div class="t">Skip this exercise</div></div><button class="c sk" data-act="eq-set" data-id="' + esc(q.pickFor) + '" data-to="skip">Skip</button></div>';
       md.innerHTML = h; return;
     }
-    h += '<div class="eq-ttl">ANONG EQUIPMENT ANG FREE TODAY?</div><div class="eq-sub">' + esc(day.name) + ' \u00b7 ' + day.exercises.length + ' exercises</div><div class="eq-chips">' +
-      eqTypes(day).map((t) => { const off = q.off.indexOf(t) >= 0; return '<button class="eq-chip' + (off ? " off" : "") + '" data-act="eq-tog" data-eq="' + esc(t) + '" aria-pressed="' + (!off) + '">' + (off ? "\u2717 " : "\u2713 ") + esc(EQ_LABEL[t] || cap(t)) + "</button>"; }).join("") + '</div>' +
-      '<button class="eq-all" data-act="eq-all">Lahat available</button>';
+    h += '<div class="eq-ttl">WHAT EQUIPMENT IS AVAILABLE TODAY?</div><div class="eq-sub">' + esc(day.name) + ' \u00b7 ' + day.exercises.length + ' exercises</div><div class="eq-chips">' +
+      eqTypes(day).map((t) => { const off = q.off.indexOf(t) >= 0; return '<button class="eq-chip' + (off ? " off" : "") + '" data-act="eq-tog" data-eq="' + esc(t) + '" aria-pressed="' + (!off) + '">' + eqIcon(t) + "<span>" + (off ? "\u2717 " : "\u2713 ") + esc(EQ_LABEL[t] || cap(t)) + "</span></button>"; }).join("") + '</div>' +
+      '<button class="eq-all" data-act="eq-all">All available</button>';
     if (keys.length) {
-      h += '<div class="eq-h">PAPALITAN</div>' + keys.map((k) => '<div class="eq-row"><div class="eq-nm"><span class="eq-from">' + esc(getEx(k).name) + '</span> \u2192 ' + (subs[k] === "skip" ? '<span class="eq-to skip">Skip</span>' : '<span class="eq-to">' + esc(getEx(subs[k]).name) + '</span>') + '</div><button class="eq-sw" data-act="eq-pick" data-id="' + esc(k) + '" aria-label="Pumili ng ibang kapalit para sa ' + esc(getEx(k).name) + '">\u21C5</button></div>').join("");
+      h += '<div class="eq-h">REPLACEMENTS</div>' + keys.map((k) => '<div class="eq-row"><div class="eq-pair">' + exThumb(k, "sm dim") + '<span class="eq-arr">\u2192</span>' + (subs[k] === "skip" ? '<span class="eq-skipbox" aria-hidden="true">\u2717</span>' : exThumb(subs[k], "sm")) + '</div><div class="eq-nm"><span class="eq-from">' + esc(getEx(k).name) + '</span> ' + (subs[k] === "skip" ? '<span class="eq-to skip">Skip</span>' : '<span class="eq-to">' + esc(getEx(subs[k]).name) + '</span>') + '</div><button class="eq-sw" data-act="eq-pick" data-id="' + esc(k) + '" aria-label="Choose a different replacement for ' + esc(getEx(k).name) + '">\u21C5</button></div>').join("");
     }
-    h += '<div class="eq-ok">\u2713 ' + (day.exercises.length - keys.length) + ' exercises walang pagbabago</div><div class="eq-go"><button data-act="eq-go">Start workout</button></div>';
+    h += '<div class="eq-ok">\u2713 ' + (day.exercises.length - keys.length) + ' exercises unchanged</div><div class="eq-go"><button data-act="eq-go">Start workout</button></div>';
     md.innerHTML = h;
   }
   function eqAct(a, d) {
@@ -1600,7 +1651,7 @@
         else if (sg.status === "declined") sgh = '<div class="sub">Suggestion declined. Keeping previous weight.</div>';
         else sgh = '<div class="sub">' + esc(sg.reason) + "</div>";
       }
-      h += '<div class="card ex' + (e.skipped ? " skipped" : "") + '"><div class="row between"><div><div class="t" style="font-size:16px">' + esc(e.name) + '</div><div class="sub">Target ' + e.targetRepMin + "&ndash;" + e.targetRepMax + " reps &bull; " + e.targetSets + " sets &bull; rest " + e.restSec + 's</div></div><button class="btn sec sm" data-act="wk-skip" data-ei="' + ei + '">' + (e.skipped ? "Unskip" : "Skip") + "</button></div>" +
+      h += '<div class="card ex' + (e.skipped ? " skipped" : "") + '"><div class="row between"><div class="row" style="gap:10px;min-width:0;flex:1">' + exThumb(e.exId) + '<div style="min-width:0"><div class="t" style="font-size:16px">' + esc(e.name) + '</div><div class="sub">Target ' + e.targetRepMin + "&ndash;" + e.targetRepMax + " reps &bull; " + e.targetSets + " sets &bull; rest " + e.restSec + 's</div></div></div><button class="btn sec sm" data-act="wk-skip" data-ei="' + ei + '">' + (e.skipped ? "Unskip" : "Skip") + "</button></div>" +
         '<div class="sub mt">' + (lp ? "Last: " + esc(fmtSets(lp.sets)) + " (" + fmtShort(lp.date) + ")" : "Last: no history yet") + "</div>";
       if (e.replacedFrom) h += '<div class="sub mt">Replaced ' + esc(e.replacedFrom.name) + ' (equipment unavailable)</div>'; else if (e.skipReason) h += '<div class="sub mt">Skipped: equipment unavailable</div>';
       if (!e.skipped) {
@@ -1612,7 +1663,7 @@
           (e.painFlag ? '<div class="sub warn mt">Pain flagged. Stop the painful movement; don\'t train through pain. See a qualified professional if it continues.</div>' : "") +
           '<input type="text" class="mt" placeholder="Notes" data-wf="notes" data-ei="' + ei + '" value="' + esc(e.notes) + '" aria-label="Exercise notes" />';
       }
-      h += (next ? '<div class="sub mt">Next: ' + esc(next.name) + " &bull; " + next.targetSets + " &times; " + next.targetRepMin + "&ndash;" + next.targetRepMax + "</div>" : '<div class="sub mt">Last exercise</div>') + "</div>";
+      h += (next ? '<div class="nxt">' + exThumb(next.exId, "sm") + '<div class="sub">Next: ' + esc(next.name) + " &bull; " + next.targetSets + " &times; " + next.targetRepMin + "&ndash;" + next.targetRepMax + "</div></div>" : '<div class="sub mt">Last exercise</div>') + "</div>";
     });
     return h + '<button class="btn block mt2" data-act="wk-finish">Finish workout</button>';
   }
@@ -1668,7 +1719,7 @@
   function sessionDetail(id) {
     const s = state.sessions.find((x) => x.id === id); if (!s) return;
     openModal("<h2>" + esc(s.name) + "</h2><div class=\"sub\">" + fmtDate(s.date) + " &bull; " + Math.round((s.durationSec || 0) / 60) + " min &bull; " + esc(s.programVersionName || "") + "</div><div class=\"mt\">" + sessionBadge(s) + "</div>" +
-      s.exercises.map((e) => '<div class="li" style="display:block"><div class="t">' + esc(e.name) + (e.skipped ? ' <span class="sub">(skipped)</span>' : "") + (e.painFlag ? ' <span class="badge-s inc">pain</span>' : "") + (e.techniqueFlag ? ' <span class="badge-s prog">form</span>' : "") + '</div><div class="sub">' + (e.sets.filter((x) => x.done).map((x) => kgNum(x.kg) + "kg &times; " + x.reps + (x.rir !== "" && x.rir != null ? " @RIR" + x.rir : "")).join(" &bull; ") || "no sets done") + "</div>" + (e.notes ? '<div class="sub">Note: ' + esc(e.notes) + "</div>" : "") + "</div>").join("") +
+      s.exercises.map((e) => '<div class="li" style="align-items:flex-start">' + (e.exId ? exThumb(e.exId, "sm") : "") + '<div class="grow"><div class="t">' + esc(e.name) + (e.skipped ? ' <span class="sub">(skipped)</span>' : "") + (e.painFlag ? ' <span class="badge-s inc">pain</span>' : "") + (e.techniqueFlag ? ' <span class="badge-s prog">form</span>' : "") + '</div><div class="sub">' + (e.sets.filter((x) => x.done).map((x) => kgNum(x.kg) + "kg &times; " + x.reps + (x.rir !== "" && x.rir != null ? " @RIR" + x.rir : "")).join(" &bull; ") || "no sets done") + "</div>" + (e.notes ? '<div class="sub">Note: ' + esc(e.notes) + "</div>" : "") + "</div></div>").join("") +
       (s.notes ? '<div class="sub mt">Notes: ' + esc(s.notes) + "</div>" : "") +
       '<div class="row mt2"><button class="btn danger sm" data-act="session-del" data-id="' + s.id + '">Delete record</button><div class="spacer"></div><button class="btn sec" data-act="modal-close">Close</button></div>');
   }
@@ -1916,7 +1967,7 @@
     let h = shTopHtml(!!pn) + '<div class="sh-hero">' + exImgHtml(x.exId, "sh-img") + '<div class="nm">' + esc(e.name) + '</div><div class="sub">' + cap(e.primary || "") + "</div></div>" +
       '<div class="sh-chips">' + chip("how", "\u25B7 How to") + chip("replace", "\u21C5 Replace") + chip("rest", "\u23F1 " + fmtDur(x.restSec)) + '<button class="shchip red" data-act="sh-del">\uD83D\uDDD1 Delete exercise</button></div>';
     if (pn === "how") h += '<div class="sh-panel"><div class="sh-hero">' + exImgHtml(x.exId, "sh-big") + '</div><p style="margin:10px 0 0">' + esc(e.instructions || "No instructions.") + "</p></div>";
-    else if (pn === "replace") { const cands = replaceCandidates(x.exId, state.profile).slice(0, 12); h += '<div class="sh-panel"><div class="sub">Replace for this program slot only. Logged history keeps the old name.</div>' + (cands.length ? cands.map((a) => '<div class="li"><div class="grow"><div class="t">' + esc(a.name) + '</div><div class="sub">' + cap(a.primary) + " &bull; " + cap(a.equipment) + '</div></div><button class="btn sm" data-act="sh-pick" data-id="' + esc(a.id) + '">Choose</button></div>').join("") : '<div class="sub">No alternatives available.</div>') + "</div>"; }
+    else if (pn === "replace") { const cands = replaceCandidates(x.exId, state.profile).slice(0, 12); h += '<div class="sh-panel"><div class="sub">Replace for this program slot only. Logged history keeps the old name.</div>' + (cands.length ? cands.map((a) => '<div class="li">' + exThumb(a.id, "sm") + '<div class="grow"><div class="t">' + esc(a.name) + '</div><div class="sub">' + cap(a.primary) + " &bull; " + eqTag(a.equipment) + '</div></div><button class="btn sm" data-act="sh-pick" data-id="' + esc(a.id) + '">Choose</button></div>').join("") : '<div class="sub">No alternatives available.</div>') + "</div>"; }
     else if (pn === "rest") h += '<div class="sh-panel"><label class="lbl" style="margin-top:0">Rest timer (seconds)</label><input type="number" inputmode="numeric" min="10" max="600" step="5" data-sh="rest" value="' + x.restSec + '" aria-label="Rest seconds" /></div>';
     h += '<div class="sh-tbl"><div class="sh-row hd"><div>Set</div><div>Reps</div><div>Weight (kg)</div><div></div></div>';
     if (x.warm) h += '<div class="sh-row"><div class="sn w">W</div><input type="number" inputmode="numeric" min="0" data-sh="wreps" value="' + x.warm.reps + '" aria-label="Warm-up reps" /><input type="number" inputmode="decimal" step="0.5" min="0" data-sh="wkg" value="' + f2(x.warm.kg) + '" aria-label="Warm-up kg" /><button class="x" data-act="sh-warm" aria-label="Remove warm-up">&times;</button></div>';
@@ -1967,16 +2018,19 @@
   function progressTagHtml(exId) {
     const p = planProgress(exId); if (!p || p.n < 2 || p.cur === p.first) return "";
     const d = r1(p.cur - p.first);
-    return '<span class="ptag ' + (d > 0 ? "up" : "down") + '">' + (d > 0 ? "\u25B2 +" : "\u25BC ") + d + " kg (mula " + kgNum(p.first) + ")</span>";
+    return '<span class="ptag ' + (d > 0 ? "up" : "down") + '">' + (d > 0 ? "\u25B2 +" : "\u25BC ") + d + " kg (from " + kgNum(p.first) + ")</span>";
   }
-  function planRowHtml(x, i, day) {
-    const e = getEx(x.exId), p = planProgress(x.exId);
+  function planRowHtml(x, i, day, se) { // se: the session exercise while a workout is in progress (shows what is really being trained)
+    const e = getEx(x.exId), p = planProgress(x.exId), bw = e.equipment === "bodyweight";
     const reps = x.repMin === x.repMax ? x.repMin : x.repMin + "\u2013" + x.repMax;
-    const tk = Array.isArray(x.tgt) && x.tgt.length ? Math.max.apply(null, x.tgt.map((q) => q.kg || 0)) : null;
-    const kg = tk != null ? (tk > 0 ? kgNum(tk) + " kg" : "BW") : p ? (p.cur > 0 ? kgNum(p.cur) + " kg" : "BW") : "\u2013";
-    const warm = x.warm !== undefined ? !!x.warm : warmHeur(x, i);
+    let w;
+    if (se) w = Math.max.apply(null, se.sets.map((s) => num(s.kg) || 0).concat([0]));
+    else { const tk = Array.isArray(x.tgt) && x.tgt.length ? Math.max.apply(null, x.tgt.map((q) => q.kg || 0)) : 0; w = tk > 0 ? tk : p ? p.cur : 0; }
+    const kg = w > 0 ? kgNum(w) + " kg" : bw ? "BW" : "\u2013"; // BW only for genuine bodyweight exercises
+    const warm = se ? false : x.warm !== undefined ? !!x.warm : warmHeur(x, i);
+    const note = se && se.replacedFrom ? '<div class="rptag">Replaced ' + esc(se.replacedFrom.name) + "</div>" : se && se.skipped ? '<div class="rptag sk">Skipped (equipment unavailable)</div>' : "";
     return '<div class="exrow" data-act="ex-sheet" data-id="' + esc(x.exId) + '"><div class="thumb">' + exImgHtml(x.exId) + '<span class="mbadge">' + muscleSvg(e.primary) + "</span></div>" +
-      '<div class="info">' + (warm ? '<div class="wtag">W/ warm up</div>' : "") + '<div class="nm">' + esc(e.name) + '</div><div class="meta">' + x.sets + " \u00d7 " + reps + " \u2022 " + kg + progressTagHtml(x.exId) + "</div></div>" +
+      '<div class="info">' + note + (warm ? '<div class="wtag">W/ warm up</div>' : "") + '<div class="nm">' + esc(e.name) + '</div><div class="meta">' + x.sets + " \u00d7 " + reps + " \u2022 " + kg + progressTagHtml(x.exId) + "</div></div>" +
       '<button class="dots3" data-act="ex-sheet" data-id="' + esc(x.exId) + '" aria-label="Exercise options">\u22EE</button></div>';
   }
   function renderPlan() {
@@ -1994,16 +2048,18 @@
     if (!prog) return top + '<div class="card"><div class="sub">No active program.</div><button class="btn block mt" data-act="prog-gen">Generate a program</button></div>';
     const wsk = weekStart(), doneIds = new Set(sessionsInWeek(wsk).map((s) => s.dayId));
     const nd = nextProgramDay();
-    let sel = prog.days.find((d) => d.id === nav.planDay) || nd || prog.days[0];
+    let sel = prog.days.find((d) => d.id === nav.planDay) || (act && prog.days.find((d) => d.id === act.dayId)) || nd || prog.days[0];
     if (!sel) return top + '<div class="card"><div class="sub">This program has no days.</div><button class="btn block mt" data-act="prog-edit">Edit program</button></div>';
     nav.planDay = sel.id;
     const chips = '<div class="daychips">' + prog.days.map((d, i) => {
       const done = doneIds.has(d.id), on = d.id === sel.id;
       return '<button class="dchip' + (done ? " done" : "") + (on ? " sel" : "") + '" data-act="plan-day" data-day="' + d.id + '" aria-label="' + esc(d.name) + (done ? " (completed)" : "") + '">' + (done ? "\u2713" + (on ? " DAY " + (i + 1) : "") : "DAY " + (i + 1)) + "</button>";
     }).join("") + '<button class="dchip" data-act="prog-gen" aria-label="Generate new program">\u21BB</button></div>';
-    const n = sel.exercises.length;
+    const live = act && act.dayId === sel.id ? act : null; // in-progress session for this day: show its real (possibly substituted) exercises; the program itself is unchanged
+    const rows = live ? live.exercises.map((se) => ({ x: { exId: se.exId, sets: se.targetSets, repMin: se.targetRepMin, repMax: se.targetRepMax }, se: se })) : sel.exercises.map((x) => ({ x: x, se: null }));
+    const n = rows.length;
     const head = '<div class="exhead"><div class="cnt">' + n + " EXERCISE" + (n === 1 ? "" : "S") + '</div><div class="spacer"></div><button class="rbtn" data-act="plan-compact" aria-label="Expand or collapse details">' + ic.expand + '</button><button class="rbtn" data-act="plan-menu" aria-label="Plan options">\u2026</button></div>';
-    const list = n ? '<div class="tl' + (nav.planCompact ? " compact" : "") + '">' + sel.exercises.map((x, i) => planRowHtml(x, i, sel)).join("") + "</div>" : '<div class="card"><div class="sub">No exercises on this day.</div><button class="btn sec sm mt" data-act="prog-edit">Edit program</button></div>';
+    const list = n ? '<div class="tl' + (nav.planCompact ? " compact" : "") + '">' + rows.map((r, i) => planRowHtml(r.x, i, sel, r.se)).join("") + "</div>" : '<div class="card"><div class="sub">No exercises on this day.</div><button class="btn sec sm mt" data-act="prog-edit">Edit program</button></div>';
     const probs = validateProgram(prog, state.profile);
     const btn = act ? '<button class="startbtn" data-act="resume">Resume workout</button>' : (n ? '<button class="startbtn" data-act="start" data-day="' + sel.id + '">Start workout</button>' : "");
     return top + chips + '<div class="plan-div"></div>' + head + list + (probs.length ? '<div class="sub warn mt">Check: ' + esc(probs.slice(0, 3).join("; ")) + "</div>" : "") + '<div class="startgap"></div>' + btn;
@@ -2095,6 +2151,7 @@
       case "session-del": if (confirm("Delete this workout record permanently?")) { state.sessions = state.sessions.filter((s) => s.id !== d.id); save(); closeModal(); renderAll(true); } break;
       // train
       case "train-sub": nav.train = d.sub; renderAll(); break;
+      case "lib-eq": nav.libE = d.eq === nav.libE ? "" : d.eq; renderAll(true); break;
       case "ex-view": showExercise(d.id); break;
       case "ex-sheet": if (ev && ev.target && ev.target.closest(".dots3") && el.classList.contains("exrow")) break; openExerciseSheet(d.id); break;
       case "sh-chip": case "sh-back": case "sh-addset": case "sh-rmset": case "sh-warm": case "sh-pick": case "sh-del": case "sh-start": shAct(a, d); break;
@@ -2111,7 +2168,7 @@
       case "ed-del": nav.editor.days[+d.di].exercises.splice(+d.xi, 1); renderAll(true); break;
       case "ed-delday": if (nav.editor.days.length > 1 && confirm("Remove this day from the program?")) { nav.editor.days.splice(+d.di, 1); renderAll(true); } break;
       case "ed-addday": nav.editor.days.push({ id: uid(), name: "Day " + (nav.editor.days.length + 1), exercises: [] }); renderAll(true); break;
-      case "ed-replace": { nav.edTarget = { di: +d.di, xi: +d.xi, mode: "replace" }; const cur = nav.editor.days[+d.di].exercises[+d.xi]; openModal("<h2>Replace " + esc(getEx(cur.exId).name) + '</h2><div id="edList"></div><div class="row mt2"><div class="spacer"></div><button class="btn sec" data-act="modal-close">Cancel</button></div>'); pickList($("#edList"), replaceCandidates(cur.exId, state.profile), "ed-pick"); break; }
+      case "ed-replace": { nav.edTarget = { di: +d.di, xi: +d.xi, mode: "replace" }; const cur = nav.editor.days[+d.di].exercises[+d.xi]; openModal('<div class="row" style="gap:10px">' + exThumb(cur.exId, "sm") + "<h2 style=\"margin:0\">Replace " + esc(getEx(cur.exId).name) + '</h2></div><div id="edList" class="mt"></div><div class="row mt2"><div class="spacer"></div><button class="btn sec" data-act="modal-close">Cancel</button></div>'); pickList($("#edList"), replaceCandidates(cur.exId, state.profile), "ed-pick"); break; }
       case "ed-add": nav.edTarget = { di: +d.di, mode: "add" }; openModal('<h2>Add exercise</h2><input type="text" id="edq" placeholder="Search exercises" aria-label="Search exercises" /><div id="edList" class="mt"></div><div class="row mt2"><div class="spacer"></div><button class="btn sec" data-act="modal-close">Cancel</button></div>'); pickList($("#edList"), allExercises().slice(0, 30), "ed-pick"); break;
       case "ed-pick": { const t = nav.edTarget, ex = getEx(d.id), day = nav.editor.days[t.di]; if (t.mode === "replace") day.exercises[t.xi].exId = d.id; else { const pr = prescribe(ex, state.profile); day.exercises.push(pr); } closeModal(); renderAll(true); break; }
       case "cx-add": openModal('<h2>Custom exercise</h2><label class="lbl">Name</label>' + inputHtml("name", "", "text") + '<div class="f2"><div><label class="lbl">Primary muscle</label>' + selectHtml("primary", MUSCLES, "chest") + '</div><div><label class="lbl">Equipment</label>' + selectHtml("equipment", EQUIPMENT, "dumbbell") + '</div><div><label class="lbl">Min reps</label>' + inputHtml("repMin", 8) + '</div><div><label class="lbl">Max reps</label>' + inputHtml("repMax", 12) + '</div></div><label class="lbl">Category</label>' + selectHtml("category", ["compound", "isolation"], "isolation") + '<label class="lbl">Instructions</label><textarea name="instructions"></textarea><div class="row mt2"><button class="btn sec" data-act="modal-close">Cancel</button><div class="spacer"></div><button class="btn" data-act="cx-save">Save</button></div>'); break;
