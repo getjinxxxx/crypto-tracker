@@ -642,6 +642,29 @@
   .bd-row.cut-over { box-shadow: inset 3px 0 0 #ff9a9a; border-radius: 8px; }
   .debt-item.cut-card-due { border-left: 3px solid #8f8cf5 !important; padding-left: 4px; }
   .debt-item.cut-card-over { border-left: 3px solid #ff9a9a !important; padding-left: 4px; }
+  /* Card statements as normal debt groups, Summary minimize, edit-plan mode (explicit colors) */
+  .sum-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .sum-head span { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: #c9ccd8; text-transform: uppercase; letter-spacing: .4px; }
+  .sum-minline { display: none; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+  .sum-minline span { flex: 1; min-width: 0; }
+  .summary.smin > * { display: none; }
+  .summary.smin > .sum-minline { display: flex; }
+  .sec-head .sec-r { display: flex; align-items: center; gap: 10px; }
+  .sec-head { cursor: pointer !important; }
+  .sec-min { background: transparent; border: 1px solid #3a3e4d; color: #c9ccd8; border-radius: 8px; min-width: 32px; height: 28px; font-size: 16px; line-height: 1; cursor: pointer; }
+  .cs-linktag { font-size: 10px; font-weight: 700; color: #b9b6ff; border: 1px solid #8f8cf5; border-radius: 999px; padding: 0 7px; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+  .debt-head .d-share.cs-edit, .debt-head .d-share.cs-info { color: #b9b6ff; font-weight: 700; font-size: 13px; min-height: 32px; }
+  .debt-head .d-share.cs-info { font-size: 17px; }
+  .cs-group .cs-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 4px; }
+  .cs-linked { font-size: 12.5px; color: #4fd1a5; margin: 4px 0; display: flex; flex-wrap: wrap; align-items: center; }
+  .cs-linked-x { overflow-wrap: anywhere; }
+  .cs-unlink { background: transparent; border: 0; color: #b9b6ff; font: inherit; font-size: 12.5px; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 6px 4px; min-height: 32px; }
+  .cs-linkbar { margin: 2px 0; }
+  .cs-lnkbtn { background: transparent; border: 0; color: #b9b6ff; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 6px 2px; }
+  #addOverlay.ce-mode .addonly { display: none !important; }
+  .ceonly { display: none; }
+  #addOverlay.ce-mode .ceonly { display: flex; }
+  #addOverlay.ce-mode #newAmount { color: #c9ccd8; }
 </style>
 </head>
 <body class="locked">
@@ -689,7 +712,8 @@
     </div>
 
     <!-- SUMMARY -->
-    <div class="summary">
+    <div class="summary" id="sumCard">
+      <div class="sum-head"><span>Summary</span><button type="button" class="th-min" id="sumMin" title="Minimize" aria-label="Minimize summary">&minus;</button></div>
       <div class="th-note" id="sumRange" style="margin:0 0 2px"></div>
       <div class="srow"><div class="lbl" id="sumLblDue">Due this month</div><div class="val owed big" id="sumMonthDue">PHP 0.00</div></div>
       <div class="srow"><div class="lbl" id="sumLblPaid">Paid this month</div><div class="val paid" id="sumMonthPaid">PHP 0.00</div></div>
@@ -707,6 +731,7 @@
         </div>
         <div class="th-minline"><span id="thMinTxt">Left after debts - PHP 0.00</span><button type="button" class="th-min" id="thExp" title="Expand" aria-label="Expand">+</button></div>
       </div>
+      <div class="sum-minline"><span id="sumMinTxt">Left after debts PHP 0.00</span><button type="button" class="th-min" id="sumExp" title="Expand summary" aria-label="Expand summary">+</button></div>
     </div>
 
     <!-- SALARY VS DEBT -->
@@ -774,10 +799,10 @@
         <h2 style="margin:0">Add a debt</h2>
         <button class="add-close" id="addClose" title="Close">&times;</button>
       </div>
-      <div class="hint">This will be added to the <b id="addMonthLabel">current month</b>. If it has terms, it is spread across the following months (1 term per month). Same name/label = <b>add up</b> with the existing entry.</div>
+      <div class="hint" id="addHint">This will be added to the <b id="addMonthLabel">current month</b>. If it has terms, it is spread across the following months (1 term per month). Same name/label = <b>add up</b> with the existing entry.</div>
 
       <!-- Scan a bill (on-device OCR) -->
-      <div class="scan-box">
+      <div class="scan-box addonly">
         <div class="scan-btns">
           <button type="button" class="scan-btn" id="scanCamBtn">&#128247; Scan a bill</button>
           <button type="button" class="scan-btn" id="scanUpBtn">&#128444;&#65039; Upload image</button>
@@ -795,7 +820,7 @@
         </div>
       </div>
 
-      <div class="field">
+      <div class="field addonly">
         <label>Category</label>
         <select id="newCategory" class="cat-sel">
           <option value="person">Person (debt to someone)</option>
@@ -807,11 +832,11 @@
           <option value="other">Other</option>
         </select>
       </div>
-      <div class="field" id="personField">
+      <div class="field addonly" id="personField">
         <label>Person name<span class="sub">who you owe</span></label>
         <input type="text" class="name-in" id="newPerson" placeholder="e.g. Angel, Mico" />
       </div>
-      <div class="field" id="subCatField">
+      <div class="field addonly" id="subCatField">
         <label>Sub-category<span class="sub">what the debt was for</span></label>
         <select id="newSubCat" class="cat-sel">
           <option value="food">Food</option>
@@ -826,15 +851,15 @@
           <option value="other">Other</option>
         </select>
       </div>
-      <div class="field" id="bankField" style="display:none">
+      <div class="field addonly" id="bankField" style="display:none">
         <label>Bank / wallet / lender<span class="sub">search or pick from the list</span></label>
         <div id="bkAddWrap"></div>
       </div>
-      <div class="field" id="nameField">
+      <div class="field addonly" id="nameField">
         <label>Name / label<span class="sub">name of the debt, e.g. Jollibee, BPI Visa</span></label>
         <input type="text" class="name-in" id="newName" placeholder="e.g. Jollibee, Grab, BPI Visa" />
       </div>
-      <div class="field" id="bankNoteField" style="display:none">
+      <div class="field addonly" id="bankNoteField" style="display:none">
         <label>Label / note<span class="sub">optional, e.g. loan #1</span></label>
         <input type="text" class="name-in" id="newNote" placeholder="e.g. loan #1" />
       </div>
@@ -842,11 +867,11 @@
         <label>Total amount owed<span class="sub">principal (or amount per month if recurring)</span></label>
         <input type="text" inputmode="decimal" id="newAmount" placeholder="0.00" />
       </div>
-      <div class="field">
+      <div class="field addonly">
         <label>Due date / deadline<span class="sub">day of the month (1-15 = 1st cutoff, 16-31 = 2nd cutoff)</span></label>
         <input type="number" inputmode="numeric" id="newDueDay" min="1" max="31" placeholder="e.g. 15" />
       </div>
-      <div class="field" id="recurringField">
+      <div class="field addonly" id="recurringField">
         <label>Recurring bill<span class="sub">monthly, until further notice (e.g. Netflix, Meralco)</span></label>
         <input type="checkbox" id="newRecurring" style="width:22px;height:22px;accent-color:#34d399" />
       </div>
@@ -858,6 +883,11 @@
           <button type="button" class="pm-btn active" data-paymode="monthly" id="pmMonthly">Monthly terms</button>
           <button type="button" class="pm-btn" data-paymode="payday" id="pmPayday">Per payday (13 &amp; 28)</button>
         </div>
+      </div>
+
+      <div class="field ceonly" id="cePayOnField">
+        <label>Pay on<span class="sub">first payday (13th / 28th); further terms follow</span></label>
+        <select id="cePayOn" class="cat-sel"></select>
       </div>
 
       <!-- MONTHLY fields -->
@@ -875,7 +905,7 @@
         <label>Number of paydays<span class="sub">how many installments, every 13th &amp; 28th</span></label>
         <input type="number" inputmode="numeric" id="newPaydays" min="2" max="60" placeholder="e.g. 3" />
       </div>
-      <div class="field" id="paydayStartField" style="display:none">
+      <div class="field addonly" id="paydayStartField" style="display:none">
         <label>Start payday</label>
         <select id="newPayStart" class="cat-sel">
           <option value="28" selected>28 (this month)</option>
@@ -1176,6 +1206,10 @@ var CE = (function () {
   const catOpen = {};    // category -> bool (false = collapsed; default expanded)
   const cardOpen = {};   // cardKey -> bool (false = minimized; default expanded)
   let paidSectionOpen = false; // the "Paid" section is collapsed by default
+  try { paidSectionOpen = localStorage.getItem("debtPaidOpen") === "1"; } catch (e) {}
+  let toPayMin = false;        // "To Pay" section minimized to one line (persisted)
+  try { toPayMin = localStorage.getItem("debtToPayMin") === "1"; } catch (e) {}
+  let cutWinIds = null;        // debt ids with a bill dated inside the viewed cutoff window (set by renderList)
   let fbStateRef = null, applyingRemote = false, saveTimer = null;
   const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
   let firstSnapshot = true; // first cloud snapshot after load is always applied (cloud wins)
@@ -1629,8 +1663,22 @@ var CE = (function () {
     el.textContent = peso(left); el.className = cls;
     const mt = document.getElementById("thMinTxt");
     mt.textContent = "Left after debts - " + peso(left); mt.className = left >= 0 ? "th-ok" : "th-neg";
+    const smt = document.getElementById("sumMinTxt");
+    if (smt) { smt.textContent = "Left after debts " + peso(left); smt.className = left >= 0 ? "th-ok" : "th-neg"; }
     sec.classList.toggle("min", thMin());
+    const sc = document.getElementById("sumCard");
+    if (sc) sc.classList.toggle("smin", sumMin());
   }
+  function sumMin() { try { return localStorage.getItem("debtSummaryMin") === "1"; } catch (e) { return false; } }
+  (function () {
+    const tog = () => {
+      try { localStorage.setItem("debtSummaryMin", sumMin() ? "0" : "1"); } catch (e) {}
+      document.getElementById("sumCard").classList.toggle("smin", sumMin());
+    };
+    const b1 = document.getElementById("sumMin"), b2 = document.getElementById("sumExp");
+    if (b1) b1.onclick = tog;
+    if (b2) b2.onclick = tog;
+  })();
   (function () {
     const inp = document.getElementById("thInput");
     if (inp) inp.addEventListener("input", () => {
@@ -1819,7 +1867,9 @@ var CE = (function () {
     '</div>';
   }
 
-  // ---------- Card statements block (above "To Pay") ----------
+  // ---------- Card statements as normal debt groups (inside TO PAY / PAID) ----------
+  // Source of truth = the statement's payments in cards data. A statement is split into 1..n terms
+  // (cardsState.payPlan["cardId|key"] = { mode, n, dates }). Payments fill the terms in order.
   function stmtOccsInView() {
     let a, b;
     if (cutoffFilter === "1st" || cutoffFilter === "2nd") { const P = cutPeriodFor(cutoffFilter); a = P.start; b = P.end; }
@@ -1841,34 +1891,6 @@ var CE = (function () {
     list.sort();
     return { list: list, cur: cur, def: def, first: first };
   }
-  function payOnHtml(o) {
-    if (o.paid) return "";
-    const po = payOnOptions(o), key = escH(o.cardId) + "|" + o.key;
-    let h = '<div class="cs-pay"><label>Pay on: <select data-payon="' + key + '">';
-    po.list.forEach(p => {
-      const dd = parseIso(p)[2], tag = p === po.first ? " (this cutoff)" : (dd === 13 ? " (13th)" : " (28th)");
-      h += '<option value="' + p + '"' + (p === po.cur ? " selected" : "") + (p > o.due ? " disabled" : "") + '>' + shortDate(p) + tag + '</option>';
-    });
-    h += '</select></label><span class="cs-due">due ' + shortDate(o.due) + '</span></div>';
-    if (po.cur > o.due) h += '<div class="cs-warn">\u26A0 Pay on is after the due date \u2013 you would pay late.</div>';
-    return h;
-  }
-  document.addEventListener("change", (e) => {
-    const t = e.target, v = t && t.getAttribute ? t.getAttribute("data-payon") : null;
-    if (!v) return;
-    const i = v.lastIndexOf("|");
-    setPayOn(v.slice(0, i), v.slice(i + 1), t.value);
-  });
-  function setPayOn(cardId, key, iso) {
-    if (!cardsState) return;
-    const card = cardsState.cards.find(c => c.id === cardId);
-    const st = card && CE.statements(cardsState, card, cardsToday()).find(s => s.key === key);
-    if (!st || iso > st.due || !/^\d{4}-\d{2}-(13|28)$/.test(iso)) return;
-    if (!cardsState.payOn || typeof cardsState.payOn !== "object") cardsState.payOn = {};
-    cardsState.payOn[cardId + "|" + key] = iso;
-    cardsPersist();
-    renderAll();
-  }
   // One-time: RCBC 8009 Dec 4 statement (due 2027-01-01) is paid on the Dec 13 payday.
   function cardsMigratePayOn() {
     if (!cardsState || cardsState.mPayOn1) return;
@@ -1883,84 +1905,261 @@ var CE = (function () {
     cardsState.mPayOn1 = true;
     cardsPersist();
   }
-  function stmtBlockHtml(occs) {
+  // Group of terms of one statement that fall inside the current view window.
+  function stmtGroupsInView() {
+    const occs = stmtOccsInView(), map = {}, out = [];
+    occs.forEach(o => {
+      const k = o.cardId + "|" + o.key;
+      if (!map[k]) { map[k] = { cardId: o.cardId, key: o.key, label: o.label, close: o.close, due: o.due, status: o.status, est: o.est, occs: [] }; out.push(map[k]); }
+      map[k].occs.push(o);
+    });
+    out.forEach(g => { g.allPaid = g.occs.every(o => o.paid); });
+    return out;
+  }
+  function stmtGroupStats(g) {
+    const due = g.occs.reduce((s, o) => s + o.full, 0);
+    const rem = g.occs.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0);
+    return { due: due, rem: rem, paid: Math.max(0, due - rem) };
+  }
+  function linkedLinesHtml(cardId, shown) {
+    const lg = {}, lo = [];
+    state.debts.filter(d => d.cardLink === cardId).forEach(d => {
+      const k = debtDisplayName(d).trim().toLowerCase();
+      if (!lg[k]) { lg[k] = []; lo.push(k); }
+      lg[k].push(d);
+      if (shown) shown[d.id] = true;
+    });
+    const card = cardsState.cards.find(c => c.id === cardId);
+    return lo.map(k => {
+      const ds = lg[k], hid = ds.some(d => d.cardHide);
+      return '<div class="cs-linked"><span class="cs-linked-x">\u2713 ' + escH(debtDisplayName(ds[0])) + ' linked to ' + escH(card ? cardLabel(card) : "card") + (hid ? ' (hidden)' : '') +
+        ' \u00b7 </span><button class="cs-unlink" data-csunlink="' + escH(ds.map(d => d.id).join(",")) + '">Unlink</button></div>';
+    }).join("");
+  }
+  function stmtGroupHtml(g, shownLinked) {
+    const ck = "cs:" + g.cardId + "|" + g.key, open = cardOpen[ck] !== false, st = stmtGroupStats(g);
+    const pct = st.due > 0 ? Math.min(100, (st.paid / st.due) * 100) : 0, paidOff = st.rem <= 0.009;
+    const linkedAny = state.debts.some(d => d.cardLink === g.cardId);
+    const cutOccs = g.occs.filter(o => !o.paid).map(o => cutData.map[o.id + "|" + o.key + "|" + o.pi]).filter(Boolean);
+    const cutCls = cutOccs.length ? (cutOccs.some(o => o.over) ? " cut-card-over" : " cut-card-due") : "";
+    const kid = escH(g.cardId) + "|" + g.key;
+    const due = cutoffFilter === "all" ? "Due this month" : "Due this cutoff";
+    let rows = "";
+    g.occs.forEach(o => {
+      const co = o.paid ? null : cutData.map[o.id + "|" + o.key + "|" + o.pi];
+      const tn = o.n > 1 ? " " + (o.pi + 1) + "/" + o.n : "";
+      rows += '<div class="bd-row' + (o.paid ? " bd-paid" : "") + (co ? (co.over ? " cut-over" : " cut-due") : "") + '">' +
+        '<input type="checkbox" class="bd-check" data-csterm="' + kid + '|' + o.pi + '"' + (o.paid ? " checked" : "") + ' aria-label="Mark paid">' +
+        '<span class="bd-label"><span class="due-tag u-up">' + shortDate(o.date) + '</span>' + (o.paid ? "" : cutBadgeHtml(co)) + ' ' +
+        '<span class="bd-date">' + shortDate(o.close) + ' stmt' + tn + ' \u00b7 due ' + shortDate(o.due) + (o.est ? " (est.)" : "") + '</span>' +
+        (o.partial > 0 ? ' <span class="part-tag">\u20b1' + o.partial.toLocaleString("en-US", { maximumFractionDigits: 2 }) + ' paid</span>' : '') + '</span>' +
+        '<span class="bd-amt">' + peso(o.paid ? o.full : o.amount) + '</span></div>';
+    });
+    const foot = '<div class="cs-links"><a href="cards.html?card=' + encodeURIComponent(g.cardId) + '">Open Card Tracker \u2192</a>' +
+      (st.rem > 0.009 ? '<button class="cs-btn" data-cspay="' + kid + '">Pay full</button><button class="cs-btn" data-cspart="' + kid + '">Partial\u2026</button>' : '') + '</div>' +
+      linkedLinesHtml(g.cardId, shownLinked);
+    return '<div class="debt-item cs-group' + (paidOff ? " paid-off" : "") + cutCls + '">' +
+      '<div class="debt-head">' +
+        '<div class="d-name" data-cardtoggle="' + encodeURIComponent(ck) + '" style="cursor:pointer">' +
+          '<span class="cat-chev" style="font-size:10px;color:var(--muted)">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + escH(g.label) +
+          (linkedAny ? ' <span class="cs-linktag">\uD83D\uDD17 linked</span>' : '') + '</div>' +
+        '<span class="d-badge ' + (paidOff ? "b-paid" : "b-ok") + '">' + (paidOff ? "Fully paid" : (g.occs.length + " term" + (g.occs.length === 1 ? "" : "s"))) + '</span>' +
+        '<button class="d-share cs-edit" data-csedit="' + kid + '" title="Edit payment plan">\u270E Edit</button>' +
+        '<button class="d-share d-detail cs-info" data-csinfo="' + kid + '" title="Statement details">\u24D8</button>' +
+      '</div>' +
+      (open
+        ? ('<div class="d-amounts">' +
+            '<div class="seg"><div class="k">' + due + '</div><div class="v">' + peso(st.due) + '</div></div>' +
+            '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(st.paid) + '</div></div>' +
+            '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(st.rem) + '</div></div>' +
+          '</div>' +
+          '<div class="d-bar"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+          '<div class="d-meta"><span>' + pct.toFixed(0) + '% paid</span><span></span></div>' +
+          '<div class="sub-box">' + rows + '</div>' + foot)
+        : ('<div class="d-meta" style="margin-top:2px"><span>Remaining: <b style="color:var(--red)">' + peso(st.rem) + '</b></span><span>' + pct.toFixed(0) + '% paid</span></div>')) +
+    '</div>';
+  }
+  // Unresolved duplicate suggestions + a small "Link a debt to a card" action (picker hidden until asked).
+  var csLinkOpen = false;
+  function linkBarHtml(shownLinked) {
     if (!cardsState) return "";
-    const linked = state.debts.filter(d => d.cardLink);
     const cardsAvail = cardsState.cards.filter(c => !c.archived);
-    if (!occs.length && !linked.length && !cardsAvail.length) return "";
-    const due = occs.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0);
-    const open = catOpen["cs:block"] !== false;
-    let h = '<div class="cat-group cs-block"><div class="cat-header" data-cattoggle="cs:block"><span class="cat-title"><span class="cat-chev">' + (open ? "\u25BC" : "\u25B6") +
-      '</span> Card statements</span><span class="cat-total">Due: ' + peso(due) + '</span></div>';
-    if (open) {
-      if (!occs.length) h += '<div class="empty">No card statements due in this view</div>';
-      occs.forEach(o => {
-        const cls = o.paid ? "paid" : (o.status === "Overdue" ? "over" : (o.status === "Partial" ? "part" : "open"));
-        h += '<div class="cs-row"><div class="cs-top"><span class="cs-dt">' + shortDate(o.date) + '</span>' +
-          '<span class="cs-nm">' + escH(o.label) + (o.est ? ' <small>(est.)</small>' : '') + '</span>' +
-          '<span class="cs-pill ' + cls + '">' + escH(o.status) + '</span>' +
-          '<span class="cs-am">' + peso(o.paid ? o.full : o.amount) + '</span></div>';
-        h += payOnHtml(o);
-        h += '<a class="cs-open" href="cards.html?card=' + encodeURIComponent(o.cardId) + '">\u25B8 Open in Card Tracker</a>';
-        if (!o.paid) {
-          h += '<div class="cs-act"><button class="cs-btn" data-cspay="' + escH(o.cardId) + '|' + o.key + '">Pay full</button>' +
-            '<button class="cs-btn" data-cspart="' + escH(o.cardId) + '|' + o.key + '">Partial\u2026</button></div>';
-        }
-        h += '</div>';
+    const cands = state.debts.filter(d => d.category === "creditcard" && !d.cardLink);
+    const groups = {}, gorder = [];
+    cands.forEach(d => {
+      const k = debtDisplayName(d).trim().toLowerCase();
+      if (!groups[k]) { groups[k] = []; gorder.push(k); }
+      groups[k].push(d);
+    });
+    const sugg = [];
+    gorder.forEach(k => {
+      const ds = groups[k], bc = bankCanon(ds[0].bank || ds[0].name);
+      if (!bc) return;
+      cardsAvail.forEach(c => {
+        if (bankCanon(c.bank) !== bc) return;
+        const live = ds.filter(d => !(Array.isArray(d.notDup) && d.notDup.indexOf(c.id) >= 0));
+        if (live.length) sugg.push({ ds: live, c: c });
       });
-      h += '<div class="cs-links"><a href="cards.html">Open Card Tracker \u2192</a></div>';
-      // Duplicates: manual credit-card debts that mirror a card. One row per distinct manual debt name + card.
-      const cands = state.debts.filter(d => d.category === "creditcard" && !d.cardLink);
-      const groups = {}, gorder = [];
-      cands.forEach(d => {
-        const k = debtDisplayName(d).trim().toLowerCase();
-        if (!groups[k]) { groups[k] = []; gorder.push(k); }
-        groups[k].push(d);
+    });
+    // Linked debts whose card has no statement group in this view still get their "linked" line + Unlink.
+    let orphan = "";
+    const doneCards = {};
+    state.debts.filter(d => d.cardLink && !(shownLinked && shownLinked[d.id])).forEach(d => {
+      if (doneCards[d.cardLink]) return;
+      doneCards[d.cardLink] = true;
+      orphan += linkedLinesHtml(d.cardLink, null);
+    });
+    let h = "";
+    if (sugg.length) {
+      h += '<div class="cs-dup-t">Unresolved duplicates</div>';
+      sugg.forEach(x => {
+        const ids = escH(x.ds.map(d => d.id).join(",")) + '|' + escH(x.c.id);
+        h += '<div class="cs-dup-r"><span class="cs-dup-x">' + escH(debtDisplayName(x.ds[0])) + (x.ds.length > 1 ? ' (' + x.ds.length + ' entries)' : '') + ' looks like ' + escH(cardLabel(x.c)) + '</span>' +
+          '<span class="cs-dup-b"><button class="cs-btn" data-csg="link|' + ids + '">Link</button>' +
+          '<button class="cs-btn" data-csg="hide|' + ids + '">Hide duplicate</button>' +
+          '<button class="cs-btn" data-csg="nodup|' + ids + '">Not a duplicate</button></span></div>';
       });
-      const sugg = [];
-      gorder.forEach(k => {
-        const ds = groups[k], bc = bankCanon(ds[0].bank || ds[0].name);
-        if (!bc) return;
-        cardsAvail.forEach(c => {
-          if (bankCanon(c.bank) !== bc) return;
-          const live = ds.filter(d => !(Array.isArray(d.notDup) && d.notDup.indexOf(c.id) >= 0));
-          if (live.length) sugg.push({ ds: live, c: c });
-        });
-      });
-      const lgroups = {}, lorder = [];
-      linked.forEach(d => {
-        const k = debtDisplayName(d).trim().toLowerCase() + "|" + d.cardLink;
-        if (!lgroups[k]) { lgroups[k] = []; lorder.push(k); }
-        lgroups[k].push(d);
-      });
-      if (sugg.length || lorder.length || (cands.length && cardsAvail.length)) {
-        h += '<div class="cs-dup"><div class="cs-dup-t">Duplicates</div>';
-        sugg.forEach(x => {
-          const ids = escH(x.ds.map(d => d.id).join(",")) + '|' + escH(x.c.id);
-          h += '<div class="cs-dup-r"><span class="cs-dup-x">' + escH(debtDisplayName(x.ds[0])) + (x.ds.length > 1 ? ' (' + x.ds.length + ' entries)' : '') + ' looks like ' + escH(cardLabel(x.c)) + '</span>' +
-            '<span class="cs-dup-b"><button class="cs-btn" data-csg="link|' + ids + '">Link</button>' +
-            '<button class="cs-btn" data-csg="hide|' + ids + '">Hide duplicate</button>' +
-            '<button class="cs-btn" data-csg="nodup|' + ids + '">Not a duplicate</button></span></div>';
-        });
-        if (cands.length && cardsAvail.length) {
-          h += '<div class="cs-dup-r"><select id="csLinkDebt" class="cs-sel">' + gorder.map(k => '<option value="' + escH(groups[k].map(d => d.id).join(",")) + '">' + escH(debtDisplayName(groups[k][0])) + '</option>').join("") + '</select>' +
-            '<select id="csLinkCard" class="cs-sel">' + cardsAvail.map(c => '<option value="' + escH(c.id) + '">' + escH(cardLabel(c)) + '</option>').join("") + '</select>' +
-            '<button class="cs-btn" data-cslink="1">Link</button></div>';
-        }
-        lorder.forEach(k => {
-          const ds = lgroups[k], c = cardsState.cards.find(x => x.id === ds[0].cardLink), hid = ds.some(d => d.cardHide);
-          h += '<div class="cs-dup-r"><span class="cs-dup-x">' + escH(debtDisplayName(ds[0])) + ' \u2192 ' + escH(c ? cardLabel(c) : "card") + (hid ? ' (hidden)' : ' (paid history kept)') + '</span>' +
-            '<span class="cs-dup-b"><button class="cs-btn" data-csunlink="' + escH(ds.map(d => d.id).join(",")) + '">Unlink</button></span></div>';
-        });
-        h += '</div>';
-      }    }
-    return h + '</div>';
+    }
+    h += orphan;
+    if (cands.length && cardsAvail.length) {
+      if (csLinkOpen) {
+        h += '<div class="cs-dup-r"><select id="csLinkDebt" class="cs-sel" aria-label="Debt">' + gorder.map(k => '<option value="' + escH(groups[k].map(d => d.id).join(",")) + '">' + escH(debtDisplayName(groups[k][0])) + '</option>').join("") + '</select>' +
+          '<select id="csLinkCard" class="cs-sel" aria-label="Card">' + cardsAvail.map(c => '<option value="' + escH(c.id) + '">' + escH(cardLabel(c)) + '</option>').join("") + '</select>' +
+          '<button class="cs-btn" data-cslink="1">Link</button><button class="cs-btn" data-cslinkopen="0">Cancel</button></div>';
+      } else {
+        h += '<div class="cs-linkbar"><button class="cs-lnkbtn" data-cslinkopen="1">Link a debt to a card</button></div>';
+      }
+    }
+    return h ? '<div class="cs-dup">' + h + '</div>' : "";
+  }
+  // Statement info (read-only).
+  function stmtInfo(cardId, key) {
+    if (!cardsState) return;
+    const card = cardsState.cards.find(c => c.id === cardId);
+    const st = card && CE.statements(cardsState, card, cardsToday()).find(s => s.key === key);
+    if (!st) return;
+    const terms = stmtTerms(cardId, st);
+    alert(cardLabel(card) + " statement\nPeriod: " + shortDate(st.start) + " \u2013 " + shortDate(st.close) + "\nDue: " + st.due + "\nTotal: " + peso(st.total / 100) +
+      "\nPaid: " + peso(st.paid / 100) + "\nRemaining: " + peso(st.remaining / 100) + "\nStatus: " + st.status +
+      "\nTerms: " + terms.map(t => shortDate(t.date) + " " + peso(t.amt / 100) + (t.paid ? " \u2713" : "")).join(", "));
+  }
+  // ---- Edit the payment plan (reuses the Add-a-debt form; never touches the card's transactions) ----
+  var ceEdit = null, ceSave = { title: "", amtLabel: "", hint: "", btn: "" };
+  function ceRestoreForm() {
+    const ov = document.getElementById("addOverlay");
+    if (!ceEdit) return;
+    ceEdit = null;
+    ov.classList.remove("ce-mode");
+    ov.querySelector(".add-modal-head h2").textContent = ceSave.title;
+    document.getElementById("newAmount").closest(".field").querySelector("label").innerHTML = ceSave.amtLabel;
+    document.getElementById("addHint").innerHTML = ceSave.hint;
+    document.getElementById("addBtn").textContent = ceSave.btn;
+    document.getElementById("addBtn").disabled = false;
+    const na = document.getElementById("newAmount"); na.readOnly = false; na.value = "";
+    document.getElementById("newTerms").value = ""; document.getElementById("newPerTerm").value = "";
+    document.getElementById("newPaydays").value = "";
+    setAddPayMode("monthly");
+  }
+  function openCardEdit(cardId, key) {
+    if (!cardsState) return;
+    const card = cardsState.cards.find(c => c.id === cardId);
+    const st = card && CE.statements(cardsState, card, cardsToday()).find(s => s.key === key);
+    if (!st) return;
+    const ov = document.getElementById("addOverlay");
+    if (!ceEdit) {
+      ceSave.title = ov.querySelector(".add-modal-head h2").textContent;
+      ceSave.amtLabel = document.getElementById("newAmount").closest(".field").querySelector("label").innerHTML;
+      ceSave.hint = document.getElementById("addHint").innerHTML;
+      ceSave.btn = document.getElementById("addBtn").textContent;
+    }
+    ceEdit = { cardId: cardId, key: key, due: st.due, total: st.total, label: cardLabel(card) };
+    const plan = stmtPlanOf(cardId, key, st.due), pp = cardsState.payPlan && cardsState.payPlan[cardId + "|" + key];
+    const po = payOnOptions({ cardId: cardId, key: key, due: st.due });
+    const opts = po.list.slice();
+    if (opts.indexOf(plan.dates[0]) < 0) opts.push(plan.dates[0]);
+    opts.sort();
+    const first = po.first;
+    document.getElementById("cePayOn").innerHTML = opts.map(p => {
+      const dd = parseIso(p)[2];
+      return '<option value="' + p + '"' + (p === plan.dates[0] ? " selected" : "") + '>' + shortDate(p) + (p === first ? " (this cutoff)" : (dd === 13 ? " (13th)" : " (28th)")) + '</option>';
+    }).join("");
+    ov.classList.add("ce-mode");
+    ov.querySelector(".add-modal-head h2").textContent = "Edit " + ceEdit.label;
+    document.getElementById("newAmount").closest(".field").querySelector("label").innerHTML = 'Statement amount<span class="sub">from Card Tracker (read-only)</span>';
+    document.getElementById("addHint").innerHTML = 'Only the <b>payment plan</b> changes here. The card\u2019s transactions and statement total are not touched. Statement due <b>' + shortDate(st.due) + '</b>; terms cannot fall after it.';
+    document.getElementById("addBtn").textContent = "Save plan";
+    const na = document.getElementById("newAmount"); na.value = (st.total / 100).toFixed(2); na.readOnly = true;
+    const mode = (pp && pp.mode === "payday") ? "payday" : "monthly";
+    setAddPayMode(mode);
+    document.getElementById("newTerms").value = mode === "monthly" ? String(plan.dates.length) : "";
+    document.getElementById("newPaydays").value = mode === "payday" ? String(plan.dates.length) : "";
+    ceRenderPreview();
+    openAddModal();
+  }
+  function ceCompute() {
+    if (!ceEdit) return null;
+    const mode = addPayMode, first = document.getElementById("cePayOn").value;
+    let n = Math.round(num(document.getElementById(mode === "monthly" ? "newTerms" : "newPaydays").value) || 1);
+    n = Math.max(1, Math.min(mode === "monthly" ? 24 : 60, n));
+    const dates = [];
+    let p = first;
+    for (let i = 0; i < n; i++) {
+      if (mode === "monthly") dates.push(i === 0 ? first : CE.addMonthsIso(first, i));
+      else { dates.push(p); const q = parseIso(p); p = q[2] === 13 ? isoD(q[0], q[1], 28) : isoD(q[0], q[1] + 1, 13); }
+    }
+    const total = ceEdit.total, base = Math.floor(total / n);
+    const amts = dates.map((d, i) => i === n - 1 ? total - base * (n - 1) : base);
+    return { mode: mode, n: n, dates: dates, amts: amts, late: dates.filter(d => d > ceEdit.due) };
+  }
+  function ceRenderPreview() {
+    const c = ceCompute(), box = document.getElementById("payPreview");
+    if (!c || !box) return;
+    document.getElementById("newPerTerm").value = (c.amts[0] / 100).toFixed(2);
+    let h = "<b style='color:var(--text)'>Preview (" + c.n + " term" + (c.n === 1 ? "" : "s") + "):</b><br>" +
+      c.dates.map((d, i) => "&bull; " + shortDate(d) + " &rarr; <b>" + peso(c.amts[i] / 100) + "</b>" + (d > ceEdit.due ? " <span style='color:#ff9a9a'>after due date</span>" : "")).join("<br>");
+    if (c.late.length) h += "<br><span style='color:#ff9a9a;font-weight:700'>Not allowed: " + c.late.map(shortDate).join(", ") + " is after the due date (" + shortDate(ceEdit.due) + "). Fewer terms or an earlier Pay on.</span>";
+    box.style.display = "block"; box.innerHTML = h;
+    document.getElementById("addBtn").disabled = c.late.length > 0;
+  }
+  function saveCardPlan() {
+    const c = ceCompute();
+    if (!c || c.late.length || !cardsState) return;
+    const k = ceEdit.cardId + "|" + ceEdit.key;
+    if (!cardsState.payPlan || typeof cardsState.payPlan !== "object") cardsState.payPlan = {};
+    if (!cardsState.payOn || typeof cardsState.payOn !== "object") cardsState.payOn = {};
+    if (c.n === 1) delete cardsState.payPlan[k];
+    else cardsState.payPlan[k] = { mode: c.mode, n: c.n, dates: c.dates };
+    cardsState.payOn[k] = c.dates[0];
+    cardsPersist();
+    closeAddModal();
+    renderAll();
   }
   (function () {
     const el = document.getElementById("debtList");
     if (!el) return;
+    el.addEventListener("change", async (e) => {
+      const t = e.target, v = t && t.getAttribute ? t.getAttribute("data-csterm") : null;
+      if (!v) return;
+      const ps = v.split("|"), ti = parseInt(ps[2], 10);
+      if (t.checked) {
+        const pid = await payCardTerm(ps[0], ps[1], ti);
+        renderAll();
+        if (pid) ccToast("Marked paid", function () { removeCardPayment(pid); renderAll(); });
+      } else {
+        const snap = cardsState ? JSON.stringify(cardsState.payments) : null;
+        unpayCardTerm(ps[0], ps[1], ti);
+        renderAll();
+        if (snap) ccToast("Marked unpaid", function () { cardsState.payments = JSON.parse(snap); cardsPersist(); renderAll(); });
+      }
+    });
     el.addEventListener("click", async (e) => {
       const t = e.target, q = s => (t.closest ? t.closest(s) : null);
+      const ed = q("[data-csedit]");
+      if (ed) { const ps = ed.getAttribute("data-csedit").split("|"); openCardEdit(ps[0], ps[1]); return; }
+      const inf = q("[data-csinfo]");
+      if (inf) { const ps = inf.getAttribute("data-csinfo").split("|"); stmtInfo(ps[0], ps[1]); return; }
+      const lo = q("[data-cslinkopen]");
+      if (lo) { csLinkOpen = lo.getAttribute("data-cslinkopen") === "1"; renderList(); return; }
       const pay = q("[data-cspay]"), part = q("[data-cspart]");
       if (pay || part) {
         const ps = (pay || part).getAttribute(pay ? "data-cspay" : "data-cspart").split("|");
@@ -1994,6 +2193,7 @@ var CE = (function () {
         if (ds && cs && cs.value) {
           const ids = ds.value.split(",");
           state.debts.filter(x => ids.indexOf(x.id) >= 0).forEach(d => { d.cardLink = cs.value; delete d.cardHide; });
+          csLinkOpen = false;
           saveState(); renderAll();
         }
         return;
@@ -2003,15 +2203,24 @@ var CE = (function () {
         const ids = un.getAttribute("data-csunlink").split(",");
         state.debts.filter(x => ids.indexOf(x.id) >= 0).forEach(d => { delete d.cardLink; delete d.cardHide; });
         saveState(); renderAll();
-      }    });
+      }
+    });
   })();
 
   function renderList() {
     const el = document.getElementById("debtList");
-    const stmtOccs = stmtOccsInView();
-    const stmtHtml = stmtBlockHtml(stmtOccs);
+    const stmtGroups = stmtGroupsInView();
+    // Cutoff view: only debts with a bill dated inside the cutoff window (same data as the summary).
+    cutWinIds = null;
+    let winTotal = null;
+    if (cutoffFilter === "1st" || cutoffFilter === "2nd") {
+      const P = cutPeriodFor(cutoffFilter), win = occurrencesIn(P.start, P.end);
+      cutWinIds = {};
+      win.forEach(o => { cutWinIds[o.id] = true; });
+      winTotal = sumDue(win);
+    }
     const activeThisMonth = state.debts.filter(d => isActiveIn(d, viewMonth) && passesCutoffFilter(d));
-    if (!activeThisMonth.length) {
+    if (!activeThisMonth.length && !stmtGroups.length) {
       // Find the nearest month that DOES have active debts, so the user can jump there.
       let jumpMonth = "";
       if (state.debts.length) {
@@ -2035,7 +2244,7 @@ var CE = (function () {
         msg += 'Add one below.';
       }
       msg += '</div>';
-      el.innerHTML = stmtHtml + '<div class="card">' + msg + '</div>';
+      el.innerHTML = linkBarHtml(null) + '<div class="card">' + msg + '</div>';
       el.querySelectorAll("[data-cattoggle]").forEach(h => h.addEventListener("click", () => {
         const c = h.getAttribute("data-cattoggle");
         catOpen[c] = (catOpen[c] === false) ? true : false;
@@ -2054,14 +2263,14 @@ var CE = (function () {
 
     // Build the category-grouped HTML for a given subset of debts.
     // sectionTag namespaces the collapse keys so To-Pay and Paid don't clash.
-    function buildGroups(subset, sectionTag) {
+    function buildGroups(subset, sectionTag, stmtList) {
       const groups = {};
       subset.forEach(d => { const c = d.category || "other"; (groups[c] = groups[c] || []).push(d); });
       let h = "";
       order.forEach(cat => {
-        const list = groups[cat];
-        if (!list || !list.length) return;
-        const catDue = list.reduce((s, d) => s + perTermOf(d), 0);
+        const list = groups[cat] || [], sl = (cat === "creditcard" && stmtList) ? stmtList : [];
+        if (!list.length && !sl.length) return;
+        const catDue = list.reduce((s, d) => s + perTermOf(d), 0) + sl.reduce((s, g) => s + stmtGroupStats(g).due, 0);
         const catKey = sectionTag + ":" + cat;
         const open = catOpen[catKey] !== false; // expanded by default
         h += '<div class="cat-group">' +
@@ -2073,6 +2282,7 @@ var CE = (function () {
           const cardOrder = [];
           list.forEach(d => { const k = cardKeyOf(d); if (!cards[k]) { cards[k] = []; cardOrder.push(k); } cards[k].push(d); });
           cardOrder.forEach(k => { h += cardHtml(cardTitleOf(cards[k][0]), cat, cards[k], k); });
+          sl.forEach(g => { h += stmtGroupHtml(g, shownLinked); });
         }
         h += '</div>';
       });
@@ -2090,30 +2300,39 @@ var CE = (function () {
 
     // This-month remaining (plan-aware): this month's due minus what's paid this month.
     // (remainingOf counts ALL future plan paydays, which would over-count the section.)
-    const toPayTotal = toPayDebts.reduce((s, d) => s + Math.max(0, perTermOf(d) - paidOfMonth(d)), 0) +
-      stmtOccs.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0);
-    const paidTotal  = paidDebts.reduce((s, d) => s + perTermOf(d), 0);
+    // In a cutoff view this is the SAME number as "Remaining this cutoff": the unpaid bills dated inside the window.
+    const toPayStmt = stmtGroups.filter(g => !g.allPaid), paidStmt = stmtGroups.filter(g => g.allPaid);
+    const toPayTotal = winTotal !== null ? winTotal
+      : toPayDebts.reduce((s, d) => s + Math.max(0, perTermOf(d) - paidOfMonth(d)), 0) + stmtGroups.reduce((s, g) => s + stmtGroupStats(g).rem, 0);
+    const paidTotal  = paidDebts.reduce((s, d) => s + perTermOf(d), 0) + paidStmt.reduce((s, g) => s + stmtGroupStats(g).due, 0);
+    const shownLinked = {};
 
-    let html = stmtHtml;
+    let html = "";
     // TO PAY section
-    html += '<div class="sec-head topay"><span class="sec-title">To Pay</span>' +
-      '<span class="sec-total">' + peso(toPayTotal) + '</span></div>';
-    html += toPayDebts.length ? buildGroups(toPayDebts, "topay")
-      : '<div class="empty">Nothing left to pay this month \uD83C\uDF89</div>';
+    html += '<div class="sec-head topay" id="toPayHead"><span class="sec-title">To Pay</span>' +
+      '<span class="sec-r"><span class="sec-total">' + peso(toPayTotal) + '</span><button type="button" class="sec-min" aria-label="' + (toPayMin ? "Expand To Pay" : "Minimize To Pay") + '">' + (toPayMin ? "+" : "\u2014") + '</button></span></div>';
+    if (!toPayMin) {
+      if (winTotal !== null) html += '<div class="th-note" style="margin:-6px 4px 8px">To Pay = unpaid bills dated inside this cutoff (' + rangeLabel(cutPeriodFor(cutoffFilter)) + '), the same total as Remaining this cutoff. Overdue from earlier cutoffs is listed in Due this cutoff. Bills with no due date are listed but not counted.</div>';
+      html += (toPayDebts.length || toPayStmt.length) ? buildGroups(toPayDebts, "topay", toPayStmt)
+        : '<div class="empty">Nothing left to pay this month \uD83C\uDF89</div>';
+      html += linkBarHtml(shownLinked);
+    }
 
     // PAID section (collapsed by default)
-    if (paidDebts.length) {
+    if (paidDebts.length || paidStmt.length) {
       html += '<div class="sec-head paid" id="paidSectionHead"><span class="sec-title">' +
         '<span class="sec-chev">' + (paidSectionOpen ? "\u25BC" : "\u25B6") + '</span>\u2713 Paid</span>' +
-        '<span class="sec-total">' + peso(paidTotal) + '</span></div>';
-      if (paidSectionOpen) html += buildGroups(paidDebts, "paid");
+        '<span class="sec-r"><span class="sec-total">' + peso(paidTotal) + '</span><button type="button" class="sec-min" aria-label="' + (paidSectionOpen ? "Minimize Paid" : "Expand Paid") + '">' + (paidSectionOpen ? "\u2014" : "+") + '</button></span></div>';
+      if (paidSectionOpen) html += buildGroups(paidDebts, "paid", paidStmt);
     }
 
     el.innerHTML = html;
 
-    // wire the Paid section collapse/expand
+    // wire the To Pay / Paid section minimize toggles (persisted)
+    const tph = document.getElementById("toPayHead");
+    if (tph) tph.addEventListener("click", () => { toPayMin = !toPayMin; try { localStorage.setItem("debtToPayMin", toPayMin ? "1" : "0"); } catch (e) {} renderList(); });
     const psh = document.getElementById("paidSectionHead");
-    if (psh) psh.addEventListener("click", () => { paidSectionOpen = !paidSectionOpen; renderList(); });
+    if (psh) psh.addEventListener("click", () => { paidSectionOpen = !paidSectionOpen; try { localStorage.setItem("debtPaidOpen", paidSectionOpen ? "1" : "0"); } catch (e) {} renderList(); });
 
     // wire category collapse/expand
     el.querySelectorAll("[data-cattoggle]").forEach(h => h.addEventListener("click", (e) => {
@@ -2568,7 +2787,9 @@ var CE = (function () {
   var cutoffFilter = "all"; // "all" | "1st" | "2nd"
   function passesCutoffFilter(d) {
     if (cutoffFilter === "all") return true;
-    if (!d.dueDay || d.dueDay < 1 || d.dueDay > 31) return true; // no deadline -> always shown
+    if (!hasPlan(d) && (!d.dueDay || d.dueDay < 1 || d.dueDay > 31)) return true; // no deadline -> always shown
+    // Same rule as the summary: a debt belongs to the cutoff when one of its bills is dated inside the window.
+    if (cutWinIds) return !!cutWinIds[d.id];
     const bucket = (d.dueDay <= 13) ? "1st" : "2nd";
     return bucket === cutoffFilter;
   }
@@ -2915,6 +3136,7 @@ var CE = (function () {
 
   // ---------- Add debt (each add = one standalone item) ----------
   function addDebt() {
+    if (ceEdit) { saveCardPlan(); return; }
     const category = document.getElementById("newCategory").value;
     const person = document.getElementById("newPerson").value.trim();
     let name = document.getElementById("newName").value.trim();
@@ -2990,6 +3212,7 @@ var CE = (function () {
   function closeAddModal() {
     const ov = document.getElementById("addOverlay");
     if (ov) ov.classList.remove("open");
+    ceRestoreForm();
   }
 
   // ---------- Add-form payment mode (Monthly terms vs Per payday) ----------
@@ -3011,6 +3234,7 @@ var CE = (function () {
   function renderPayPreview() {
     const box = document.getElementById("payPreview");
     if (!box) return;
+    if (ceEdit) { ceRenderPreview(); return; }
     if (addPayMode !== "payday") { box.style.display = "none"; return; }
     const total = num(document.getElementById("newAmount").value);
     const n = Math.max(2, Math.min(60, Math.round(num(document.getElementById("newPaydays").value)) || 2));
@@ -3536,6 +3760,8 @@ var CE = (function () {
     }
     amtInp.addEventListener("input", refreshPerTerm);
     termsInp.addEventListener("input", refreshPerTerm);
+    termsInp.addEventListener("input", () => { if (ceEdit) ceRenderPreview(); });
+    document.getElementById("cePayOn").addEventListener("change", () => { if (ceEdit) ceRenderPreview(); });
 
     renderAll();
   }
@@ -3630,6 +3856,7 @@ var CE = (function () {
     if (!s.settings || typeof s.settings !== "object") s.settings = { minFixed: 50000, minPct: 5 };
     if (typeof s.u !== "number") s.u = 0;
     if (!s.payOn || typeof s.payOn !== "object") s.payOn = {};
+    if (!s.payPlan || typeof s.payPlan !== "object") s.payPlan = {};
     return s;
   }
   function cardsInvalidate() { cardsMemoKey = ""; cardsMemo = null; }
@@ -3684,6 +3911,11 @@ var CE = (function () {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && appStarted) cardsRefreshCloud();
   });
+  // Card Tracker in another tab saved a payment: reflect it right away.
+  window.addEventListener("storage", (e) => {
+    if (e.key === CARDS_LS && appStarted && loadCardsLocal()) renderAll();
+  });
+  window.addEventListener("focus", () => { if (appStarted && loadCardsLocal()) renderAll(); });
   // Pay a statement. cents == null pays the current remaining. Returns the payment id or null.
   async function payCardStmt(cardId, key, cents, skipRefresh) {
     if (!skipRefresh) await cardsRefreshCloud(true);
@@ -3723,20 +3955,76 @@ var CE = (function () {
     return all;
   }
   function cardLabel(card) { return (card.nickname || "Card") + " \u2022\u2022\u2022" + (card.last4 || ""); }
-  // Card statement occurrences whose due date is inside [start, end] (same shape as debt occurrences).
+  // Payment plan of a statement: saved terms (cardsState.payPlan) or one payment on the Pay-on payday.
+  function stmtPlanOf(cardId, key, due) {
+    const pp = cardsState && cardsState.payPlan && cardsState.payPlan[cardId + "|" + key];
+    if (pp && Array.isArray(pp.dates) && pp.dates.length && pp.dates.every(x => /^\d{4}-\d{2}-(13|28)$/.test(x))) {
+      return { mode: pp.mode === "payday" ? "payday" : "monthly", dates: pp.dates.slice().sort() };
+    }
+    return { mode: "monthly", dates: [CE.payOf(cardsState, cardId, key, due)] };
+  }
+  // Terms of a statement in cents. Payments fill the terms in order; the last term absorbs rounding.
+  function stmtTerms(cardId, st) {
+    const plan = stmtPlanOf(cardId, st.key, st.due), n = plan.dates.length, base = Math.floor(st.total / n);
+    let cum = 0;
+    return plan.dates.map((date, i) => {
+      const amt = i === n - 1 ? st.total - base * (n - 1) : base;
+      const start = cum; cum += amt;
+      const paidC = Math.max(0, Math.min(amt, st.paid - start));
+      return { i: i, n: n, date: date, amt: amt, start: start, paidC: paidC, remC: amt - paidC, paid: amt > 0 ? paidC >= amt : st.remaining === 0 };
+    });
+  }
+  // Card statement terms whose pay date is inside [start, end] (same shape as debt occurrences).
   function cardOccIn(start, end) {
     const out = [];
     cardsAllStmts().forEach(x => {
-      const s = x.s;
-      const pay = CE.payOf(cardsState, x.card.id, s.key, s.due);
-      if (pay < start || pay > end) return;
-      const label = cardLabel(x.card) + " \uD83D\uDCB3", paid = s.remaining === 0;
-      out.push({ id: "cs:" + x.card.id, key: s.key, pi: -2, date: pay, due: s.due, name: label, grp: label,
-        item: "Statement " + shortDate(s.close) + (s.est ? " (est.)" : ""),
-        full: s.total / 100, amount: (paid ? s.total : s.remaining) / 100, paid: paid, over: false, recurring: false,
-        card: true, status: s.status, cardId: x.card.id, label: label, est: s.est });
+      const s = x.s, label = cardLabel(x.card) + " \uD83D\uDCB3";
+      stmtTerms(x.card.id, s).forEach(t => {
+        if (t.date < start || t.date > end) return;
+        const tn = t.n > 1 ? " " + (t.i + 1) + "/" + t.n : "";
+        out.push({ id: "cs:" + x.card.id, key: s.key, pi: t.i, date: t.date, due: s.due, close: s.close, name: label + tn, grp: label,
+          item: shortDate(s.close) + " stmt" + tn + (s.est ? " (est.)" : ""),
+          full: t.amt / 100, amount: (t.paid ? t.amt : t.remC) / 100, paid: t.paid, over: false, recurring: false,
+          card: true, status: s.status, cardId: x.card.id, label: label, est: s.est, n: t.n, partial: (!t.paid && t.paidC > 0) ? t.paidC / 100 : 0 });
+      });
     });
     return out;
+  }
+  // Pay the statement up to the end of term ti (earlier unpaid terms included). Returns the payment id or null.
+  async function payCardTerm(cardId, key, ti, skipRefresh) {
+    if (!skipRefresh) await cardsRefreshCloud(true);
+    if (!cardsState) return null;
+    const card = cardsState.cards.find(c => c.id === cardId);
+    const st = card && CE.statements(cardsState, card, cardsToday()).find(s => s.key === key);
+    if (!st) return null;
+    const t = stmtTerms(cardId, st)[ti];
+    if (!t) return null;
+    const amt = Math.min(t.start + t.amt - st.paid, st.remaining);
+    if (!(amt > 0)) return null;
+    const now = Date.now(), id = uid();
+    cardsState.payments.push({ id: id, cardId: cardId, stmtKey: key, date: cardsToday(), amt: amt, kind: "debt", note: "Paid via Debt Tracker" + (t.n > 1 ? " (term " + (ti + 1) + "/" + t.n + ")" : ""), createdAt: now, updatedAt: now });
+    cardsPersist();
+    return id;
+  }
+  // Un-pay term ti (and any later term): trims the newest payments of that statement down to the start of the term.
+  function unpayCardTerm(cardId, key, ti) {
+    if (!cardsState) return;
+    const card = cardsState.cards.find(c => c.id === cardId);
+    const st = card && CE.statements(cardsState, card, cardsToday()).find(s => s.key === key);
+    if (!st) return;
+    const t = stmtTerms(cardId, st)[ti];
+    if (!t) return;
+    let need = st.paid - t.start;
+    if (!(need > 0)) return;
+    const mine = cardsState.payments.filter(p => p.cardId === cardId && p.stmtKey === key).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const drop = {};
+    mine.forEach(p => {
+      if (need <= 0) return;
+      if (p.amt <= need) { need -= p.amt; drop[p.id] = true; }
+      else { p.amt -= need; p.updatedAt = Date.now(); need = 0; }
+    });
+    cardsState.payments = cardsState.payments.filter(p => !drop[p.id]);
+    cardsPersist();
   }
   // Total outstanding balance (billed + running) across active cards, in pesos.
   function cardsOutstanding() {
@@ -3923,7 +4211,7 @@ var CE = (function () {
       if (pay) {
         const parts = pay.getAttribute("data-ccpay").split("|");
         if (parts[0].indexOf("cs:") === 0) {
-          const pid = await payCardStmt(parts[0].slice(3), parts[1], null);
+          const pid = await payCardTerm(parts[0].slice(3), parts[1], parseInt(parts[2], 10));
           renderAll();
           if (pid) ccToast("Marked paid", function () { removeCardPayment(pid); renderAll(); });
           return;
@@ -3947,7 +4235,7 @@ var CE = (function () {
         const pids = [];
         if (cardItems.length) {
           await cardsRefreshCloud(true);
-          for (const p of cardItems) { const pid = await payCardStmt(p[0].slice(3), p[1], null, true); if (pid) pids.push(pid); }
+          for (const p of cardItems) { const pid = await payCardTerm(p[0].slice(3), p[1], parseInt(p[2], 10), true); if (pid) pids.push(pid); }
         }
         renderAll();
         ccToast("Marked " + items.length + " paid", function () {
@@ -3977,7 +4265,7 @@ var CE = (function () {
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 191;
+  const APP_VERSION = 192;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
