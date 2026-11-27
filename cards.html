@@ -709,7 +709,8 @@ var CE = (function () {
       (attached ? "" : "<button class='btn dng sm' data-act='delcard' data-id='" + escH(c.id) + "'>Delete</button>") + "</div></div>" +
       "<div class='card'><h2>Statements</h2>" + stmtBlock(c) + "</div>" +
       "<div class='card'><h2>Installments<span class='sp'></span><button class='btn sm' data-act='addinst' data-id='" + escH(c.id) + "'>\uFF0B Add</button></h2>" + instBlock(c) + "</div>" +
-      "<div class='card'><h2>Transactions</h2>" + filterBar(false) + "<div class='hint' id='txCount'></div><div id='txList'></div></div>";
+      "<div class='card'><h2>Transactions<span class='sp'></span><button type='button' class='btn sec sm' id='filtBtn' data-act='togglefilt'></button></h2>" +
+      "<div id='filtPanel' style='display:" + (prefs.filtOpen ? "block" : "none") + "'>" + filterBar(false) + "</div><div class='hint' id='txCount'></div><div id='txList'></div></div>";
     return h;
   }
   function viewTxns() {
@@ -1236,7 +1237,7 @@ var CE = (function () {
     window.addEventListener("focus", refreshAll);
   }
 
-  const APP_VERSION = 193;
+  const APP_VERSION = 194;
   function setFooterVersion() { const fv = $("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // Manual update only: shows a banner, never auto-reloads.
   async function checkForUpdate() {

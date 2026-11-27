@@ -1921,6 +1921,38 @@ var CE = (function () {
     cardsState.mPayOn2 = true;
     cardsPersist();
   }
+  // One-time (v194) repair, RCBC 8009: Pay on / plans are keyed by "cardId|statement close month" (one entry per statement).
+  // Re-key stray entries (bare card id or unknown key) and undo a Dec 13 that leaked from the Dec 4 statement onto the
+  // Dec 5 - Jan 4 statement. Never touches an entry the user saved explicitly (payOnBy). Idempotent.
+  function cardsRepairPayOn3() {
+    if (!cardsState || cardsState.mRepair194) return;
+    const card = cardsState.cards.find(c => String(c.last4) === "8009" && /rcbc/i.test(String(c.bank || "") + String(c.nickname || "")));
+    if (!card) return;
+    let list = [];
+    try { list = CE.statements(cardsState, card, cardsToday()).filter(s => !s.skip); } catch (e) { return; }
+    const cur = list.find(s => s.key === "2026-12" && s.due === "2027-01-01"), up = list.find(s => s.key === "2027-01" && s.due === "2027-02-01");
+    if (!cur && !up) return;
+    ["payOn", "payPlan", "payOnBy"].forEach(n => { if (!cardsState[n] || typeof cardsState[n] !== "object") cardsState[n] = {}; });
+    const P = cardsState.payOn, PL = cardsState.payPlan, BY = cardsState.payOnBy, kc = card.id + "|2026-12", ku = card.id + "|2027-01";
+    // 1) stray keys for this card (bare id / not a statement key): move onto the Dec 4 statement when it has nothing
+    [P, PL].forEach(m => Object.keys(m).forEach(k => {
+      if (k !== card.id && k.indexOf(card.id + "|") !== 0) return;
+      if (list.some(s => card.id + "|" + s.key === k)) return;
+      if (cur && m[k] != null && m[kc] == null && !(m === P && PL[kc])) m[kc] = m[k];
+      delete m[k];
+    }));
+    // 2) the Dec 4 statement keeps Dec 13
+    if (cur && !P[kc] && !PL[kc]) P[kc] = "2026-12-13";
+    // 3) the Dec 5 - Jan 4 statement: undo a copied plan / leaked Dec 13, back to the v193 Dec 28 (default Jan 28 if never set)
+    if (up && !BY[ku]) {
+      const a = PL[ku], b = PL[kc];
+      const copied = a && b && JSON.stringify(a.dates || []) === JSON.stringify(b.dates || []);
+      if (copied) delete PL[ku];
+      if (copied || (P[ku] === "2026-12-13" && !PL[ku])) { if (cardsState.mPayOn2) P[ku] = "2026-12-28"; else delete P[ku]; }
+    }
+    cardsState.mRepair194 = true;
+    cardsPersist();
+  }
   // Group of terms of one statement that fall inside the current view window.
   function stmtGroupsInView() {
     const occs = stmtOccsInView(), map = {}, out = [];
@@ -2146,6 +2178,8 @@ var CE = (function () {
     if (c.n === 1) delete cardsState.payPlan[k];
     else cardsState.payPlan[k] = { mode: c.mode, n: c.n, dates: c.dates };
     cardsState.payOn[k] = c.dates[0];
+    if (!cardsState.payOnBy || typeof cardsState.payOnBy !== "object") cardsState.payOnBy = {};
+    cardsState.payOnBy[k] = 1; // explicit user choice: the v194 repair never moves it
     cardsPersist();
     closeAddModal();
     renderAll();
@@ -3922,6 +3956,7 @@ var CE = (function () {
     } catch (e) {}
     try { cardsMigratePayOn(); } catch (e) {}
     try { cardsMigratePayOn2(); } catch (e) {}
+    try { cardsRepairPayOn3(); } catch (e) {}
     if (changed && !silent && appStarted) renderAll();
     return changed;
   }
@@ -4282,7 +4317,7 @@ var CE = (function () {
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 193;
+  const APP_VERSION = 194;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
