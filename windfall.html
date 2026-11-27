@@ -106,6 +106,12 @@
   .plan .pn { flex: 1; font-weight: 800; min-width: 0; }
   .plan .pl { font-size: 13px; color: #dfe2ec; display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
   .plan .pl .a { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .editbar { display: flex; align-items: center; gap: 8px; }
+  .editbar .eb { font-size: 13px; font-weight: 800; color: #cfcffb; }
+  .editbar input { flex: 1; }
+  .plan .ph .x { width: 32px; height: 32px; }
+  .plan .meta { padding-left: 40px; }
+  .plan .pl { padding-left: 40px; }
   .plan .meta { font-size: 12px; color: #a9aebd; }
 
   #toast { position: fixed; left: 12px; right: 12px; bottom: 16px; z-index: 700; max-width: 520px; margin: 0 auto; background: #2a2d3c; color: #f2f2f7; border: 1px solid #5b5f78; border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; box-shadow: 0 4px 18px rgba(0,0,0,.6); font-size: 14px; }
@@ -192,7 +198,7 @@
     });
   }
   function loadDebtLocal() {
-    try { const s = JSON.parse(localStorage.getItem(LS_DEBT) || "null"); if (s && Array.isArray(s.debts)) debtState = s; } catch (e) {}
+    try { const s = JSON.parse(localStorage.getItem(LS_DEBT) || "null"); if (s && Array.isArray(s.debts)) { debtState = s; debtsReady = true; } } catch (e) {}
     sanitizeDebts();
   }
   // Cloud is the source of truth for debts (like debt.html). Falls back to the local copy.
@@ -205,7 +211,7 @@
         if (remote && typeof remote.stateJson === "string") { try { s = JSON.parse(remote.stateJson); } catch (e) {} }
         else if (remote && remote.state) s = remote.state;
         if (s && Array.isArray(s.debts)) {
-          debtState = s; sanitizeDebts();
+          debtState = s; debtsReady = true; sanitizeDebts();
           try { localStorage.setItem(LS_DEBT, JSON.stringify(debtState)); } catch (e) {}
         }
       }
@@ -248,6 +254,9 @@
     if (d.category === "person" && d.person) return d.person + (nm ? " \u00b7 " + nm : "");
     return nm || d.person || CATS[d.category] || "Other";
   }
+  // Ids are compared as strings: object keys (plan lines) are always strings, but a debt id may be a number.
+  function findDebt(id) { return debtState.debts.find(function (x) { return String(x.id) === String(id); }); }
+  let debtsReady = false; // true once debts came from localStorage or the cloud
   // Apply a payment of X to a debt, oldest unpaid term first. Mirrors the fields debt.html sets
   // (plan[].paid, paidTerms/paidAmt per month, paid/paidOnce). Returns the amount applied.
   function applyPayment(d, X) {
@@ -344,8 +353,13 @@
 
   // ---------- windfall data ----------
   let wf = { entries: [], u: 0 };
-  let ui = { newGoal: false };
-  function newPlan() { return { id: null, entries: [{ id: uid(), label: "13th Month Pay", date: isoD(new Date().getFullYear(), 11, 15), amount: "" }], dl: {}, gl: {}, cl: [] }; }
+  let ui = { newGoal: false, editing: false, plansOpen: false, openPlans: {}, base: "" };
+  const LS_SEC = "windfallSecV1";
+  let sec = { inc: false, debt: false, goal: false }; // true = minimized
+  try { const j = JSON.parse(localStorage.getItem(LS_SEC) || "null"); if (j) sec = { inc: !!j.inc, debt: !!j.debt, goal: !!j.goal }; } catch (e) {}
+  function snapCur() { const c = JSON.parse(JSON.stringify(wf.cur)); delete c.savedAt; return JSON.stringify(c); }
+  function isDirty() { return ui.editing && snapCur() !== ui.base; }
+  function newPlan() { return { id: null, name: "13th Month Pay", nameAuto: true, entries: [{ id: uid(), label: "13th Month Pay", date: isoD(new Date().getFullYear(), 11, 15), amount: "" }], dl: {}, gl: {}, cl: [] }; }
   function freshWf() { return { goals: [], plans: [], cur: newPlan(), u: 0 }; }
   wf = freshWf();
   function sanitizeWf() {
@@ -384,7 +398,8 @@
       if (remote && typeof remote.stateJson === "string") {
         const s = JSON.parse(remote.stateJson);
         if (s && typeof s === "object" && (num(remote.updatedAt) >= num(wf.u))) {
-          wf = s; sanitizeWf();
+          const keep = ui.editing ? wf.cur : null;
+          wf = s; sanitizeWf(); if (keep) wf.cur = keep;
           try { localStorage.setItem(LS_WF, JSON.stringify(wf)); } catch (e) {}
           return true;
         }
@@ -467,47 +482,77 @@
   function planHtml(p) {
     const lines = [];
     Object.keys(p.dl || {}).forEach(function (id) {
-      const l = p.dl[id], d = debtState.debts.find(function (x) { return x.id === id; });
+      const l = p.dl[id], d = findDebt(id);
       const amt = l.paid ? num(l.applied) : (l.on ? num(l.amount) : 0);
-      if (amt > 0) lines.push({ n: d ? debtName(d) : "(removed debt)", a: amt, paid: !!l.paid });
+      if (!(amt > 0)) return;
+      let n;
+      if (d) n = debtName(d);
+      else if (!debtsReady) n = l.name || "Loading debt\u2026";
+      else n = l.name ? l.name + " (deleted)" : "(deleted debt)";
+      lines.push({ n: n, a: amt, paid: !!l.paid });
     });
     Object.keys(p.gl || {}).forEach(function (id) {
-      const l = p.gl[id], g = wf.goals.find(function (x) { return x.id === id; });
+      const l = p.gl[id], g = wf.goals.find(function (x) { return String(x.id) === String(id); });
       const amt = l.paid ? num(l.applied) : num(l.amount);
-      if (amt > 0) lines.push({ n: "Savings: " + (g ? g.name : "(removed goal)"), a: amt, paid: !!l.paid });
+      if (amt > 0) lines.push({ n: "Savings: " + (g ? g.name : (l.name ? l.name + " (deleted)" : "(deleted goal)")), a: amt, paid: !!l.paid });
     });
     (p.cl || []).forEach(function (c) { if (num(c.amount) > 0) lines.push({ n: (c.name || "Custom line") + " (custom)", a: num(c.amount), paid: !!c.paid }); });
     const tin = (p.entries || []).reduce(function (s, e) { return s + num(e.amount); }, 0);
-    const lbl = (p.entries || []).map(function (e) { return e.label || "Windfall"; }).join(" + ") || "Windfall plan";
-    return '<div class="plan" data-pid="' + p.id + '"><div class="ph"><div class="pn">' + escH(lbl) + '</div>' +
+    const lbl = p.name || (p.entries || []).map(function (e) { return e.label || "Windfall"; }).join(" + ") || "Windfall plan";
+    const open = !!ui.openPlans[p.id];
+    return '<div class="plan" data-pid="' + p.id + '"><div class="ph">' +
+      '<button class="x" data-act="toggleplan" aria-expanded="' + open + '" aria-label="Show allocations">' + (open ? "\u25BE" : "\u25B8") + '</button>' +
+      '<div class="pn">' + escH(lbl) + '</div>' +
       '<button class="btn sec sm" data-act="openplan">Open</button><button class="x" data-act="delplan" aria-label="Delete plan">&times;</button></div>' +
-      '<div class="meta">Incoming ' + peso(tin) + ' \u00b7 saved ' + escH(String(p.savedAt || "").slice(0, 10)) + '</div>' +
-      (lines.length ? lines.map(function (x) {
+      '<div class="meta">' + peso(tin) + ' incoming \u00b7 saved ' + escH(String(p.savedAt || "").slice(0, 10)) + '</div>' +
+      (!open ? "" : lines.length ? lines.map(function (x) {
         return '<div class="pl"><span>' + (x.paid ? '<span class="st ok">\u2713</span>' : '<span class="st pend">\u25CB</span>') + ' ' + escH(x.n) + '</span><span class="a">' + peso(x.a) + '</span></div>';
       }).join("") : '<div class="meta">No allocations</div>') + '</div>';
+  }
+  function plansCardHtml() {
+    const n = wf.plans.length, expanded = !ui.editing || ui.plansOpen;
+    let h = '<div class="card" id="plansCard"><h2>Saved plans' + (ui.editing ? ' (' + n + ')' : '') + '<span class="sp"></span>' +
+      (expanded ? '<button class="btn sec sm" data-act="newplan">New plan</button>' : '') +
+      (ui.editing ? '<button class="x" data-act="toggleplans" aria-expanded="' + expanded + '" aria-label="Show saved plans">' + (expanded ? "\u25BE" : "\u25B8") + '</button>' : '') + '</h2>';
+    if (expanded) h += n ? wf.plans.slice().reverse().map(planHtml).join("") : '<div class="hint">No saved plans yet. Tap New plan.</div>';
+    return h + '</div>';
+  }
+  function refreshPlans() { const c = document.getElementById("plansCard"); if (c) c.outerHTML = plansCardHtml(); }
+  function secHead(key, title) {
+    const m = sec[key];
+    return '<h2>' + title + '<span class="sp"></span><button class="x" data-act="sec" data-s="' + key + '" aria-expanded="' + !m + '" aria-label="' + (m ? "Expand " : "Minimize ") + title + '">' + (m ? "+" : "\u2014") + '</button></h2>';
   }
   function hasRates() { return rowsCache.some(function (r) { return r.rate > 0; }); }
   function render() {
     const rows = buildRows(), cur = wf.cur;
     let h = '<datalist id="wfLabels">' + SUGGEST.map(function (s) { return '<option value="' + escH(s) + '">'; }).join("") + '</datalist>';
+    h += plansCardHtml();
+    if (!ui.editing) { main.innerHTML = h; return; }
+    h += '<div class="card editbar"><label for="planName" class="eb">Editing:</label>' +
+      '<input type="text" id="planName" data-f="pname" placeholder="Plan name" value="' + escH(cur.name || "") + '" aria-label="Plan name">' +
+      '<button class="btn sec sm" data-act="closeplan">\u2715 Close</button></div>';
     // incoming
-    h += '<div class="card"><h2>Incoming windfall</h2>' +
-      cur.entries.map(entryHtml).join("") +
+    h += '<div class="card">' + secHead("inc", "Incoming windfall");
+    if (!sec.inc) h += cur.entries.map(entryHtml).join("") +
       '<button class="link" data-act="addentry">+ Add windfall</button>' +
-      '<div class="chips">' + SUGGEST.slice(0, 6).map(function (s) { return '<button class="chip" data-act="quick" data-q="' + escH(s) + '">' + escH(s) + '</button>'; }).join("") + '</div>' +
-      '<div class="total"><span class="k">TOTAL INCOMING</span><span class="v" id="totalIn"></span></div></div>';
+      '<div class="chips">' + SUGGEST.slice(0, 6).map(function (s) { return '<button class="chip" data-act="quick" data-q="' + escH(s) + '">' + escH(s) + '</button>'; }).join("") + '</div>';
+    h += '<div class="total"><span class="k">TOTAL INCOMING</span><span class="v" id="totalIn"></span></div></div>';
     // debts
-    h += '<div class="card"><h2>Allocate to debts</h2>';
-    if (!rows.length) h += '<div class="hint">No unpaid debts found in the Debt Tracker.</div>';
+    h += '<div class="card">' + secHead("debt", "Allocate to debts");
+    if (sec.debt) h += '<div class="hint" id="debtMin"></div>';
+    else if (!rows.length) h += '<div class="hint">No unpaid debts found in the Debt Tracker.</div>';
     else {
       h += '<div class="tools"><select id="auto" aria-label="Auto-allocate"><option value="">Auto-allocate\u2026</option>' +
         '<option value="smallest">Smallest balance first</option>' + (hasRates() ? '<option value="interest">Highest interest first</option>' : '') +
         '<option value="cutoff">This cutoff\u2019s bills first</option><option value="clear">Clear</option></select></div>';
       h += rows.map(debtRowHtml).join("");
     }
-    h += cur.cl.map(customRowHtml).join("") + '<button class="link" data-act="addcustom">+ Add custom line</button></div>';
+    if (!sec.debt) h += cur.cl.map(customRowHtml).join("") + '<button class="link" data-act="addcustom">+ Add custom line</button>';
+    h += '</div>';
     // goals
-    h += '<div class="card"><h2>Savings goals</h2>';
+    h += '<div class="card">' + secHead("goal", "Savings goals");
+    if (sec.goal) h += '<div class="hint" id="goalMin"></div>';
+    else {
     if (!wf.goals.length && !ui.newGoal) h += '<div class="hint">Create a goal to set money aside from this windfall.</div>';
     h += wf.goals.map(goalRowHtml).join("");
     if (ui.newGoal) {
@@ -517,12 +562,10 @@
         '<div class="full"><label for="ngDate">Target date (optional)</label><input type="date" id="ngDate"></div>' +
         '<div class="acts"><button class="btn" data-act="savegoal">Add goal</button><button class="btn sec" data-act="cancelgoal">Cancel</button></div></div>';
     } else h += '<button class="link" data-act="newgoal">+ New goal</button>';
+    }
     h += '</div>';
     // summary
     h += '<div class="card"><h2>Summary</h2><div id="summary"></div></div>';
-    // saved plans
-    h += '<div class="card"><h2>Saved plans<span class="sp"></span><button class="btn sec sm" data-act="newplan">New plan</button></h2>' +
-      (wf.plans.length ? wf.plans.slice().reverse().map(planHtml).join("") : '<div class="hint">No saved plans yet.</div>') + '</div>';
     main.innerHTML = h;
     update();
   }
@@ -539,6 +582,8 @@
       note.textContent = peso(g.saved) + (plan > 0 ? " + " + peso(plan) + " planned" : "") + " of " + peso(tg) + " (" + Math.round(pa + pb) + "%)" +
         (g.targetDate ? " \u00b7 by " + shortDate(g.targetDate) : "");
     });
+    const dm = document.getElementById("debtMin"); if (dm) dm.textContent = "Allocated " + peso(c.toDebts) + " \u00b7 " + c.cleared + " of " + c.total + " debts cleared";
+    const gm = document.getElementById("goalMin"); if (gm) gm.textContent = "Allocated " + peso(c.toGoals);
     const s = document.getElementById("summary");
     if (!s) return;
     s.innerHTML = '<div class="sum"><div class="l"><span>Allocated to debts</span><b>' + peso(c.toDebts) + '</b></div>' +
@@ -574,6 +619,11 @@
   function savePlan() {
     const cur = wf.cur;
     cur.id = cur.id || uid(); cur.savedAt = new Date().toISOString();
+    // snapshot names so a line still reads right if the debt/goal is deleted later
+    Object.keys(cur.dl).forEach(function (id) { const d = findDebt(id); if (d) cur.dl[id].name = debtName(d); });
+    Object.keys(cur.gl).forEach(function (id) { const g = wf.goals.find(function (x) { return String(x.id) === String(id); }); if (g) cur.gl[id].name = g.name; });
+    if (!cur.name) cur.name = cur.entries.map(function (e) { return e.label; }).filter(Boolean)[0] || "Windfall plan";
+    ui.base = snapCur();
     const copy = JSON.parse(JSON.stringify(cur)), i = wf.plans.findIndex(function (p) { return p.id === cur.id; });
     if (i >= 0) wf.plans[i] = copy; else wf.plans.push(copy);
     persist();
@@ -585,7 +635,7 @@
     await refreshDebt();
     let n = 0, sum = 0;
     todo.forEach(function (id) {
-      const d = debtState.debts.find(function (x) { return x.id === id; }), l = wf.cur.dl[id];
+      const d = findDebt(id), l = wf.cur.dl[id];
       if (!d) return;
       const snap = JSON.stringify(d), X = r2(Math.min(num(l.amount), balanceOf(d)));
       if (X <= 0.004) return;
@@ -600,7 +650,7 @@
     await refreshDebt();
     ids.forEach(function (id) {
       const l = wf.cur.dl[id]; if (!l || !l.paid || !l.snap) return;
-      const i = debtState.debts.findIndex(function (x) { return x.id === id; });
+      const i = debtState.debts.findIndex(function (x) { return String(x.id) === String(id); });
       if (i >= 0) debtState.debts[i] = JSON.parse(l.snap);
       l.paid = false; delete l.snap; delete l.applied;
     });
@@ -638,7 +688,7 @@
     await refreshDebt();
     let sum = 0;
     dIds.forEach(function (id) {
-      const d = debtState.debts.find(function (x) { return x.id === id; }), l = wf.cur.dl[id];
+      const d = findDebt(id), l = wf.cur.dl[id];
       if (!d) return;
       const snap = JSON.stringify(d), X = r2(Math.min(num(l.amount), balanceOf(d)));
       if (X <= 0.004) return;
@@ -659,7 +709,11 @@
   main.addEventListener("input", function (ev) {
     const t = ev.target, f = t.getAttribute("data-f");
     if (!f) return;
-    if (f === "label" || f === "date" || f === "amount") { const e = entryOf(t); if (e) e[f] = t.value; }
+    if (f === "pname") { wf.cur.name = t.value; wf.cur.nameAuto = false; }
+    else if (f === "label" || f === "date" || f === "amount") {
+      const e = entryOf(t); if (e) e[f] = t.value;
+      if (e && f === "label" && wf.cur.nameAuto && wf.cur.entries[0] === e) { wf.cur.name = t.value; const pn = document.getElementById("planName"); if (pn) pn.value = t.value; }
+    }
     else if (f === "damt") { const id = rowId(t, "data-did"), l = lineOf(id); l.amount = t.value; if (num(t.value) > 0 && !l.on) { l.on = true; const cb = t.closest(".row").querySelector("[data-act=don]"); if (cb) cb.checked = true; } }
     else if (f === "gamt") { lineGoal(rowId(t, "data-gid")).amount = t.value; }
     else if (f === "cname" || f === "camt") { const c = customOf(t); if (c) c[f === "cname" ? "name" : "amount"] = t.value; }
@@ -671,12 +725,12 @@
     const t = ev.target;
     if (t.id === "auto") { if (t.value) { auto(t.value); persist(); render(); } return; }
     if (t.getAttribute("data-f") === "damt") { // cap at the remaining balance
-      const id = rowId(t, "data-did"), r = rowsCache.find(function (x) { return x.id === id; });
+      const id = rowId(t, "data-did"), r = rowsCache.find(function (x) { return String(x.id) === String(id); });
       if (r && num(t.value) > r.before) { t.value = r.before.toFixed(2); lineOf(id).amount = t.value; persist(); update(); }
       return;
     }
     if (t.getAttribute("data-act") === "don") {
-      const id = rowId(t, "data-did"), l = lineOf(id), r = rowsCache.find(function (x) { return x.id === id; });
+      const id = rowId(t, "data-did"), l = lineOf(id), r = rowsCache.find(function (x) { return String(x.id) === String(id); });
       l.on = t.checked;
       if (l.on && num(l.amount) <= 0 && r) {
         const c = calc(); l.amount = r2(Math.max(0, Math.min(r.before, c.left))).toFixed(2); if (num(l.amount) <= 0) l.amount = "";
@@ -716,11 +770,25 @@
     else if (act === "undogoal") undoGoals([rowId(b, "data-gid")]);
     else if (act === "payall") payAll();
     else if (act === "saveplan") { if (checkOver()) return; savePlan(); render(); toast("Plan saved."); }
-    else if (act === "newplan") { wf.cur = newPlan(); persist(); render(); window.scrollTo(0, 0); }
+    else if (act === "newplan") {
+      if (isDirty() && !confirm("You have unsaved changes. Discard them and start a new plan?")) return;
+      wf.cur = newPlan(); ui.editing = true; ui.plansOpen = false; ui.base = snapCur(); persist(); render(); window.scrollTo(0, 0);
+    }
     else if (act === "openplan") {
       const p = wf.plans.find(function (x) { return x.id === rowId(b, "data-pid"); });
-      if (p) { wf.cur = JSON.parse(JSON.stringify(p)); persist(); render(); window.scrollTo(0, 0); toast("Plan opened. Edit it and save again."); }
+      if (!p) return;
+      if (isDirty() && !confirm("You have unsaved changes. Discard them and open this plan?")) return;
+      wf.cur = JSON.parse(JSON.stringify(p)); sanitizeWf();
+      if (!wf.cur.name) wf.cur.name = wf.cur.entries.map(function (e) { return e.label; }).filter(Boolean).join(" + ") || "Windfall plan";
+      wf.cur.nameAuto = false; ui.editing = true; ui.plansOpen = false; ui.base = snapCur(); persist(); render(); window.scrollTo(0, 0);
     }
+    else if (act === "closeplan") {
+      if (isDirty() && !confirm("You have unsaved changes. Close without saving?")) return;
+      ui.editing = false; ui.newGoal = false; wf.cur = newPlan(); persist(); render(); window.scrollTo(0, 0);
+    }
+    else if (act === "toggleplans") { ui.plansOpen = !ui.plansOpen; refreshPlans(); }
+    else if (act === "toggleplan") { const id = rowId(b, "data-pid"); ui.openPlans[id] = !ui.openPlans[id]; refreshPlans(); }
+    else if (act === "sec") { const k = b.getAttribute("data-s"); sec[k] = !sec[k]; try { localStorage.setItem(LS_SEC, JSON.stringify(sec)); } catch (e) {} render(); }
     else if (act === "delplan") {
       const id = rowId(b, "data-pid");
       if (confirm("Delete this saved plan? Payments already recorded stay in the Debt Tracker.")) { wf.plans = wf.plans.filter(function (x) { return x.id !== id; }); if (wf.cur.id === id) wf.cur.id = null; persist(); render(); }
@@ -750,10 +818,11 @@
     if (JSON.stringify(debtState) !== before || wf.u !== wasWf) {
       const a = document.activeElement;
       if (!(a && a.closest && a.closest("#main") && a.tagName === "INPUT")) render(); // never re-render while typing
-    }
+      else refreshPlans();
+    } else refreshPlans();
   }
 
-  const APP_VERSION = 185;
+  const APP_VERSION = 186;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // Manual update only: shows a banner, never auto-reloads.
   async function checkForUpdate() {
