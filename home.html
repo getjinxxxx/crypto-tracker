@@ -245,7 +245,7 @@
   }
 
   // ---------- Version / update chip (dashboard right side; no bottom banner) ----------
-  const APP_VERSION = 182;
+  const APP_VERSION = 184;
   function setVersionChipIdle() {
     const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION;
     const chip = document.getElementById("versionChip");
@@ -370,40 +370,59 @@
   }
   // ---------- Left after debts (same pure logic as debt.html) ----------
   // Current cutoff = pay period containing today: 29th..13th = "13th", 14th..28th = "28th".
-  // Take-home: Salary module (latest saved net per cutoff) else manual value saved on the debt page.
-  function ladPick(hist, manual, cut) {
-    const pick = c => {
-      let best = null;
-      (Array.isArray(hist) ? hist : []).forEach(h => {
-        if (h && h.cutoff === c && num(h.net) > 0 && (!best || String(h.period || "") > String(best.period || ""))) best = h;
-      });
-      return best ? num(best.net) : 0;
-    };
-    const a = pick("1st"), b = pick("2nd");
-    if (a > 0 || b > 0) { const v1 = a > 0 ? a : b, v2 = b > 0 ? b : a; return { value: cut === "1st" ? v1 : v2 }; }
-    return { value: Math.max(0, num(String(manual == null ? "" : manual).replace(/[^0-9.]/g, ""))) };
+  // Take-home: Salary module entry for the SAME month (period "YYYY-MM") and cutoff ("1st" = 13th, "2nd" = 28th),
+  // i.e. the exact net pay Salary shows for it; no entry -> manual value saved on the debt page.
+  function ladPick(hist, manual, cut, key) {
+    let best = null;
+    (Array.isArray(hist) ? hist : []).forEach(h => {
+      if (h && h.cutoff === cut && h.period === key && num(h.net) > 0 && (!best || num(h.savedAt) >= num(best.savedAt))) best = h;
+    });
+    if (best) return { value: num(best.net), src: "salary" };
+    return { value: Math.max(0, num(String(manual == null ? "" : manual).replace(/[^0-9.]/g, ""))), src: "manual" };
   }
+  // Bills due inside the pay period of cutoff `cut` of month `key`: 29th..13th ("1st") or 14th..28th ("2nd"),
+  // the same periods as the "Due this cutoff" card on the debt page.
   function ladBills(st, key, cut) {
-    const [ky, km] = [parseInt(key.slice(0, 4), 10), parseInt(key.slice(5, 7), 10) - 1];
+    let a = 13, b = 28;
+    try { const j = JSON.parse(localStorage.getItem("debtCutoffDays") || "null"); if (j) { a = Math.round(Number(j.a)); b = Math.round(Number(j.b)); } } catch (e) {}
+    if (!(a >= 1 && a <= 28)) a = 13;
+    if (!(b === 0 || (b > a && b <= 31))) b = 28;
+    const ky = parseInt(key.slice(0, 4), 10), km = parseInt(key.slice(5, 7), 10) - 1;
+    const iso = (y, m, d) => { const t = new Date(y, m, d); return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); };
+    const dim = (y, m) => new Date(y, m + 1, 0).getDate();
+    const c2 = b ? Math.min(b, dim(ky, km)) : dim(ky, km);
+    let start, end;
+    if (cut === "1st") {
+      const pm = new Date(ky, km - 1, 1), pc2 = b ? Math.min(b, dim(pm.getFullYear(), pm.getMonth())) : dim(pm.getFullYear(), pm.getMonth());
+      start = pc2 >= dim(pm.getFullYear(), pm.getMonth()) ? iso(ky, km, 1) : iso(pm.getFullYear(), pm.getMonth(), pc2 + 1);
+      end = iso(ky, km, a);
+    } else { start = iso(ky, km, a + 1); end = iso(ky, km, c2); }
     const now = new Date(), nowKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
     let total = 0;
-    st.debts.forEach(d => {
-      const hasPlan = Array.isArray(d.plan) && d.plan.length > 0;
-      const terms = Math.max(1, num(d.terms)), amt = num(d.amount);
-      let active, per;
-      if (hasPlan) {
-        const es = d.plan.filter(p => p.key === key);
-        active = es.length > 0; per = es.reduce((s, p) => s + num(p.amount), 0);
-      } else {
+    const keys = [new Date(ky, km - 1, 1), new Date(ky, km, 1), new Date(ky, km + 1, 1)].map(t => ({ y: t.getFullYear(), m: t.getMonth(), k: t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") }));
+    keys.forEach(K => {
+      st.debts.forEach(d => {
+        const hasPlan = Array.isArray(d.plan) && d.plan.length > 0;
+        const terms = Math.max(1, num(d.terms)), amt = num(d.amount);
+        if (hasPlan) {
+          d.plan.forEach(p => {
+            if (p.key !== K.k) return;
+            const dt = iso(K.y, K.m, Math.min(Math.max(1, Math.round(num(p.payday)) || 1), dim(K.y, K.m)));
+            if (dt >= start && dt <= end && num(p.amount) > 0) total += num(p.amount);
+          });
+          return;
+        }
+        const dd = Math.round(num(d.dueDay));
+        if (!(dd >= 1 && dd <= 31)) return;
         const sk = d.startMonth || nowKey;
-        const idx = (ky - parseInt(sk.slice(0, 4), 10)) * 12 + (km - (parseInt(sk.slice(5, 7), 10) - 1));
-        active = idx < 0 ? false : (d.recurring ? (!d.endMonth || key <= d.endMonth) : idx < terms);
-        per = (terms > 1 && !d.recurring) ? amt / terms : amt;
-      }
-      if (!active) return;
-      const dd = num(d.dueDay);
-      if (dd >= 1 && dd <= 31 && ((dd <= 13) ? "1st" : "2nd") !== cut) return;
-      total += per;
+        const idx = (K.y - parseInt(sk.slice(0, 4), 10)) * 12 + (K.m - (parseInt(sk.slice(5, 7), 10) - 1));
+        const active = idx < 0 ? false : (d.recurring ? (!d.endMonth || K.k <= d.endMonth) : idx < terms);
+        if (!active) return;
+        const dt = iso(K.y, K.m, Math.min(dd, dim(K.y, K.m)));
+        if (dt < start || dt > end) return;
+        const per = (terms > 1 && !d.recurring) ? amt / terms : amt;
+        if (per > 0) total += per;
+      });
     });
     return total;
   }
@@ -416,7 +435,7 @@
     const t = new Date(now.getFullYear(), mo, 1);
     const key = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0");
     const hist = (DASH.salary && Array.isArray(DASH.salary.history)) ? DASH.salary.history : localState("salaryHistoryV1");
-    const tk = ladPick(hist, st.takeHome, cut).value;
+    const tk = ladPick(hist, st.takeHome, cut, key).value;
     const bills = ladBills(st, key, cut);
     return { cut: cut === "1st" ? "13th" : "28th", takeHome: tk, bills: bills, left: tk - bills };
   }

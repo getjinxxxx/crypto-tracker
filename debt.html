@@ -212,6 +212,7 @@
   .summary .srow .val.owed { color: var(--red); }
   .summary .srow .val.paid { color: var(--green); }
   .summary .srow .val.gold { color: var(--gold-bright); }
+  .summary .srow .val.rem { color: #b9b6ff; }
   .summary .big { font-size: 24px; font-weight: 800; }
   /* Take-home left after debts (explicit colors: theme.css may override the CSS vars) */
   .summary .th-sec { margin-top: 8px; padding-top: 8px; border-top: 1px solid #2e313d; }
@@ -583,6 +584,23 @@
   #cutoffCard.min { padding: 4px 8px 4px 12px; }
   #cutoffCard .cc-minrow { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e4e6ee; }
   #cutoffCard .cc-minrow span { flex: 1; min-width: 0; }
+  #cutoffCard .cc-row.subr { padding-left: 14px; background: #20222c; border-top-color: #2a2d38; }
+  #cutoffCard .cc-row.subr .nm { font-weight: 500; color: #dfe2ec; }
+  #cutoffCard .cc-row.grp .nm { cursor: pointer; }
+  /* Bank / wallet picker */
+  .bk { position: relative; width: 100%; max-width: 240px; }
+  .bk .bk-in { width: 100%; box-sizing: border-box; background: #16161a; color: #f2f2f7; border: 1px solid #3a3e4d; border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 14px; text-align: left; }
+  .bk .bk-in:focus { outline: none; border-color: #8f8cf5; }
+  .bk .bk-list { display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; max-height: 260px; overflow-y: auto; background: #1b1d26; border: 1px solid #3a3e4d; border-radius: 10px; z-index: 50; }
+  .bk.open .bk-list { display: block; }
+  .bk .bk-grp { position: sticky; top: 0; background: #23252f; color: #c9ccd8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 6px 10px; }
+  .bk .bk-opt { display: block; width: 100%; text-align: left; background: transparent; border: 0; border-top: 1px solid #2a2d38; color: #f2f2f7; font: inherit; font-size: 14px; padding: 0 10px; min-height: 40px; cursor: pointer; }
+  .bk .bk-opt:hover, .bk .bk-opt:focus { background: #2a2d3a; outline: none; }
+  .bk .bk-opt.other { color: #b9b6ff; font-weight: 600; }
+  .bk .bk-none { padding: 10px; color: #a9aebd; font-size: 13px; }
+  .edit-panel .bk { max-width: 200px; }
+  .edit-panel .bk .bk-in, .edit-panel input.bk-text { text-align: left; }
+  .edit-panel input.bk-text { width: 100%; box-sizing: border-box; margin-top: 4px; }
   #ccToast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #2a2d3a; color: #f2f2f7; border: 1px solid #3a3e4d;
     border-radius: 10px; padding: 4px 6px 4px 14px; font-size: 13px; z-index: 9999; display: flex; align-items: center; gap: 10px; }
   #ccToast button { background: transparent; border: 0; color: #b9b6ff; font-weight: 700; min-height: 36px; padding: 0 10px; cursor: pointer; }
@@ -642,9 +660,10 @@
 
     <!-- SUMMARY -->
     <div class="summary">
-      <div class="srow"><div class="lbl">Due this month</div><div class="val owed big" id="sumMonthDue">PHP 0.00</div></div>
-      <div class="srow"><div class="lbl">Paid this month</div><div class="val paid" id="sumMonthPaid">PHP 0.00</div></div>
-      <div class="srow"><div class="lbl">Remaining this month</div><div class="val gold" id="sumMonthRemaining">PHP 0.00</div></div>
+      <div class="th-note" id="sumRange" style="margin:0 0 2px"></div>
+      <div class="srow"><div class="lbl" id="sumLblDue">Due this month</div><div class="val owed big" id="sumMonthDue">PHP 0.00</div></div>
+      <div class="srow"><div class="lbl" id="sumLblPaid">Paid this month</div><div class="val paid" id="sumMonthPaid">PHP 0.00</div></div>
+      <div class="srow"><div class="lbl" id="sumLblRem">Remaining this month</div><div class="val rem" id="sumMonthRemaining">PHP 0.00</div></div>
       <div class="srow"><div class="lbl">Total remaining (all debts)</div><div class="val owed" id="sumTotalRemaining">PHP 0.00</div></div>
       <div class="th-sec" id="thSec">
         <div class="th-head"><span class="th-ttl">Take-home left</span><button type="button" class="th-min" id="thMin" title="Minimize" aria-label="Minimize">&minus;</button></div>
@@ -652,9 +671,9 @@
           <div class="srow"><div class="lbl">Take-home per cutoff</div><div class="th-in-wrap"><span>PHP</span><input type="text" inputmode="decimal" id="thInput" placeholder="0.00" aria-label="Take-home per cutoff (PHP)" /></div></div>
           <div class="th-note" id="thSrc"></div>
           <div class="srow"><div class="lbl" id="thLbl">Take-home</div><div class="val" id="thVal">PHP 0.00</div></div>
-          <div class="srow"><div class="lbl">- Bills this cutoff</div><div class="val owed" id="thBills">PHP 0.00</div></div>
+          <div class="srow"><div class="lbl" id="thBillsLbl">- Bills this cutoff</div><div class="val owed" id="thBills">PHP 0.00</div></div>
           <div class="th-total"><span class="th-lbl">LEFT AFTER DEBTS</span><span class="th-amt th-ok" id="thLeft">PHP 0.00</span></div>
-          <div class="th-note">Take-home minus all bills due this cutoff.</div>
+          <div class="th-note" id="thNote">Take-home minus all bills due this cutoff.</div>
         </div>
         <div class="th-minline"><span id="thMinTxt">Left after debts - PHP 0.00</span><button type="button" class="th-min" id="thExp" title="Expand" aria-label="Expand">+</button></div>
       </div>
@@ -777,9 +796,17 @@
           <option value="other">Other</option>
         </select>
       </div>
-      <div class="field">
+      <div class="field" id="bankField" style="display:none">
+        <label>Bank / wallet / lender<span class="sub">search or pick from the list</span></label>
+        <div id="bkAddWrap"></div>
+      </div>
+      <div class="field" id="nameField">
         <label>Name / label<span class="sub">name of the debt, e.g. Jollibee, BPI Visa</span></label>
         <input type="text" class="name-in" id="newName" placeholder="e.g. Jollibee, Grab, BPI Visa" />
+      </div>
+      <div class="field" id="bankNoteField" style="display:none">
+        <label>Label / note<span class="sub">optional, e.g. loan #1</span></label>
+        <input type="text" class="name-in" id="newNote" placeholder="e.g. loan #1" />
       </div>
       <div class="field">
         <label>Total amount owed<span class="sub">principal (or amount per month if recurring)</span></label>
@@ -1104,6 +1131,84 @@
   function subLabel(s) { return SUBCATS[s] || ""; }
   function usesSubCat(category) { return category === "creditcard" || category === "person"; }
 
+  // ---------- Bank / wallet / lender picker (credit card, bank loan, online loan/BNPL) ----------
+  const BANK_CATS = ["creditcard", "bankloan", "onlineloan"];
+  const BANK_GROUPS = [
+    { g: "Banks", items: ["BDO", "BPI", "Metrobank", "Landbank", "PNB", "Security Bank", "UnionBank", "RCBC", "China Bank", "EastWest", "AUB", "PSBank", "Bank of Commerce", "Robinsons Bank", "Maybank PH", "HSBC PH", "Citi (now UnionBank)", "Standard Chartered", "DBP", "Sterling Bank", "PBCom", "Philtrust", "UCPB", "CTBC"] },
+    { g: "Digital banks", items: ["GoTyme", "Maya Bank", "CIMB", "Tonik", "SeaBank", "UNO Digital", "UnionDigital", "Diskartech", "OFBank", "Netbank", "Komo"] },
+    { g: "E-wallets / BNPL / lenders", items: ["GCash", "GLoan", "GGives", "GCredit", "Maya", "Maya Credit", "Maya PayLater", "ShopeePay", "SPayLater", "Lazada PayLater/LazPayLater", "Atome", "BillEase", "Home Credit", "Grab PayLater", "TendoPay", "Cashalo", "Tala", "Digido", "JuanHand", "Kviku", "MoneyCat", "Akulaku", "Coins.ph"] }
+  ];
+  const BANK_OTHER = "__other", BANK_OTHER_LABEL = "Other (type your own)";
+  function bankCanon(name) {
+    const n = String(name || "").trim().toLowerCase();
+    if (!n) return "";
+    for (const g of BANK_GROUPS) for (const it of g.items) if (it.toLowerCase() === n) return it;
+    return "";
+  }
+  function bkHtml(id, val) {
+    const shown = val === BANK_OTHER ? BANK_OTHER_LABEL : (val || "");
+    return '<div class="bk" data-bk="' + id + '" data-val="' + escH(val || "") + '">' +
+      '<input type="text" class="bk-in" autocomplete="off" placeholder="Search bank / wallet\u2026" aria-label="Bank, wallet or lender" value="' + escH(shown) + '">' +
+      '<div class="bk-list"></div></div>';
+  }
+  function bkGet(root) { return root ? (root.getAttribute("data-val") || "") : ""; }
+  function bkSet(root, val) {
+    if (!root) return;
+    root.setAttribute("data-val", val || "");
+    root.querySelector(".bk-in").value = val === BANK_OTHER ? BANK_OTHER_LABEL : (val || "");
+    root.classList.remove("open");
+    root.dispatchEvent(new CustomEvent("bkchange", { bubbles: true }));
+  }
+  function bkRenderList(root, q) {
+    const f = String(q || "").trim().toLowerCase();
+    let h = "";
+    BANK_GROUPS.forEach(g => {
+      const its = g.items.filter(x => !f || x.toLowerCase().indexOf(f) >= 0);
+      if (!its.length) return;
+      h += '<div class="bk-grp">' + escH(g.g) + '</div>' + its.map(x => '<button type="button" class="bk-opt" data-bkopt="' + escH(x) + '">' + escH(x) + '</button>').join("");
+    });
+    h += '<button type="button" class="bk-opt other" data-bkopt="' + BANK_OTHER + '">' + BANK_OTHER_LABEL + '</button>';
+    root.querySelector(".bk-list").innerHTML = h;
+  }
+  (function () {
+    function closeAll(except) { document.querySelectorAll(".bk.open").forEach(b => { if (b !== except) { b.classList.remove("open"); const v = bkGet(b); b.querySelector(".bk-in").value = v === BANK_OTHER ? BANK_OTHER_LABEL : v; } }); }
+    document.addEventListener("focusin", (e) => {
+      const inp = e.target.closest && e.target.closest(".bk-in");
+      if (!inp) return;
+      const root = inp.closest(".bk");
+      closeAll(root);
+      if (!root.classList.contains("open")) { bkRenderList(root, ""); root.classList.add("open"); inp.select(); }
+    });
+    document.addEventListener("input", (e) => {
+      const inp = e.target.closest && e.target.closest(".bk-in");
+      if (!inp) return;
+      const root = inp.closest(".bk");
+      bkRenderList(root, inp.value); root.classList.add("open");
+    });
+    document.addEventListener("click", (e) => {
+      const opt = e.target.closest && e.target.closest("[data-bkopt]");
+      if (opt) { bkSet(opt.closest(".bk"), opt.getAttribute("data-bkopt")); return; }
+      const bin = e.target.closest && e.target.closest(".bk-in");
+      if (bin) { const r = bin.closest(".bk"); if (!r.classList.contains("open")) { closeAll(r); bkRenderList(r, ""); r.classList.add("open"); bin.select(); } return; }
+      if (!(e.target.closest && e.target.closest(".bk"))) closeAll(null);
+    });
+  })();
+  // Preselect for an existing debt: saved bank, else exact list match, else "Other" with the old name.
+  function bankStateOf(d) {
+    const nm = (d.name || "").trim();
+    const b = bankCanon(d.bank) || "";
+    if (b) return { val: b, note: d.bnote || "", text: "" };
+    const c = bankCanon(nm);
+    if (c) return { val: c, note: "", text: "" };
+    return { val: nm ? BANK_OTHER : "", note: "", text: nm };
+  }
+  function bankEditHtml(d) {
+    const s = bankStateOf(d), isOther = s.val === BANK_OTHER;
+    return '<div class="efield" style="align-items:flex-start"><label>Bank / wallet</label><div style="flex:1;max-width:200px">' + bkHtml("e-" + d.id, s.val) +
+      '<input type="text" class="bk-text" data-ebktext="' + d.id + '" placeholder="Type name" value="' + escH(s.text) + '" style="' + (isOther ? "" : "display:none") + '">' + '</div></div>' +
+      '<div class="efield" data-ebknotewrap="' + d.id + '" style="' + (s.val && !isOther ? "" : "display:none") + '"><label>Label / note<span class="sub">optional</span></label><input type="text" data-ebknote="' + d.id + '" placeholder="e.g. loan #1" value="' + escH(s.note) + '" style="text-align:left"></div>';
+  }
+
   function num(v) {
     if (v == null) return 0;
     const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
@@ -1230,65 +1335,90 @@
     document.getElementById("addMonthLabel").textContent = monthLabel(viewMonth);
   }
 
+  // Pay period (start/end ISO) of the 13th ("1st") or 28th ("2nd") cutoff of the month being viewed.
+  // Same periods as the "Due this cutoff" card: 29th..13th and 14th..28th.
+  function cutPeriodFor(cut) {
+    const cd = loadCutDays(), [y, m0] = parseKey(viewMonth);
+    const day = cut === "1st" ? cd.a : cutEndDay(cd, y, m0);
+    return periodOf(isoD(y, m0, day));
+  }
   function renderSummary() {
-    // This-month figures: debts active this month, their per-term amount.
+    // Month figures: debts active this month, their per-term amount.
     let monthDue = 0, monthPaid = 0, totalRemaining = 0;
     state.debts.forEach(d => {
       totalRemaining += remainingOf(d);
-      if (isActiveIn(d, viewMonth) && passesCutoffFilter(d)) {
+      if (isActiveIn(d, viewMonth)) {
         // perTermOf is plan-aware (split paydays this month), recurring-aware, and term-aware,
         // so it gives the correct amount due THIS MONTH for every kind of debt.
         monthDue += perTermOf(d);
         monthPaid += paidOfMonth(d); // counts partials too
       }
     });
-    document.getElementById("sumMonthDue").textContent = peso(monthDue);
-    document.getElementById("sumMonthPaid").textContent = peso(monthPaid);
-    document.getElementById("sumMonthRemaining").textContent = peso(Math.max(0, monthDue - monthPaid));
+    const cut = cutoffFilter;
+    let due = monthDue, paid = monthPaid, rem = Math.max(0, monthDue - monthPaid), word = "month", range = "";
+    if (cut === "1st" || cut === "2nd") {
+      // Per cutoff: only bills whose due date falls inside that pay period.
+      const P = cutPeriodFor(cut), occ = occurrencesIn(P.start, P.end);
+      due = occ.reduce((s, o) => s + o.full, 0);
+      rem = occ.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0);
+      paid = Math.max(0, due - rem);
+      word = "cutoff";
+      range = (cut === "1st" ? "13th" : "28th") + " cutoff \u00b7 " + rangeLabel(P);
+    } else {
+      range = "Whole month \u00b7 " + monthLabel(viewMonth);
+    }
+    document.getElementById("sumLblDue").textContent = "Due this " + word;
+    document.getElementById("sumLblPaid").textContent = "Paid this " + word;
+    document.getElementById("sumLblRem").textContent = "Remaining this " + word;
+    document.getElementById("sumRange").textContent = range;
+    document.getElementById("sumMonthDue").textContent = peso(due);
+    document.getElementById("sumMonthPaid").textContent = peso(paid);
+    document.getElementById("sumMonthRemaining").textContent = peso(rem);
     document.getElementById("sumTotalRemaining").textContent = peso(totalRemaining);
-    renderTakeHome(monthDue);
+    renderTakeHome(due);
   }
 
   // ---------- Take-home left after debts (same pure logic is duplicated in home.html) ----------
-  // Source: Salary module history (salaryHistoryV1, latest saved net per cutoff: "1st" = 13th, "2nd" = 28th).
-  // If a cutoff has no saved net, the other cutoff's value is used. No salary data -> manual value.
-  function thPick(hist, manual, cut) {
+  // Source: Salary module history (salaryHistoryV1). The entry must match the viewed month (period "YYYY-MM")
+  // AND the cutoff ("1st" = 13th, "2nd" = 28th), exactly like the Salary page's saved net pay.
+  // A cutoff with no saved entry falls back to the manual amount (input enabled).
+  function thPick(hist, manual, cut, key) {
     const pick = c => {
       let best = null;
       (Array.isArray(hist) ? hist : []).forEach(h => {
-        if (h && h.cutoff === c && num(h.net) > 0 && (!best || String(h.period || "") > String(best.period || ""))) best = h;
+        if (h && h.cutoff === c && h.period === key && num(h.net) > 0 && (!best || num(h.savedAt) >= num(best.savedAt))) best = h;
       });
       return best ? num(best.net) : 0;
     };
-    const a = pick("1st"), b = pick("2nd");
-    if (a > 0 || b > 0) {
-      const v1 = a > 0 ? a : b, v2 = b > 0 ? b : a;
-      return { src: "salary", v1: v1, v2: v2, value: cut === "1st" ? v1 : cut === "2nd" ? v2 : v1 + v2 };
-    }
     const m = Math.max(0, num(manual));
-    return { src: "manual", v1: m, v2: m, value: cut === "all" ? m * 2 : m };
+    const s1 = pick("1st"), s2 = pick("2nd");
+    const v1 = s1 > 0 ? s1 : m, v2 = s2 > 0 ? s2 : m;
+    const missing = (cut === "1st") ? !(s1 > 0) : (cut === "2nd") ? !(s2 > 0) : !(s1 > 0 && s2 > 0);
+    return { src: missing ? "manual" : "salary", missing: missing, v1: v1, v2: v2, value: cut === "1st" ? v1 : cut === "2nd" ? v2 : v1 + v2 };
   }
   function thMin() { try { return localStorage.getItem("debtTakeHomeMin") === "1"; } catch (e) { return false; } }
   function renderTakeHome(billsDue) {
     const sec = document.getElementById("thSec");
     if (!sec) return;
     const cut = cutoffFilter;
-    const r = thPick(loadSalaryHistory(), state.takeHome, cut);
+    const r = thPick(loadSalaryHistory(), state.takeHome, cut, viewMonth);
     const left = r.value - billsDue;
     const cls = left >= 0 ? "th-amt th-ok" : "th-amt th-neg";
     const inp = document.getElementById("thInput");
-    const shownOne = (cut === "all") ? (new Date().getDate() <= 13 ? r.v1 : r.v2) : (cut === "1st" ? r.v1 : r.v2);
-    if (r.src === "salary") {
+    const lbl = cut === "1st" ? "13th" : cut === "2nd" ? "28th" : "13th + 28th";
+    const per = monthLabel(viewMonth) + " " + lbl;
+    if (!r.missing) {
       inp.disabled = true;
-      inp.value = shownOne.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      document.getElementById("thSrc").textContent = "From Salary module";
+      inp.value = (cut === "all" ? r.value : cut === "1st" ? r.v1 : r.v2).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      document.getElementById("thSrc").textContent = "From Salary module \u00b7 " + per;
     } else {
       inp.disabled = false;
       if (document.activeElement !== inp) inp.value = state.takeHome || "";
-      document.getElementById("thSrc").textContent = "No salary saved yet \u2014 enter your take-home per cutoff.";
+      document.getElementById("thSrc").textContent = "No salary saved for " + per + " \u2014 using the amount you enter (per cutoff).";
     }
-    const lbl = cut === "1st" ? "13th" : cut === "2nd" ? "28th" : "13th + 28th";
     document.getElementById("thLbl").textContent = "Take-home (" + lbl + ")";
+    document.getElementById("thBillsLbl").textContent = cut === "all" ? "- Bills this month" : "- Bills this cutoff";
+    document.getElementById("thNote").textContent = cut === "all" ? "Take-home of both cutoffs minus all bills due this month." : "Take-home minus all bills due this cutoff.";
     document.getElementById("thVal").textContent = peso(r.value);
     document.getElementById("thBills").textContent = peso(billsDue);
     const el = document.getElementById("thLeft");
@@ -1390,6 +1520,7 @@
       '</div>' +
       // inline edit panel for this item
       '<div class="edit-panel" id="edit-' + d.id + '" style="display:none">' +
+        (BANK_CATS.indexOf(d.category) >= 0 ? bankEditHtml(d) : '') +
         '<div class="efield"><label>Amount' + (d.recurring ? ' (per month)' : '') + '</label><input type="text" inputmode="decimal" data-eamt="' + d.id + '" value="' + num(d.amount) + '"></div>' +
         '<div class="efield"><label>Due date (1-31)</label><input type="number" inputmode="numeric" min="1" max="31" data-edue="' + d.id + '" value="' + (d.dueDay || "") + '"></div>' +
         (d.recurring ? '' :
@@ -1666,6 +1797,14 @@
       if (!d) return;
       const amt = num(el.querySelector('[data-eamt="' + id + '"]').value);
       if (amt <= 0) return;
+      const bkRoot = el.querySelector('[data-bk="e-' + id + '"]');
+      if (bkRoot) {
+        const bv = bkGet(bkRoot);
+        let nn = "", bank = "", bnote = "";
+        if (bv === BANK_OTHER) nn = el.querySelector('[data-ebktext="' + id + '"]').value.trim();
+        else if (bv) { bank = bv; bnote = el.querySelector('[data-ebknote="' + id + '"]').value.trim(); nn = bank + (bnote ? " " + bnote : ""); }
+        if (nn && nn !== (d.name || "")) { d.name = nn; d.bank = bank; d.bnote = bnote; }
+      }
       d.amount = amt;
       const dueEl = el.querySelector('[data-edue="' + id + '"]');
       if (dueEl) { let dd = Math.round(num(dueEl.value)); d.dueDay = (dd >= 1 && dd <= 31) ? dd : 0; }
@@ -2379,7 +2518,15 @@
   function addDebt() {
     const category = document.getElementById("newCategory").value;
     const person = document.getElementById("newPerson").value.trim();
-    const name = document.getElementById("newName").value.trim();
+    let name = document.getElementById("newName").value.trim();
+    let bank = "", bnote = "";
+    if (BANK_CATS.indexOf(category) >= 0) {
+      const bv = bkGet(document.querySelector('[data-bk="add"]'));
+      if (bv && bv !== BANK_OTHER) {
+        bank = bv; bnote = document.getElementById("newNote").value.trim();
+        name = bank + (bnote ? " " + bnote : "");
+      }
+    }
     const subCat = usesSubCat(category) ? document.getElementById("newSubCat").value : "";
     const amount = num(document.getElementById("newAmount").value);
     let dueDay = Math.round(num(document.getElementById("newDueDay").value));
@@ -2392,7 +2539,9 @@
     if (category === "person") {
       if (!person) { document.getElementById("newPerson").focus(); return; }
     } else if (!name) {
-      document.getElementById("newName").focus(); return;
+      if (BANK_CATS.indexOf(category) >= 0 && bkGet(document.querySelector('[data-bk="add"]')) !== BANK_OTHER) document.querySelector('[data-bk="add"] .bk-in').focus();
+      else document.getElementById("newName").focus();
+      return;
     }
     if (amount <= 0) { document.getElementById("newAmount").focus(); return; }
 
@@ -2414,11 +2563,14 @@
       date: today, createdAt: Date.now()
     };
     if (plan) entry.plan = plan;
+    if (bank) { entry.bank = bank; entry.bnote = bnote; }
     state.debts.push(entry);
     saveState();
 
     document.getElementById("newPerson").value = "";
     document.getElementById("newName").value = "";
+    document.getElementById("newNote").value = "";
+    bkSet(document.querySelector('[data-bk="add"]'), "");
     document.getElementById("newAmount").value = "";
     document.getElementById("newDueDay").value = "";
     document.getElementById("newRecurring").checked = false;
@@ -2939,7 +3091,25 @@
     function refreshFields() {
       personField.style.display = (catSel.value === "person") ? "" : "none";
       subCatField.style.display = usesSubCat(catSel.value) ? "" : "none";
+      const bankType = BANK_CATS.indexOf(catSel.value) >= 0;
+      const bv = bkGet(document.querySelector('[data-bk="add"]'));
+      document.getElementById("bankField").style.display = bankType ? "" : "none";
+      document.getElementById("nameField").style.display = (!bankType || bv === BANK_OTHER) ? "" : "none";
+      document.getElementById("bankNoteField").style.display = (bankType && bv && bv !== BANK_OTHER) ? "" : "none";
     }
+    document.getElementById("bkAddWrap").innerHTML = bkHtml("add", "");
+    document.addEventListener("bkchange", (e) => {
+      const r = e.target;
+      const key = r.getAttribute("data-bk") || "";
+      if (key === "add") { refreshFields(); return; }
+      if (key.indexOf("e-") === 0) {
+        const id = key.slice(2), v = bkGet(r), panel = r.closest(".edit-panel");
+        if (!panel) return;
+        const tx = panel.querySelector('[data-ebktext="' + id + '"]'), nw = panel.querySelector('[data-ebknotewrap="' + id + '"]');
+        if (tx) tx.style.display = v === BANK_OTHER ? "" : "none";
+        if (nw) nw.style.display = (v && v !== BANK_OTHER) ? "" : "none";
+      }
+    });
     catSel.addEventListener("change", refreshFields);
     refreshFields();
 
@@ -3039,6 +3209,15 @@
     if (d.category === "person" && d.person) return d.person + (nm ? " \u00b7 " + nm : "");
     return nm || d.person || catLabel(d.category);
   }
+  // Group key = the part before " \u00b7 " in debtDisplayName (the person, or the debt name); item = the part after it.
+  function grpOf(d) {
+    const nm = (d.name && d.name.trim()) ? d.name.trim() : "";
+    return (d.category === "person" && d.person) ? d.person : (nm || d.person || catLabel(d.category));
+  }
+  function itemOf(d) {
+    const nm = (d.name && d.name.trim()) ? d.name.trim() : "";
+    return nm || grpOf(d);
+  }
   function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
   // All dated payments falling inside [start, end] (inclusive ISO dates).
   function occurrencesIn(start, end) {
@@ -3055,7 +3234,7 @@
             if (date < start || date > end) return;
             const full = num(p.amount);
             if (full <= 0) return;
-            out.push({ id: d.id, key: key, pi: pi, date: date, name: debtDisplayName(d), full: full,
+            out.push({ id: d.id, key: key, pi: pi, date: date, name: debtDisplayName(d), grp: grpOf(d), item: itemOf(d), full: full,
               amount: p.paid ? full : full, paid: !!p.paid, over: false, recurring: false });
           });
           return;
@@ -3069,7 +3248,7 @@
         const checked = multi ? !!(d.paidTerms && d.paidTerms[key]) : !!d.paid;
         const part = multi ? (num((d.paidAmt || {})[key]) || 0) : (num(d.paidOnce) || 0);
         const paid = checked || part >= full - 0.009;
-        out.push({ id: d.id, key: key, pi: -1, date: date, name: debtDisplayName(d), full: full,
+        out.push({ id: d.id, key: key, pi: -1, date: date, name: debtDisplayName(d), grp: grpOf(d), item: itemOf(d), full: full,
           amount: paid ? full : Math.max(0, full - part), paid: paid, over: false, recurring: !!d.recurring });
       });
     }
@@ -3111,12 +3290,34 @@
   }
   function rangeLabel(r) { return shortDate(r.start) + " \u2013 " + shortDate(r.end); }
   function sumDue(list) { return list.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0); }
-  function cutRowHtml(o, noAct) {
+  var cutOpenGrp = {}; // "scope|group key" -> expanded
+  // Merge rows of the same person/debt (one row per group, expandable to its items).
+  function cutGroupsHtml(list, noAct, scope) {
+    const order = [], map = {};
+    list.forEach(o => { const k = String(o.grp).toLowerCase(); if (!map[k]) { map[k] = []; order.push(k); } map[k].push(o); });
+    return order.map(k => {
+      const g = map[k];
+      if (g.length === 1) return cutRowHtml(g[0], noAct);
+      const gk = scope + "|" + k, open = !!cutOpenGrp[gk];
+      const allPaid = g.every(o => o.paid), anyOver = g.some(o => o.over && !o.paid);
+      const date = g.reduce((m, o) => o.date < m ? o.date : m, g[0].date);
+      const total = allPaid ? g.reduce((s, o) => s + o.full, 0) : sumDue(g);
+      const ids = g.filter(o => !o.paid).map(o => o.id + "|" + o.key + "|" + o.pi).join(";");
+      const circ = allPaid ? '<span class="cc-circle done" title="All paid"><i>\u2713</i></span>'
+        : (noAct ? '<span class="cc-circle" style="cursor:default"></span>' : '<button class="cc-circle" title="Mark all paid" aria-label="Mark all paid" data-ccpayg="' + escH(ids) + '"><i></i></button>');
+      return '<div class="cc-row grp ' + (allPaid ? "paid" : (anyOver ? "over" : "")) + '">' +
+        '<span class="dt">' + shortDate(date) + '</span>' +
+        '<span class="nm" role="button" tabindex="0" data-ccgrp="' + escH(gk) + '" aria-expanded="' + open + '">' + (open ? "\u25BE " : "\u25B8 ") + escH(g[0].grp) + ' (' + g.length + ')</span>' +
+        '<span class="am">' + peso(total) + '</span>' + circ + '</div>' +
+        (open ? g.map(o => cutRowHtml(o, noAct, o.item, true)).join("") : "");
+    }).join("");
+  }
+  function cutRowHtml(o, noAct, label, isSub) {
     const circ = o.paid ? '<span class="cc-circle done" title="Paid"><i>\u2713</i></span>'
       : (noAct ? '<span class="cc-circle" style="cursor:default"></span>' : '<button class="cc-circle" title="Mark paid" aria-label="Mark paid" data-ccpay="' + escH(o.id) + '|' + o.key + '|' + o.pi + '"><i></i></button>');
-    return '<div class="cc-row ' + (o.paid ? "paid" : (o.over ? "over" : "")) + '">' +
+    return '<div class="cc-row ' + (isSub ? "subr " : "") + (o.paid ? "paid" : (o.over ? "over" : "")) + '">' +
       '<span class="dt">' + shortDate(o.date) + '</span>' +
-      '<span class="nm">' + escH(o.name) + '</span>' +
+      '<span class="nm">' + escH(label || o.name) + '</span>' +
       '<span class="am">' + peso(o.amount) + '</span>' + circ + '</div>';
   }
   function cutMin() { try { return localStorage.getItem("debtCutoffMin") === "1"; } catch (e) { return false; } }
@@ -3153,15 +3354,15 @@
     h += '<div class="cc-total">' + peso(total) + '</div>' +
       '<div class="cc-sub">' + c.list.length + ' bill' + (c.list.length === 1 ? "" : "s") + ' \u00b7 ' + paidCnt + ' paid \u00b7 ' + (daysLeft <= 0 ? "ends today" : daysLeft + " day" + (daysLeft === 1 ? "" : "s") + " left") + '</div>';
     if (c.over.length) {
-      h += '<div class="cc-sec">\u258C Overdue \u00b7 ' + peso(overTotal) + '</div>' + c.over.map(o => cutRowHtml(o)).join("");
+      h += '<div class="cc-sec">\u258C Overdue \u00b7 ' + peso(overTotal) + '</div>' + cutGroupsHtml(c.over, false, "over");
     }
-    h += c.list.length ? c.list.map(o => cutRowHtml(o)).join("") : '<div class="cc-empty">Nothing due this cutoff</div>';
+    h += c.list.length ? cutGroupsHtml(c.list, false, "cur") : '<div class="cc-empty">Nothing due this cutoff</div>';
     h += '<div class="cc-next" id="ccNext"><span>' + (cutNextOpen ? "\u25BE" : "\u25B8") + ' Next cutoff (' + rangeLabel(c.N) + ')</span><span>' + peso(sumDue(c.next)) + '</span></div>';
-    if (cutNextOpen) h += c.next.length ? c.next.map(o => cutRowHtml(o, true)).join("") : '<div class="cc-empty">Nothing due next cutoff</div>';
+    if (cutNextOpen) h += c.next.length ? cutGroupsHtml(c.next, true, "next") : '<div class="cc-empty">Nothing due next cutoff</div>';
     el.innerHTML = h;
   }
   // Mark an occurrence paid using the same fields the row checkbox / plan checkbox set.
-  function markCutPaid(id, key, pi) {
+  function markCutPaid(id, key, pi, defer) {
     const d = state.debts.find(x => x.id === id);
     if (!d) return;
     if (pi >= 0) {
@@ -3174,7 +3375,7 @@
     } else {
       d.paid = true; d.paidOnce = 0;
     }
-    saveState(); renderAll();
+    if (!defer) { saveState(); renderAll(); }
   }
   (function () {
     const el = document.getElementById("cutoffCard");
@@ -3193,6 +3394,21 @@
         });
         return;
       }
+      const payg = t.closest && t.closest("[data-ccpayg]");
+      if (payg) {
+        const items = payg.getAttribute("data-ccpayg").split(";").filter(Boolean).map(s => s.split("|"));
+        const snaps = {};
+        items.forEach(p => { const dd = state.debts.find(x => x.id === p[0]); if (dd && !snaps[p[0]]) snaps[p[0]] = JSON.stringify(dd); });
+        items.forEach(p => markCutPaid(p[0], p[1], parseInt(p[2], 10), true));
+        saveState(); renderAll();
+        ccToast("Marked " + items.length + " paid", function () {
+          Object.keys(snaps).forEach(id => { const i = state.debts.findIndex(x => x.id === id); if (i >= 0) state.debts[i] = JSON.parse(snaps[id]); });
+          saveState(); renderAll();
+        });
+        return;
+      }
+      const grpEl = t.closest && t.closest("[data-ccgrp]");
+      if (grpEl) { const k = grpEl.getAttribute("data-ccgrp"); cutOpenGrp[k] = !cutOpenGrp[k]; renderCutoffCard(); return; }
       if (t.closest && t.closest("#ccMin")) {
         try { localStorage.setItem("debtCutoffMin", cutMin() ? "0" : "1"); } catch (er) {}
         renderCutoffCard(); return;
@@ -3210,7 +3426,7 @@
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 182;
+  const APP_VERSION = 184;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
