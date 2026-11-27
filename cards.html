@@ -305,6 +305,19 @@ var CE = (function () {
     return b;
   }
   function util(bal, limit) { return bal > 0 && limit > 0 ? Math.round(bal * 1000 / limit) / 10 : 0; }
+  // Default Pay-on = latest payday (13th or 28th) on or before the due date.
+  function payDefault(due) {
+    var p = parseIso(due), y = p[0], m = p[1], d = p[2];
+    if (d >= 28) return isoD(y, m, 28);
+    if (d >= 13) return isoD(y, m, 13);
+    return isoD(y, m - 1, 28);
+  }
+  // Effective payday for a statement: saved choice (never after due date) or the default.
+  function payOf(S, cardId, key, due) {
+    var v = S && S.payOn && S.payOn[cardId + "|" + key], def = payDefault(due);
+    if (typeof v === "string" && /^\d{4}-\d{2}-(13|28)$/.test(v) && v <= due) return v;
+    return def;
+  }
   function snapshot(S, today) {
     var owed = 0, spent = 0, stmts = [], next = null, mk = keyOf(today), prevFirst = keyAdd(mk, -1) + "-01";
     for (var c = 0; c < S.cards.length; c++) {
@@ -320,7 +333,7 @@ var CE = (function () {
       for (i = 0; i < list.length; i++) {
         s = list[i];
         if (s.remaining > 0 || (i >= list.length - 3 && s.due >= prevFirst)) {
-          stmts.push({ cardId: card.id, card: card.nickname, key: s.key, due: s.due, total: s.total, remaining: s.remaining, status: s.status });
+          stmts.push({ cardId: card.id, card: card.nickname, key: s.key, due: s.due, pay: payOf(S, card.id, s.key, s.due), total: s.total, remaining: s.remaining, status: s.status });
           if (s.remaining > 0 && (!next || s.due < next.date)) next = { cardId: card.id, card: card.nickname, date: s.due, amt: s.remaining };
         }
       }
@@ -329,7 +342,7 @@ var CE = (function () {
   }
   return { dim: dim, isoD: isoD, parseIso: parseIso, addMonthsIso: addMonthsIso, keyOf: keyOf, keyAdd: keyAdd, closeDay: closeDay,
     stmtKeyOf: stmtKeyOf, stmtDates: stmtDates, instPmt: instPmt, instSchedule: instSchedule, postings: postings,
-    statements: statements, balance: balance, util: util, snapshot: snapshot };
+    statements: statements, balance: balance, util: util, snapshot: snapshot, payDefault: payDefault, payOf: payOf };
 })();
 // ===== END CARD ENGINE =====
 </script>
@@ -1183,7 +1196,7 @@ var CE = (function () {
     window.addEventListener("focus", refreshAll);
   }
 
-  const APP_VERSION = 190;
+  const APP_VERSION = 191;
   function setFooterVersion() { const fv = $("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // Manual update only: shows a banner, never auto-reloads.
   async function checkForUpdate() {

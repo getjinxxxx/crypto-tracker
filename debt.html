@@ -382,6 +382,10 @@
   .cs-pill.over { background: rgba(255,107,107,0.18); color: #ff9a9a; }
   .cs-pill.part { background: rgba(143,140,245,0.2); color: #b6b4ff; }
   .cs-pill.open { background: rgba(79,140,255,0.18); color: #9db8ff; }
+  .cs-pay { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; color: #c9cdd9; }
+  .cs-pay select { background: #262938; color: #f2f2f7; border: 1px solid #3a3e55; border-radius: 8px; padding: 5px 8px; font: inherit; font-size: 12.5px; max-width: 190px; }
+  .cs-due { color: #a9aebd; font-size: 12px; }
+  .cs-warn { margin-top: 4px; color: #ff9a9a; font-size: 12px; font-weight: 600; }
   .cs-act { display: flex; gap: 8px; margin-top: 8px; }
   .cs-btn { background: #262938; color: #b6b4ff; border: 1px solid #3a3e55; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .cs-dup-r { min-width: 0; }
@@ -1092,6 +1096,19 @@ var CE = (function () {
     return b;
   }
   function util(bal, limit) { return bal > 0 && limit > 0 ? Math.round(bal * 1000 / limit) / 10 : 0; }
+  // Default Pay-on = latest payday (13th or 28th) on or before the due date.
+  function payDefault(due) {
+    var p = parseIso(due), y = p[0], m = p[1], d = p[2];
+    if (d >= 28) return isoD(y, m, 28);
+    if (d >= 13) return isoD(y, m, 13);
+    return isoD(y, m - 1, 28);
+  }
+  // Effective payday for a statement: saved choice (never after due date) or the default.
+  function payOf(S, cardId, key, due) {
+    var v = S && S.payOn && S.payOn[cardId + "|" + key], def = payDefault(due);
+    if (typeof v === "string" && /^\d{4}-\d{2}-(13|28)$/.test(v) && v <= due) return v;
+    return def;
+  }
   function snapshot(S, today) {
     var owed = 0, spent = 0, stmts = [], next = null, mk = keyOf(today), prevFirst = keyAdd(mk, -1) + "-01";
     for (var c = 0; c < S.cards.length; c++) {
@@ -1107,7 +1124,7 @@ var CE = (function () {
       for (i = 0; i < list.length; i++) {
         s = list[i];
         if (s.remaining > 0 || (i >= list.length - 3 && s.due >= prevFirst)) {
-          stmts.push({ cardId: card.id, card: card.nickname, key: s.key, due: s.due, total: s.total, remaining: s.remaining, status: s.status });
+          stmts.push({ cardId: card.id, card: card.nickname, key: s.key, due: s.due, pay: payOf(S, card.id, s.key, s.due), total: s.total, remaining: s.remaining, status: s.status });
           if (s.remaining > 0 && (!next || s.due < next.date)) next = { cardId: card.id, card: card.nickname, date: s.due, amt: s.remaining };
         }
       }
@@ -1116,7 +1133,7 @@ var CE = (function () {
   }
   return { dim: dim, isoD: isoD, parseIso: parseIso, addMonthsIso: addMonthsIso, keyOf: keyOf, keyAdd: keyAdd, closeDay: closeDay,
     stmtKeyOf: stmtKeyOf, stmtDates: stmtDates, instPmt: instPmt, instSchedule: instSchedule, postings: postings,
-    statements: statements, balance: balance, util: util, snapshot: snapshot };
+    statements: statements, balance: balance, util: util, snapshot: snapshot, payDefault: payDefault, payOf: payOf };
 })();
 // ===== END CARD ENGINE =====
 </script>
@@ -1809,6 +1826,63 @@ var CE = (function () {
     else { const [y, m0] = parseKey(viewMonth); a = isoD(y, m0, 1); b = isoD(y, m0, dimOf(y, m0)); }
     return cardOccIn(a, b);
   }
+  // Payday cutoffs (13th/28th) from the one containing today up to the statement's default payday.
+  function payOnOptions(o) {
+    const today = cardsToday(), def = CE.payDefault(o.due), cur = CE.payOf(cardsState, o.cardId, o.key, o.due), list = [];
+    const [y, m0, d] = parseIso(today);
+    let p = d <= 13 ? isoD(y, m0, 13) : (d <= 28 ? isoD(y, m0, 28) : isoD(y, m0 + 1, 13));
+    const first = p;
+    for (let g = 0; p <= def && g < 40; g++) {
+      list.push(p);
+      const q = parseIso(p); p = q[2] === 13 ? isoD(q[0], q[1], 28) : isoD(q[0], q[1] + 1, 13);
+    }
+    if (list.indexOf(def) < 0) list.push(def);
+    if (list.indexOf(cur) < 0) list.push(cur);
+    list.sort();
+    return { list: list, cur: cur, def: def, first: first };
+  }
+  function payOnHtml(o) {
+    if (o.paid) return "";
+    const po = payOnOptions(o), key = escH(o.cardId) + "|" + o.key;
+    let h = '<div class="cs-pay"><label>Pay on: <select data-payon="' + key + '">';
+    po.list.forEach(p => {
+      const dd = parseIso(p)[2], tag = p === po.first ? " (this cutoff)" : (dd === 13 ? " (13th)" : " (28th)");
+      h += '<option value="' + p + '"' + (p === po.cur ? " selected" : "") + (p > o.due ? " disabled" : "") + '>' + shortDate(p) + tag + '</option>';
+    });
+    h += '</select></label><span class="cs-due">due ' + shortDate(o.due) + '</span></div>';
+    if (po.cur > o.due) h += '<div class="cs-warn">\u26A0 Pay on is after the due date \u2013 you would pay late.</div>';
+    return h;
+  }
+  document.addEventListener("change", (e) => {
+    const t = e.target, v = t && t.getAttribute ? t.getAttribute("data-payon") : null;
+    if (!v) return;
+    const i = v.lastIndexOf("|");
+    setPayOn(v.slice(0, i), v.slice(i + 1), t.value);
+  });
+  function setPayOn(cardId, key, iso) {
+    if (!cardsState) return;
+    const card = cardsState.cards.find(c => c.id === cardId);
+    const st = card && CE.statements(cardsState, card, cardsToday()).find(s => s.key === key);
+    if (!st || iso > st.due || !/^\d{4}-\d{2}-(13|28)$/.test(iso)) return;
+    if (!cardsState.payOn || typeof cardsState.payOn !== "object") cardsState.payOn = {};
+    cardsState.payOn[cardId + "|" + key] = iso;
+    cardsPersist();
+    renderAll();
+  }
+  // One-time: RCBC 8009 Dec 4 statement (due 2027-01-01) is paid on the Dec 13 payday.
+  function cardsMigratePayOn() {
+    if (!cardsState || cardsState.mPayOn1) return;
+    const card = cardsState.cards.find(c => String(c.last4) === "8009" && /rcbc/i.test(String(c.bank || "") + String(c.nickname || "")));
+    if (!card) return;
+    let st = null;
+    try { st = CE.statements(cardsState, card, cardsToday()).find(s => s.due === "2027-01-01" && s.total === 1003000 && !s.skip); } catch (e) {}
+    if (!st) return;
+    if (!cardsState.payOn || typeof cardsState.payOn !== "object") cardsState.payOn = {};
+    const k = card.id + "|" + st.key;
+    if (!cardsState.payOn[k]) cardsState.payOn[k] = "2026-12-13";
+    cardsState.mPayOn1 = true;
+    cardsPersist();
+  }
   function stmtBlockHtml(occs) {
     if (!cardsState) return "";
     const linked = state.debts.filter(d => d.cardLink);
@@ -1826,6 +1900,7 @@ var CE = (function () {
           '<span class="cs-nm">' + escH(o.label) + (o.est ? ' <small>(est.)</small>' : '') + '</span>' +
           '<span class="cs-pill ' + cls + '">' + escH(o.status) + '</span>' +
           '<span class="cs-am">' + peso(o.paid ? o.full : o.amount) + '</span></div>';
+        h += payOnHtml(o);
         h += '<a class="cs-open" href="cards.html?card=' + encodeURIComponent(o.cardId) + '">\u25B8 Open in Card Tracker</a>';
         if (!o.paid) {
           h += '<div class="cs-act"><button class="cs-btn" data-cspay="' + escH(o.cardId) + '|' + o.key + '">Pay full</button>' +
@@ -3554,6 +3629,7 @@ var CE = (function () {
     if (!Array.isArray(s.installments)) s.installments = [];
     if (!s.settings || typeof s.settings !== "object") s.settings = { minFixed: 50000, minPct: 5 };
     if (typeof s.u !== "number") s.u = 0;
+    if (!s.payOn || typeof s.payOn !== "object") s.payOn = {};
     return s;
   }
   function cardsInvalidate() { cardsMemoKey = ""; cardsMemo = null; }
@@ -3601,6 +3677,7 @@ var CE = (function () {
         }
       }
     } catch (e) {}
+    try { cardsMigratePayOn(); } catch (e) {}
     if (changed && !silent && appStarted) renderAll();
     return changed;
   }
@@ -3651,9 +3728,10 @@ var CE = (function () {
     const out = [];
     cardsAllStmts().forEach(x => {
       const s = x.s;
-      if (s.due < start || s.due > end) return;
+      const pay = CE.payOf(cardsState, x.card.id, s.key, s.due);
+      if (pay < start || pay > end) return;
       const label = cardLabel(x.card) + " \uD83D\uDCB3", paid = s.remaining === 0;
-      out.push({ id: "cs:" + x.card.id, key: s.key, pi: -2, date: s.due, name: label, grp: label,
+      out.push({ id: "cs:" + x.card.id, key: s.key, pi: -2, date: pay, due: s.due, name: label, grp: label,
         item: "Statement " + shortDate(s.close) + (s.est ? " (est.)" : ""),
         full: s.total / 100, amount: (paid ? s.total : s.remaining) / 100, paid: paid, over: false, recurring: false,
         card: true, status: s.status, cardId: x.card.id, label: label, est: s.est });
@@ -3899,7 +3977,7 @@ var CE = (function () {
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 190;
+  const APP_VERSION = 191;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {

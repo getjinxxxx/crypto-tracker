@@ -247,7 +247,7 @@
   }
 
   // ---------- Version / update chip (dashboard right side; no bottom banner) ----------
-  const APP_VERSION = 187;
+  const APP_VERSION = 191;
   function setVersionChipIdle() {
     const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION;
     const chip = document.getElementById("versionChip");
@@ -379,7 +379,7 @@
     const sn = cardSnap();
     if (!sn || !Array.isArray(sn.stmts)) return 0;
     let t = 0;
-    sn.stmts.forEach(s => { if (s && s.due >= start && s.due <= end) t += onlyRemaining ? Math.max(0, num(s.remaining)) : Math.max(0, num(s.total)); });
+    sn.stmts.forEach(s => { if (s && (s.pay || s.due) >= start && (s.pay || s.due) <= end) t += onlyRemaining ? Math.max(0, num(s.remaining)) : Math.max(0, num(s.total)); });
     return t / 100;
   }
   // ---------- Left after debts (same pure logic as debt.html) ----------
