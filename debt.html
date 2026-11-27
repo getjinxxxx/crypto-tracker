@@ -633,6 +633,7 @@
       <a class="home-link" href="home.html">&larr; Home</a>
       <div class="page-title">Debt Tracker</div>
       <a class="home-link" href="soa.html" style="margin-left:auto" title="Statement of Account per payday">&#128196; SOA</a>
+      <a class="home-link" href="windfall.html" title="Windfall Planner: plan a bonus or 13th month pay">&#127873; Windfall</a>
     </div>
 
     <!-- DUE THIS CUTOFF (rendered by renderCutoffCard) -->
@@ -823,7 +824,7 @@
 
       <!-- How to split the payment -->
       <div class="field" id="payModeField">
-        <label>Hatiin ang bayad</label>
+        <label>Split payment</label>
         <div class="paymode">
           <button type="button" class="pm-btn active" data-paymode="monthly" id="pmMonthly">Monthly terms</button>
           <button type="button" class="pm-btn" data-paymode="payday" id="pmPayday">Per payday (13 &amp; 28)</button>
@@ -842,7 +843,7 @@
 
       <!-- PER-PAYDAY fields -->
       <div class="field" id="paydayCountField" style="display:none">
-        <label>Bilang ng paydays<span class="sub">ilang hulog tuwing 13 &amp; 28</span></label>
+        <label>Number of paydays<span class="sub">how many installments, every 13th &amp; 28th</span></label>
         <input type="number" inputmode="numeric" id="newPaydays" min="2" max="60" placeholder="e.g. 3" />
       </div>
       <div class="field" id="paydayStartField" style="display:none">
@@ -871,7 +872,7 @@
           <h2 style="margin:0">Scanned items</h2>
           <button class="add-close" id="scanItemsClose" title="Close">&times;</button>
         </div>
-        <div class="hint">Pumili ng items na idadagdag. Walang petsa sa litrato, kaya sagutin ang <b>Due day</b> at <b>Terms</b> sa ibaba.</div>
+        <div class="hint">Choose the items to add. The photo has no date, so fill in the <b>Due day</b> and <b>Terms</b> below.</div>
         <div class="scan-result" style="display:flex;margin-bottom:10px">
           <img id="scanItemsThumb" class="scan-thumb" alt="receipt" />
           <div class="scan-found" id="scanItemsCount"></div>
@@ -908,11 +909,11 @@
           <input type="text" class="name-in" id="siName" placeholder="e.g. Shopee haul, Lazada order" />
         </div>
         <div class="field" id="siDueDayField">
-          <label>Due day (1-31)<span class="sub">required &mdash; wala sa litrato</span></label>
+          <label>Due day (1-31)<span class="sub">required &mdash; not in the photo</span></label>
           <input type="number" inputmode="numeric" id="siDueDay" min="1" max="31" placeholder="e.g. 15" />
         </div>
         <div class="field">
-          <label>Hatiin ang bayad</label>
+          <label>Split payment</label>
           <div class="paymode">
             <button type="button" class="pm-btn active" data-simode="monthly" id="siPmMonthly">Monthly terms</button>
             <button type="button" class="pm-btn" data-simode="payday" id="siPmPayday">Per payday (13 &amp; 28)</button>
@@ -923,7 +924,7 @@
           <input type="text" inputmode="numeric" id="siTerms" placeholder="1" />
         </div>
         <div class="field" id="siPaydaysField" style="display:none">
-          <label>Bilang ng paydays<span class="sub">ilang hulog tuwing 13 &amp; 28</span></label>
+          <label>Number of paydays<span class="sub">how many installments, every 13th &amp; 28th</span></label>
           <input type="number" inputmode="numeric" id="siPaydays" min="2" max="60" placeholder="e.g. 3" />
         </div>
         <div class="field" id="siPayStartField" style="display:none">
@@ -1595,7 +1596,7 @@
         '<div class="d-name" data-cardtoggle="' + encodeURIComponent(cardKey) + '" style="cursor:pointer">' +
           '<span class="cat-chev" style="font-size:10px;color:var(--muted)">' + (open ? "\u25BC" : "\u25B6") + '</span> ' + title + planTag + '</div>' +
         '<span class="d-badge ' + (paidOff ? "b-paid" : "b-ok") + '">' + (paidOff ? "Fully paid" : (items.length + " item" + (items.length === 1 ? "" : "s"))) + '</span>' +
-        '<button class="d-share d-detail" data-detail="' + encodeURIComponent(cardKey) + '" title="Detalye ng babayaran">\u2139\uFE0F</button>' +
+        '<button class="d-share d-detail" data-detail="' + encodeURIComponent(cardKey) + '" title="Details of what is due">\u2139\uFE0F</button>' +
         splitBtn +
         shareBtn +
       '</div>' +
@@ -1956,7 +1957,7 @@
   // Full breakdown of what's due this month for a card (used by the Easy-view "Detalye" button).
   function openCardDetail(cardKey) {
     const items = state.debts.filter(d => cardKeyOf(d) === cardKey && isActiveIn(d, viewMonth));
-    const title = items.length ? cardTitleOf(items[0]) : "Detalye";
+    const title = items.length ? cardTitleOf(items[0]) : "Details";
     let rowsHtml = "", total = 0;
     // Saved breakdown (what's inside a combined debt), if any.
     function lineItemsHtml(d) {
@@ -2004,19 +2005,19 @@
         if (sub) rowsHtml += sub;
       }
     });
-    if (!rowsHtml) rowsHtml = '<div class="cd-empty">Walang babayaran ngayong ' + monthLabel(viewMonth) + '.</div>';
+    if (!rowsHtml) rowsHtml = '<div class="cd-empty">Nothing to pay in ' + monthLabel(viewMonth) + '.</div>';
 
     const ov = document.createElement("div");
     ov.className = "add-overlay open";
     ov.innerHTML =
       '<div class="card add-modal">' +
         '<div class="add-modal-head">' +
-          '<h2 style="margin:0">' + title.replace(/</g, "&lt;") + ' &mdash; detalye</h2>' +
+          '<h2 style="margin:0">' + title.replace(/</g, "&lt;") + ' &mdash; details</h2>' +
           '<button class="add-close" title="Close">&times;</button>' +
         '</div>' +
-        '<div class="hint">Mga babayaran ngayong ' + monthLabel(viewMonth) + '.</div>' +
+        '<div class="hint">What is due in ' + monthLabel(viewMonth) + '.</div>' +
         '<div class="cd-list">' + rowsHtml + '</div>' +
-        '<div class="cd-total"><span>Kabuuan this month</span><b>' + peso(total) + '</b></div>' +
+        '<div class="cd-total"><span>Total this month</span><b>' + peso(total) + '</b></div>' +
       '</div>';
     document.body.appendChild(ov);
     const close = () => { if (ov.parentNode) document.body.removeChild(ov); };
@@ -2616,11 +2617,11 @@
     const total = num(document.getElementById("newAmount").value);
     const n = Math.max(2, Math.min(60, Math.round(num(document.getElementById("newPaydays").value)) || 2));
     const start = parseInt(document.getElementById("newPayStart").value, 10);
-    if (total <= 0) { box.style.display = "block"; box.innerHTML = "Maglagay ng amount para makita ang hatian."; return; }
+    if (total <= 0) { box.style.display = "block"; box.innerHTML = "Enter an amount to see the split."; return; }
     const plan = buildPlanForAmount(total, n, start);
     const lines = plan.map(p => "&bull; " + monthLabel(p.key).split(" ")[0] + " " + p.payday + " &rarr; <b>" + peso(p.amount) + "</b>").join("<br>");
     box.style.display = "block";
-    box.innerHTML = "<b style='color:var(--text)'>Preview (" + n + " hulog, tuwing 13 &amp; 28):</b><br>" + lines;
+    box.innerHTML = "<b style='color:var(--text)'>Preview (" + n + " installments, every 13th &amp; 28th):</b><br>" + lines;
   }
 
   // ---------- Scan a bill (on-device OCR via Tesseract.js) ----------
@@ -2851,7 +2852,7 @@
     scanItemsData = found.items.map(it => ({ label: it.label, price: it.price, on: true }));
     document.getElementById("scanItemsThumb").src = thumbUrl;
     document.getElementById("scanItemsCount").innerHTML =
-      "<b>" + found.items.length + " items</b> na-detect. I-uncheck ang ayaw mong isama.";
+      "<b>" + found.items.length + " items</b> detected. Uncheck any you do not want to include.";
     // prefill combined name if a biller/first line was detected
     document.getElementById("siName").value = found.name || "";
     document.getElementById("siDueDay").value = (found.dueDay >= 1 && found.dueDay <= 31) ? found.dueDay : "";
@@ -2883,7 +2884,7 @@
 
     document.getElementById("scanItemsThumb").src = thumbUrl;
     document.getElementById("scanItemsCount").innerHTML =
-      "<b>Mahirap basahin (sulat-kamay?).</b> I-type/itama ang <b>item</b> at <b>presyo</b> gamit ang litrato bilang gabay.";
+      "<b>Hard to read (handwritten?).</b> Type or correct the <b>item</b> and <b>price</b> using the photo as a guide.";
     document.getElementById("siName").value = found.name || "";
     document.getElementById("siDueDay").value = (found.dueDay >= 1 && found.dueDay <= 31) ? found.dueDay : "";
     document.getElementById("siTerms").value = "1";
@@ -2965,12 +2966,12 @@
     const chosen = scanItemsData.filter(x => x.on && num(x.price) > 0)
       .map(x => ({ label: (String(x.label).trim() || "Item"), price: num(x.price) }));
     const err = document.getElementById("siErr");
-    if (!chosen.length) { err.textContent = "Pumili/maglagay ng kahit isang item na may presyo."; return; }
+    if (!chosen.length) { err.textContent = "Select or enter at least one item with a price."; return; }
     let dueDay = Math.round(num(document.getElementById("siDueDay").value));
     if (!(dueDay >= 1 && dueDay <= 31)) dueDay = 0; // 0 = no deadline
     // Due day is only required for Monthly terms. Per-payday uses the 13/28 plan dates.
     if (siPayMode !== "payday" && dueDay === 0) {
-      err.textContent = "Ilagay ang Due day (1-31) \u2014 wala ito sa litrato.";
+      err.textContent = "Enter the Due day (1-31) \u2014 it is not in the photo.";
       document.getElementById("siDueDay").classList.add("need-fill");
       document.getElementById("siDueDay").focus();
       return;
@@ -2978,7 +2979,7 @@
     const category = document.getElementById("siCategory").value;
     const person = category === "person" ? document.getElementById("siPerson").value.trim() : "";
     if (category === "person" && !person) {
-      err.textContent = "Ilagay kung kanino ka may utang (Person name).";
+      err.textContent = "Enter who you owe (Person name).";
       document.getElementById("siPerson").classList.add("need-fill");
       document.getElementById("siPerson").focus();
       return;
@@ -2990,7 +2991,7 @@
     if (payday) {
       payN = Math.max(2, Math.min(60, Math.round(num(document.getElementById("siPaydays").value)) || 0));
       if (payN < 2) {
-        err.textContent = "Ilagay ang bilang ng paydays (2 pataas).";
+        err.textContent = "Enter the number of paydays (2 or more).";
         document.getElementById("siPaydays").classList.add("need-fill");
         document.getElementById("siPaydays").focus();
         return;
@@ -3426,7 +3427,7 @@
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 184;
+  const APP_VERSION = 185;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {

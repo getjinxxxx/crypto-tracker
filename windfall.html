@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<link rel="manifest" href="manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="Windfall" />
+<title>Windfall Planner</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #0b0c10; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #f2f2f7; max-width: 720px; margin: 0 auto; padding: 14px 12px 70px; line-height: 1.4; }
+  body.locked { overflow: hidden; }
+  #app.hidden { display: none; }
+
+  /* Lock screen */
+  #lock { position: fixed; inset: 0; background: #0b0c10; z-index: 500; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #lock .lock-card { background: #1b1d26; border: 1px solid #2e313d; border-radius: 18px; padding: 28px 24px; width: 100%; max-width: 340px; text-align: center; }
+  #lock .lk-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  #lock .lk-sub { color: #a9aebd; font-size: 13px; margin-bottom: 20px; }
+  #lock input { width: 100%; background: #12141b; border: 1px solid #3a3e4d; color: #f2f2f7; border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px; }
+  #lock input:focus { outline: none; border-color: #8f8cf5; }
+  #lock button { width: 100%; background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 12px; padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px; }
+  #lock .lk-err { color: #ff9a9a; font-size: 13px; margin-top: 12px; min-height: 16px; }
+
+  .topbar { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
+  .topbar a { color: #c9ccd8; text-decoration: none; font-size: 13px; border: 1px solid #2e313d; border-radius: 999px; padding: 6px 12px; background: #1b1d26; }
+  .topbar .ttl { font-size: 17px; font-weight: 800; letter-spacing: .4px; }
+
+  .card { background: #1b1d26; border: 1px solid #2e313d; border-left: 4px solid #8f8cf5; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .8px; color: #cfcffb; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .card h2 .sp { flex: 1; }
+  .hint { color: #a9aebd; font-size: 12px; margin: 2px 0 8px; }
+
+  input[type=text], input[type=date], select {
+    background: #12141b; color: #f2f2f7; border: 1px solid #3a3e4d; border-radius: 8px; padding: 9px 10px; font-size: 16px; min-width: 0; font-family: inherit; }
+  input:focus, select:focus { outline: none; border-color: #8f8cf5; }
+  input[type=text].amt { width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
+  input:disabled { opacity: .6; }
+  input[type=checkbox] { width: 22px; height: 22px; accent-color: #8f8cf5; flex: none; }
+
+  button { font-family: inherit; cursor: pointer; }
+  .btn { background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 10px; padding: 11px 14px; font-size: 15px; font-weight: 800; }
+  .btn.sec { background: #2a2d3c; color: #f2f2f7; border: 1px solid #3a3e4d; font-weight: 700; }
+  .btn.sm { padding: 7px 10px; font-size: 13px; border-radius: 8px; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .x { background: transparent; border: 1px solid #3a3e4d; color: #c9ccd8; border-radius: 8px; width: 34px; height: 34px; font-size: 16px; flex: none; }
+  .link { background: transparent; border: 1px dashed #5b5f78; color: #cfcffb; border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 700; width: 100%; margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { background: #23263a; border: 1px solid #3a3e4d; color: #dcdcfb; border-radius: 999px; padding: 6px 10px; font-size: 12px; }
+
+  .entry { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 0; border-top: 1px solid #2a2d38; }
+  .entry:first-of-type { border-top: none; }
+  .entry .lb { flex: 1 1 100%; }
+  .entry .lb input { width: 100%; }
+  .entry input[type=date] { flex: 1 1 130px; }
+  .entry .amt { flex: 1 1 110px; width: auto; }
+  .total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid #3a3e4d; margin-top: 8px; padding-top: 8px; }
+  .total .k { font-size: 12px; font-weight: 800; letter-spacing: .6px; color: #cfcffb; }
+  .total .v { font-size: 24px; font-weight: 800; color: #ffffff; font-variant-numeric: tabular-nums; }
+
+  .row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid #2a2d38; flex-wrap: wrap; }
+  .row:first-of-type { border-top: none; }
+  .row .nm { flex: 1; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+  .row .sub { flex: 1 1 100%; font-size: 12px; color: #a9aebd; padding-left: 30px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row .sub .due { color: #ffb4b4; font-weight: 700; }
+  .st { font-weight: 800; font-size: 13px; }
+  .st.ok { color: #34d399; }
+  .st.pend { color: #c9ccd8; }
+  .row.paid .nm { color: #b6bac8; }
+  .bar { height: 8px; background: #2a2d3c; border-radius: 999px; overflow: hidden; display: flex; flex: 1 1 100%; margin: 2px 0 0 0; }
+  .bar i { display: block; height: 100%; }
+  .bar .a { background: #34d399; }
+  .bar .b { background: #8f8cf5; }
+  .gnote { flex: 1 1 100%; font-size: 12px; color: #a9aebd; }
+
+  .tools { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .tools select { flex: 1; }
+
+  .newgoal { background: #23252f; border-radius: 10px; padding: 10px; margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .newgoal label { font-size: 12px; color: #a9aebd; display: block; margin-bottom: 2px; }
+  .newgoal input { width: 100%; }
+  .newgoal .full { grid-column: 1 / -1; }
+  .newgoal .acts { grid-column: 1 / -1; display: flex; gap: 8px; }
+
+  .sum { display: grid; gap: 4px; }
+  .sum .l { display: flex; justify-content: space-between; font-size: 14px; color: #dfe2ec; }
+  .sum .l b { color: #fff; font-variant-numeric: tabular-nums; }
+  .left { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: #12141b; display: flex; justify-content: space-between; align-items: baseline; border: 1px solid #3a3e4d; }
+  .left .k { font-size: 13px; font-weight: 800; letter-spacing: .6px; }
+  .left .v { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .left.ok .k, .left.ok .v { color: #34d399; }
+  .left.bad .k, .left.bad .v { color: #ff9a9a; }
+  .left.bad { border-color: #ff9a9a; }
+  .warn { color: #ff9a9a; font-size: 13px; margin-top: 6px; font-weight: 700; }
+  .acts2 { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .acts2 .btn { flex: 1 1 140px; }
+
+  .plan { border-top: 1px solid #2a2d38; padding: 10px 0; }
+  .plan:first-of-type { border-top: none; }
+  .plan .ph { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .plan .pn { flex: 1; font-weight: 800; min-width: 0; }
+  .plan .pl { font-size: 13px; color: #dfe2ec; display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+  .plan .pl .a { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .plan .meta { font-size: 12px; color: #a9aebd; }
+
+  #toast { position: fixed; left: 12px; right: 12px; bottom: 16px; z-index: 700; max-width: 520px; margin: 0 auto; background: #2a2d3c; color: #f2f2f7; border: 1px solid #5b5f78; border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; box-shadow: 0 4px 18px rgba(0,0,0,.6); font-size: 14px; }
+  #toast span { flex: 1; }
+  #toast button { background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 8px; padding: 7px 12px; font-weight: 800; }
+  .foot { text-align: center; color: #8d92a3; font-size: 11px; margin-top: 18px; }
+  @media (min-width: 900px) { body { max-width: 760px; } }
+</style>
+</head>
+<body class="locked">
+
+<div id="lock">
+  <div class="lock-card">
+    <div class="lk-title">Windfall Planner</div>
+    <div class="lk-sub">Enter passcode to view</div>
+    <input id="lockInput" type="password" inputmode="numeric" maxlength="12" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="off" />
+    <button id="lockBtn">Unlock</button>
+    <div class="lk-err" id="lockErr"></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <div class="topbar">
+    <a href="debt.html">&larr; Back</a>
+    <div class="ttl">&#127873; WINDFALL PLANNER</div>
+  </div>
+  <div id="main"></div>
+  <div class="foot">Windfall Planner &bull; <span id="footVer"></span></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const LS_DEBT = "debtTrackerV3";   // same key and shape as debt.html
+  const LS_WF = "windfallV1";
+  const DB_URL = "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app";
+  const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const SUGGEST = ["13th Month Pay", "Bonus", "Cash gift", "Tax refund", "Incentive", "Commission", "Allowance", "Other"];
+  const CATS = { person: "Debt to a person", creditcard: "Credit Card", bankloan: "Bank Loan", onlineloan: "Online Loan",
+    government: "Government", salaryloan: "Salary / Company Loan", other: "Other" };
+
+  // ---------- helpers ----------
+  function num(v) { if (v == null) return 0; const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? 0 : n; }
+  function r2(n) { return Math.round(n * 100) / 100; }
+  function peso(n) { return "PHP " + (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function escH(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function isoD(y, m0, d) { const t = new Date(y, m0, d); return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate()); }
+  function dimOf(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
+  function parseIso(s) { return [parseInt(s.slice(0, 4), 10), parseInt(s.slice(5, 7), 10) - 1, parseInt(s.slice(8, 10), 10)]; }
+  function addDaysIso(s, n) { const a = parseIso(s); return isoD(a[0], a[1], a[2] + n); }
+  function todayIso() { const n = new Date(); return isoD(n.getFullYear(), n.getMonth(), n.getDate()); }
+  function shortDate(s) { if (!s || s.length < 10) return ""; const a = parseIso(s); return MONTHS[a[1]] + " " + a[2]; }
+  function monthKey(s) { return String(s).slice(0, 7); }
+  function parseKey(k) { return [parseInt((k || "").slice(0, 4), 10), parseInt((k || "").slice(5, 7), 10) - 1]; }
+  function addMonths(key, n) { const p = parseKey(key), t = p[0] * 12 + p[1] + n; return Math.floor(t / 12) + "-" + String((t % 12) + 1).padStart(2, "0"); }
+  function toast(msg, undo) {
+    let t = document.getElementById("toast"); if (t) t.remove();
+    t = document.createElement("div"); t.id = "toast";
+    t.innerHTML = "<span>" + msg + "</span>" + (undo ? "<button type='button'>Undo</button>" : "");
+    if (undo) t.querySelector("button").onclick = function () { t.remove(); undo(); };
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, undo ? 7000 : 3500);
+  }
+
+  // ---------- debt data (same shape and payment logic as debt.html) ----------
+  let debtState = { debts: [], shareIds: {} };
+  function sanitizeDebts() {
+    if (!Array.isArray(debtState.debts)) debtState.debts = [];
+    debtState.debts.forEach(function (d) {
+      if (!d.terms || d.terms < 1) d.terms = 1;
+      if (!d.startMonth) d.startMonth = monthKey(todayIso());
+      if (!d.paidTerms || typeof d.paidTerms !== "object") d.paidTerms = {};
+      if (!d.paidAmt || typeof d.paidAmt !== "object") d.paidAmt = {};
+      if (typeof d.paidOnce !== "number") d.paidOnce = 0;
+      if (typeof d.paid !== "boolean") d.paid = false;
+      if (typeof d.recurring !== "boolean") d.recurring = false;
+      if (d.endMonth == null) d.endMonth = "";
+      if (d.dueDay == null) d.dueDay = 0;
+      d.terms = Number(d.terms) || 1;
+      d.amount = Number(d.amount) || 0;
+    });
+  }
+  function loadDebtLocal() {
+    try { const s = JSON.parse(localStorage.getItem(LS_DEBT) || "null"); if (s && Array.isArray(s.debts)) debtState = s; } catch (e) {}
+    sanitizeDebts();
+  }
+  // Cloud is the source of truth for debts (like debt.html). Falls back to the local copy.
+  async function refreshDebt() {
+    try {
+      const res = await fetch(DB_URL + "/debt/state.json?ts=" + Date.now(), { cache: "no-store" });
+      if (res.ok) {
+        const remote = await res.json();
+        let s = null;
+        if (remote && typeof remote.stateJson === "string") { try { s = JSON.parse(remote.stateJson); } catch (e) {} }
+        else if (remote && remote.state) s = remote.state;
+        if (s && Array.isArray(s.debts)) {
+          debtState = s; sanitizeDebts();
+          try { localStorage.setItem(LS_DEBT, JSON.stringify(debtState)); } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+  function saveDebt() {
+    try { localStorage.setItem(LS_DEBT, JSON.stringify(debtState)); } catch (e) {}
+    const payload = JSON.stringify({ stateJson: JSON.stringify(debtState), updatedAt: Date.now(), client: CLIENT_ID });
+    return fetch(DB_URL + "/debt/state.json", { method: "PUT", body: payload }).catch(function (e) { console.warn("[windfall] debt cloud save failed", e); });
+  }
+
+  // Balance = what is still unpaid on a debt (all terms). Recurring bills have no balance and are skipped.
+  function hasPlan(d) { return Array.isArray(d.plan) && d.plan.length > 0; }
+  function planEntriesFor(d, key) { return hasPlan(d) ? d.plan.filter(function (p) { return p.key === key; }).sort(function (a, b) { return a.payday - b.payday; }) : []; }
+  function isActiveIn(d, key) {
+    if (hasPlan(d)) return planEntriesFor(d, key).length > 0;
+    const p = parseKey(d.startMonth), c = parseKey(key), idx = (c[0] - p[0]) * 12 + (c[1] - p[1]);
+    if (idx < 0) return false;
+    if (d.recurring) return !d.endMonth || key <= d.endMonth;
+    return idx < d.terms;
+  }
+  function balanceOf(d) {
+    if (hasPlan(d)) return r2(d.plan.reduce(function (s, p) { return s + (p.paid ? 0 : num(p.amount)); }, 0));
+    if (d.recurring) return 0;
+    const amt = num(d.amount);
+    if (d.terms > 1) {
+      const per = amt / d.terms; let r = 0;
+      for (let i = 0; i < d.terms; i++) {
+        const k = addMonths(d.startMonth, i);
+        if (d.paidTerms[k]) continue;
+        r += per - Math.min(per, num(d.paidAmt[k]));
+      }
+      return r2(r);
+    }
+    return d.paid ? 0 : r2(Math.max(0, amt - Math.min(amt, num(d.paidOnce))));
+  }
+  function rateOf(d) { return num(d.interest != null ? d.interest : (d.rate != null ? d.rate : d.apr)); }
+  function debtName(d) {
+    const nm = (d.name && d.name.trim()) ? d.name.trim() : "";
+    if (d.category === "person" && d.person) return d.person + (nm ? " \u00b7 " + nm : "");
+    return nm || d.person || CATS[d.category] || "Other";
+  }
+  // Apply a payment of X to a debt, oldest unpaid term first. Mirrors the fields debt.html sets
+  // (plan[].paid, paidTerms/paidAmt per month, paid/paidOnce). Returns the amount applied.
+  function applyPayment(d, X) {
+    let left = X;
+    if (hasPlan(d)) {
+      const idx = d.plan.map(function (p, i) { return i; }).sort(function (a, b) {
+        const pa = d.plan[a], pb = d.plan[b];
+        return pa.key < pb.key ? -1 : pa.key > pb.key ? 1 : num(pa.payday) - num(pb.payday);
+      });
+      idx.forEach(function (i) {
+        const p = d.plan[i];
+        if (p.paid || left <= 0.004) return;
+        const a = num(p.amount);
+        if (left >= a - 0.009) { p.paid = true; left -= a; }
+        else { p.amount = r2(a - left); left = 0; } // partial: lowers the unpaid instalment
+      });
+    } else if (d.terms > 1 && !d.recurring) {
+      const per = num(d.amount) / d.terms;
+      for (let i = 0; i < d.terms && left > 0.004; i++) {
+        const k = addMonths(d.startMonth, i);
+        if (d.paidTerms[k]) continue;
+        const part = num(d.paidAmt[k]), need = per - part;
+        if (left >= need - 0.009) { d.paidTerms[k] = true; delete d.paidAmt[k]; left -= need; }
+        else { d.paidAmt[k] = r2(part + left); left = 0; }
+      }
+    } else {
+      const need = num(d.amount) - num(d.paidOnce);
+      if (left >= need - 0.009) { d.paid = true; d.paidOnce = 0; left -= need; }
+      else { d.paidOnce = r2(num(d.paidOnce) + left); left = 0; }
+    }
+    return r2(X - Math.max(0, left));
+  }
+
+  // ---------- due this cutoff (same rules as debt.html, cutoff days default 13 / 28) ----------
+  function loadCutDays() {
+    let a = 13, b = 28;
+    try { const j = JSON.parse(localStorage.getItem("debtCutoffDays") || "null"); if (j) { a = Math.round(Number(j.a)); b = Math.round(Number(j.b)); } } catch (e) {}
+    if (!(a >= 1 && a <= 28)) a = 13;
+    if (!(b === 0 || (b > a && b <= 31))) b = 28;
+    return { a: a, b: b };
+  }
+  function cutEndDay(cd, y, m0) { const D = dimOf(y, m0); return cd.b ? Math.min(cd.b, D) : D; }
+  function periodOf(s) {
+    const cd = loadCutDays(), p = parseIso(s), y = p[0], m0 = p[1], x = p[2];
+    const c2 = cutEndDay(cd, y, m0);
+    if (x <= cd.a) {
+      const pm = new Date(y, m0 - 1, 1), py = pm.getFullYear(), pmo = pm.getMonth(), pc2 = cutEndDay(cd, py, pmo);
+      return { start: pc2 >= dimOf(py, pmo) ? isoD(y, m0, 1) : isoD(py, pmo, pc2 + 1), end: isoD(y, m0, cd.a) };
+    }
+    if (x <= c2) return { start: isoD(y, m0, cd.a + 1), end: isoD(y, m0, c2) };
+    return { start: isoD(y, m0, c2 + 1), end: isoD(y, m0 + 1, cd.a) };
+  }
+  function occurrencesIn(start, end) {
+    const out = []; let key = monthKey(start); const lastKey = monthKey(end);
+    for (let g = 0; key <= lastKey && g < 80; g++, key = addMonths(key, 1)) {
+      const pk = parseKey(key), y = pk[0], m0 = pk[1], D = dimOf(y, m0);
+      debtState.debts.forEach(function (d) {
+        if (hasPlan(d)) {
+          d.plan.forEach(function (p, pi) {
+            if (p.key !== key) return;
+            const date = isoD(y, m0, Math.min(Math.max(1, Math.round(num(p.payday)) || 1), D));
+            if (date < start || date > end) return;
+            const full = num(p.amount); if (full <= 0) return;
+            out.push({ id: d.id, date: date, amount: full, paid: !!p.paid, recurring: false });
+          });
+          return;
+        }
+        if (!(d.dueDay >= 1 && d.dueDay <= 31) || !isActiveIn(d, key)) return;
+        const date = isoD(y, m0, Math.min(d.dueDay, D));
+        if (date < start || date > end) return;
+        const multi = d.recurring || d.terms > 1;
+        const full = (d.terms > 1 && !d.recurring) ? num(d.amount) / d.terms : num(d.amount);
+        if (full <= 0) return;
+        const checked = multi ? !!d.paidTerms[key] : !!d.paid;
+        const part = multi ? (num(d.paidAmt[key]) || 0) : (num(d.paidOnce) || 0);
+        const paid = checked || part >= full - 0.009;
+        out.push({ id: d.id, date: date, amount: paid ? full : Math.max(0, full - part), paid: paid, recurring: !!d.recurring });
+      });
+    }
+    return out;
+  }
+  // debtId -> { due, date, over }
+  function dueMap() {
+    const today = todayIso(), P = periodOf(today), t = parseIso(today);
+    const list = occurrencesIn(P.start, P.end).filter(function (o) { return !o.paid; });
+    const over = occurrencesIn(isoD(t[0], t[1] - 24, 1), addDaysIso(P.start, -1)).filter(function (o) { return !o.paid && !o.recurring; });
+    const m = {};
+    over.concat(list).forEach(function (o) {
+      const e = m[o.id] || (m[o.id] = { due: 0, date: o.date, over: false });
+      e.due = r2(e.due + o.amount); if (o.date < e.date) e.date = o.date; if (o.date < P.start) e.over = true;
+    });
+    return m;
+  }
+
+  // ---------- windfall data ----------
+  let wf = { entries: [], u: 0 };
+  let ui = { newGoal: false };
+  function newPlan() { return { id: null, entries: [{ id: uid(), label: "13th Month Pay", date: isoD(new Date().getFullYear(), 11, 15), amount: "" }], dl: {}, gl: {}, cl: [] }; }
+  function freshWf() { return { goals: [], plans: [], cur: newPlan(), u: 0 }; }
+  wf = freshWf();
+  function sanitizeWf() {
+    if (!wf || typeof wf !== "object") wf = freshWf();
+    if (!Array.isArray(wf.goals)) wf.goals = [];
+    if (!Array.isArray(wf.plans)) wf.plans = [];
+    if (!wf.cur || typeof wf.cur !== "object") wf.cur = newPlan();
+    if (!Array.isArray(wf.cur.entries)) wf.cur.entries = [];
+    if (!wf.cur.dl) wf.cur.dl = {};
+    if (!Array.isArray(wf.cur.cl)) wf.cur.cl = [];
+    if (!wf.cur.gl) wf.cur.gl = {};
+    wf.goals.forEach(function (g) { g.target = num(g.target); g.saved = num(g.saved); if (!g.id) g.id = uid(); });
+  }
+  let saveTimer = null;
+  function cloudSaveWf() {
+    const payload = JSON.stringify({ stateJson: JSON.stringify(wf), updatedAt: wf.u, client: CLIENT_ID });
+    return fetch(DB_URL + "/windfall/state.json", { method: "PUT", body: payload, keepalive: payload.length < 60000 }).catch(function (e) { console.warn("[windfall] cloud save failed", e); });
+  }
+  function persist() {
+    wf.u = Date.now();
+    try { localStorage.setItem(LS_WF, JSON.stringify(wf)); } catch (e) {}
+    clearTimeout(saveTimer); saveTimer = setTimeout(function () { saveTimer = null; cloudSaveWf(); }, 800);
+  }
+  function flush() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; cloudSaveWf(); } }
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") flush(); });
+  function loadWfLocal() {
+    try { const s = JSON.parse(localStorage.getItem(LS_WF) || "null"); if (s && typeof s === "object") wf = s; } catch (e) {}
+    sanitizeWf();
+  }
+  async function loadWfCloud() {
+    try {
+      const res = await fetch(DB_URL + "/windfall/state.json?ts=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return false;
+      const remote = await res.json();
+      if (remote && typeof remote.stateJson === "string") {
+        const s = JSON.parse(remote.stateJson);
+        if (s && typeof s === "object" && (num(remote.updatedAt) >= num(wf.u))) {
+          wf = s; sanitizeWf();
+          try { localStorage.setItem(LS_WF, JSON.stringify(wf)); } catch (e) {}
+          return true;
+        }
+      }
+      if (wf.u) cloudSaveWf(); // cloud empty or older: seed it from this device
+    } catch (e) {}
+    return false;
+  }
+
+  // ---------- computation ----------
+  let rowsCache = [];
+  function buildRows() {
+    const due = dueMap(), cur = wf.cur, rows = [], seen = {};
+    debtState.debts.forEach(function (d) {
+      const bal = balanceOf(d), ln = cur.dl[d.id];
+      if (bal > 0.004 || (ln && ln.paid)) {
+        seen[d.id] = 1;
+        const applied = ln && ln.paid ? num(ln.applied) : 0;
+        rows.push({ d: d, id: d.id, name: debtName(d), bal: bal, before: r2(bal + applied), due: due[d.id] || null, rate: rateOf(d) });
+      }
+    });
+    rowsCache = rows;
+    return rows;
+  }
+  function lineOf(id) { return wf.cur.dl[id] || (wf.cur.dl[id] = { on: false, amount: "", paid: false }); }
+  function debtAlloc(r) { const l = wf.cur.dl[r.id]; if (!l) return 0; if (l.paid) return num(l.applied); return l.on ? Math.min(num(l.amount), r.before) : 0; }
+  function goalAlloc(g) { const l = wf.cur.gl[g.id]; if (!l) return 0; return l.paid ? num(l.applied) : num(l.amount); }
+  function totalIn() { return r2(wf.cur.entries.reduce(function (s, e) { return s + num(e.amount); }, 0)); }
+  function calc() {
+    const rows = rowsCache, tin = totalIn();
+    const toDebts = r2(rows.reduce(function (s, r) { return s + debtAlloc(r); }, 0) + wf.cur.cl.reduce(function (s, c) { return s + num(c.amount); }, 0));
+    const toGoals = r2(wf.goals.reduce(function (s, g) { return s + goalAlloc(g); }, 0));
+    const left = r2(tin - toDebts - toGoals);
+    let cleared = 0, remain = 0;
+    rows.forEach(function (r) { const a = debtAlloc(r); if (a >= r.before - 0.009) cleared++; remain += Math.max(0, r.before - a); });
+    return { tin: tin, toDebts: toDebts, toGoals: toGoals, left: left, over: left < -0.004, cleared: cleared, total: rows.length, remain: r2(remain) };
+  }
+
+  // ---------- render ----------
+  const main = document.getElementById("main");
+  function entryHtml(e) {
+    return '<div class="entry" data-eid="' + e.id + '"><div class="lb"><input type="text" list="wfLabels" data-f="label" placeholder="Label (e.g. Bonus)" value="' + escH(e.label) + '" aria-label="Windfall label"></div>' +
+      '<input type="date" data-f="date" value="' + escH(e.date) + '" aria-label="Expected date">' +
+      '<input type="text" class="amt" inputmode="decimal" data-f="amount" placeholder="Amount" value="' + escH(e.amount) + '" aria-label="Amount in PHP">' +
+      '<button class="x" data-act="delentry" aria-label="Remove">&times;</button></div>';
+  }
+  function debtRowHtml(r) {
+    const l = wf.cur.dl[r.id] || {}, paid = !!l.paid;
+    const dueTxt = r.due ? '<span class="due">Due this cutoff ' + peso(r.due.due) + (r.due.over ? " (incl. overdue)" : "") + '</span>' : "";
+    return '<div class="row' + (paid ? " paid" : "") + '" data-did="' + escH(r.id) + '">' +
+      '<input type="checkbox" data-act="don" ' + (l.on || paid ? "checked " : "") + (paid ? "disabled " : "") + 'aria-label="Allocate to ' + escH(r.name) + '">' +
+      '<span class="nm">' + escH(r.name) + '</span>' +
+      '<input type="text" class="amt" inputmode="decimal" data-f="damt" placeholder="0.00" value="' + escH(paid ? num(l.applied).toFixed(2) : (l.amount === 0 ? "" : (l.amount || ""))) + '" ' + (paid ? "disabled " : "") + 'aria-label="Amount for ' + escH(r.name) + '">' +
+      '<div class="sub"><span>Balance ' + peso(r.before) + '</span>' + dueTxt +
+      (paid ? '<span class="st ok">\u2713 Paid</span> <button class="btn sec sm" data-act="undodebt">Undo</button>'
+            : '<span class="st pend">\u25CB Pending</span> <button class="btn sec sm" data-act="paydebt">Mark paid</button>') + '</div></div>';
+  }
+  function customRowHtml(c) {
+    const paid = !!c.paid;
+    return '<div class="row' + (paid ? " paid" : "") + '" data-cid="' + c.id + '">' +
+      '<input type="text" class="nm" style="flex:1 1 120px" data-f="cname" placeholder="Name (person, bill\u2026)" value="' + escH(c.name) + '" ' + (paid ? "disabled " : "") + 'aria-label="Custom line name">' +
+      '<input type="text" class="amt" inputmode="decimal" data-f="camt" placeholder="0.00" value="' + escH(c.amount) + '" ' + (paid ? "disabled " : "") + 'aria-label="Custom line amount">' +
+      '<button class="x" data-act="delcustom" aria-label="Delete line"' + (paid ? " disabled" : "") + '>&times;</button>' +
+      '<div class="sub"><span>Custom line (plan only)</span>' +
+      (paid ? '<span class="st ok">\u2713 Paid</span> <button class="btn sec sm" data-act="undocustom">Undo</button>'
+            : '<span class="st pend">\u25CB Pending</span> <button class="btn sec sm" data-act="paycustom">Mark paid</button>') + '</div></div>';
+  }
+  function goalRowHtml(g) {
+    const l = wf.cur.gl[g.id] || {}, paid = !!l.paid;
+    return '<div class="row' + (paid ? " paid" : "") + '" data-gid="' + g.id + '">' +
+      '<span class="nm">' + escH(g.name) + '</span>' +
+      '<input type="text" class="amt" inputmode="decimal" data-f="gamt" placeholder="0.00" value="' + escH(paid ? num(l.applied).toFixed(2) : (l.amount || "")) + '" ' + (paid ? "disabled " : "") + 'aria-label="Amount for ' + escH(g.name) + '">' +
+      '<button class="x" data-act="delgoal" aria-label="Delete goal" title="Delete goal">&times;</button>' +
+      '<div class="bar" id="gbar-' + g.id + '"></div>' +
+      '<div class="gnote" id="gnote-' + g.id + '"></div>' +
+      '<div class="sub" style="padding-left:0">' +
+      (paid ? '<span class="st ok">\u2713 Added</span> <button class="btn sec sm" data-act="undogoal">Undo</button>'
+            : '<span class="st pend">\u25CB Pending</span> <button class="btn sec sm" data-act="paygoal">Add to goal</button>') + '</div></div>';
+  }
+  function planHtml(p) {
+    const lines = [];
+    Object.keys(p.dl || {}).forEach(function (id) {
+      const l = p.dl[id], d = debtState.debts.find(function (x) { return x.id === id; });
+      const amt = l.paid ? num(l.applied) : (l.on ? num(l.amount) : 0);
+      if (amt > 0) lines.push({ n: d ? debtName(d) : "(removed debt)", a: amt, paid: !!l.paid });
+    });
+    Object.keys(p.gl || {}).forEach(function (id) {
+      const l = p.gl[id], g = wf.goals.find(function (x) { return x.id === id; });
+      const amt = l.paid ? num(l.applied) : num(l.amount);
+      if (amt > 0) lines.push({ n: "Savings: " + (g ? g.name : "(removed goal)"), a: amt, paid: !!l.paid });
+    });
+    (p.cl || []).forEach(function (c) { if (num(c.amount) > 0) lines.push({ n: (c.name || "Custom line") + " (custom)", a: num(c.amount), paid: !!c.paid }); });
+    const tin = (p.entries || []).reduce(function (s, e) { return s + num(e.amount); }, 0);
+    const lbl = (p.entries || []).map(function (e) { return e.label || "Windfall"; }).join(" + ") || "Windfall plan";
+    return '<div class="plan" data-pid="' + p.id + '"><div class="ph"><div class="pn">' + escH(lbl) + '</div>' +
+      '<button class="btn sec sm" data-act="openplan">Open</button><button class="x" data-act="delplan" aria-label="Delete plan">&times;</button></div>' +
+      '<div class="meta">Incoming ' + peso(tin) + ' \u00b7 saved ' + escH(String(p.savedAt || "").slice(0, 10)) + '</div>' +
+      (lines.length ? lines.map(function (x) {
+        return '<div class="pl"><span>' + (x.paid ? '<span class="st ok">\u2713</span>' : '<span class="st pend">\u25CB</span>') + ' ' + escH(x.n) + '</span><span class="a">' + peso(x.a) + '</span></div>';
+      }).join("") : '<div class="meta">No allocations</div>') + '</div>';
+  }
+  function hasRates() { return rowsCache.some(function (r) { return r.rate > 0; }); }
+  function render() {
+    const rows = buildRows(), cur = wf.cur;
+    let h = '<datalist id="wfLabels">' + SUGGEST.map(function (s) { return '<option value="' + escH(s) + '">'; }).join("") + '</datalist>';
+    // incoming
+    h += '<div class="card"><h2>Incoming windfall</h2>' +
+      cur.entries.map(entryHtml).join("") +
+      '<button class="link" data-act="addentry">+ Add windfall</button>' +
+      '<div class="chips">' + SUGGEST.slice(0, 6).map(function (s) { return '<button class="chip" data-act="quick" data-q="' + escH(s) + '">' + escH(s) + '</button>'; }).join("") + '</div>' +
+      '<div class="total"><span class="k">TOTAL INCOMING</span><span class="v" id="totalIn"></span></div></div>';
+    // debts
+    h += '<div class="card"><h2>Allocate to debts</h2>';
+    if (!rows.length) h += '<div class="hint">No unpaid debts found in the Debt Tracker.</div>';
+    else {
+      h += '<div class="tools"><select id="auto" aria-label="Auto-allocate"><option value="">Auto-allocate\u2026</option>' +
+        '<option value="smallest">Smallest balance first</option>' + (hasRates() ? '<option value="interest">Highest interest first</option>' : '') +
+        '<option value="cutoff">This cutoff\u2019s bills first</option><option value="clear">Clear</option></select></div>';
+      h += rows.map(debtRowHtml).join("");
+    }
+    h += cur.cl.map(customRowHtml).join("") + '<button class="link" data-act="addcustom">+ Add custom line</button></div>';
+    // goals
+    h += '<div class="card"><h2>Savings goals</h2>';
+    if (!wf.goals.length && !ui.newGoal) h += '<div class="hint">Create a goal to set money aside from this windfall.</div>';
+    h += wf.goals.map(goalRowHtml).join("");
+    if (ui.newGoal) {
+      h += '<div class="newgoal"><div class="full"><label for="ngName">Goal name</label><input type="text" id="ngName" placeholder="e.g. Emergency fund"></div>' +
+        '<div><label for="ngTarget">Target amount (PHP)</label><input type="text" id="ngTarget" inputmode="decimal" placeholder="0.00"></div>' +
+        '<div><label for="ngSaved">Saved so far (PHP)</label><input type="text" id="ngSaved" inputmode="decimal" placeholder="0.00"></div>' +
+        '<div class="full"><label for="ngDate">Target date (optional)</label><input type="date" id="ngDate"></div>' +
+        '<div class="acts"><button class="btn" data-act="savegoal">Add goal</button><button class="btn sec" data-act="cancelgoal">Cancel</button></div></div>';
+    } else h += '<button class="link" data-act="newgoal">+ New goal</button>';
+    h += '</div>';
+    // summary
+    h += '<div class="card"><h2>Summary</h2><div id="summary"></div></div>';
+    // saved plans
+    h += '<div class="card"><h2>Saved plans<span class="sp"></span><button class="btn sec sm" data-act="newplan">New plan</button></h2>' +
+      (wf.plans.length ? wf.plans.slice().reverse().map(planHtml).join("") : '<div class="hint">No saved plans yet.</div>') + '</div>';
+    main.innerHTML = h;
+    update();
+  }
+  function update() {
+    const c = calc();
+    const el = document.getElementById("totalIn"); if (el) el.textContent = peso(c.tin);
+    wf.goals.forEach(function (g) {
+      const bar = document.getElementById("gbar-" + g.id), note = document.getElementById("gnote-" + g.id);
+      if (!bar) return;
+      const l = wf.cur.gl[g.id] || {}, plan = l.paid ? 0 : num(l.amount), tg = g.target || 0;
+      const pa = tg > 0 ? Math.min(100, g.saved / tg * 100) : 0, pb = tg > 0 ? Math.min(100 - pa, plan / tg * 100) : 0;
+      bar.setAttribute("role", "progressbar"); bar.setAttribute("aria-valuenow", String(Math.round(pa + pb)));
+      bar.innerHTML = '<i class="a" style="width:' + pa.toFixed(1) + '%"></i><i class="b" style="width:' + pb.toFixed(1) + '%"></i>';
+      note.textContent = peso(g.saved) + (plan > 0 ? " + " + peso(plan) + " planned" : "") + " of " + peso(tg) + " (" + Math.round(pa + pb) + "%)" +
+        (g.targetDate ? " \u00b7 by " + shortDate(g.targetDate) : "");
+    });
+    const s = document.getElementById("summary");
+    if (!s) return;
+    s.innerHTML = '<div class="sum"><div class="l"><span>Allocated to debts</span><b>' + peso(c.toDebts) + '</b></div>' +
+      '<div class="l"><span>Allocated to savings</span><b>' + peso(c.toGoals) + '</b></div>' +
+      '<div class="l"><span>Debts cleared after this plan</span><b>' + c.cleared + ' of ' + c.total + '</b></div>' +
+      '<div class="l"><span>Remaining total debt after plan</span><b>' + peso(c.remain) + '</b></div></div>' +
+      '<div class="left ' + (c.over ? "bad" : "ok") + '"><span class="k">LEFT FOR YOU</span><span class="v">' + peso(c.left) + '</span></div>' +
+      (c.over ? '<div class="warn">Over-allocated by ' + peso(-c.left) + '. Lower an amount to save or mark paid.</div>' : '') +
+      '<div class="acts2"><button class="btn" data-act="saveplan"' + (c.over ? " disabled" : "") + '>Save plan</button>' +
+      '<button class="btn sec" data-act="payall"' + (c.over ? " disabled" : "") + '>Mark all paid</button></div>';
+  }
+
+  // ---------- actions ----------
+  function auto(mode) {
+    const rows = rowsCache.filter(function (r) { return !(wf.cur.dl[r.id] && wf.cur.dl[r.id].paid); });
+    let pool = totalIn() - wf.goals.reduce(function (s, g) { return s + goalAlloc(g); }, 0) -
+      rowsCache.reduce(function (s, r) { const l = wf.cur.dl[r.id]; return s + (l && l.paid ? num(l.applied) : 0); }, 0);
+    pool = Math.max(0, r2(pool - wf.cur.cl.reduce(function (s, c) { return s + num(c.amount); }, 0)));
+    rows.forEach(function (r) { const l = lineOf(r.id); l.on = false; l.amount = ""; });
+    if (mode === "clear") return;
+    let order = rows.slice();
+    if (mode === "smallest") order.sort(function (a, b) { return a.before - b.before; });
+    else if (mode === "interest") order = order.filter(function (r) { return r.rate > 0; }).sort(function (a, b) { return b.rate - a.rate || a.before - b.before; });
+    else if (mode === "cutoff") order = order.filter(function (r) { return r.due; }).sort(function (a, b) { return a.due.date < b.due.date ? -1 : a.due.date > b.due.date ? 1 : 0; });
+    order.forEach(function (r) {
+      const want = mode === "cutoff" ? Math.min(r.due.due, r.before) : r.before;
+      const a = r2(Math.min(want, pool));
+      if (a <= 0.004) return;
+      const l = lineOf(r.id); l.on = true; l.amount = a.toFixed(2); pool = r2(pool - a);
+    });
+  }
+  function checkOver() { if (calc().over) { toast("Over-allocated. Lower an amount first."); return true; } return false; }
+  function savePlan() {
+    const cur = wf.cur;
+    cur.id = cur.id || uid(); cur.savedAt = new Date().toISOString();
+    const copy = JSON.parse(JSON.stringify(cur)), i = wf.plans.findIndex(function (p) { return p.id === cur.id; });
+    if (i >= 0) wf.plans[i] = copy; else wf.plans.push(copy);
+    persist();
+  }
+  async function payDebts(ids) {
+    if (checkOver()) return;
+    const todo = ids.filter(function (id) { const l = wf.cur.dl[id]; return l && l.on && !l.paid && num(l.amount) > 0.004; });
+    if (!todo.length) { toast("Nothing to pay. Tick a debt and enter an amount."); return; }
+    await refreshDebt();
+    let n = 0, sum = 0;
+    todo.forEach(function (id) {
+      const d = debtState.debts.find(function (x) { return x.id === id; }), l = wf.cur.dl[id];
+      if (!d) return;
+      const snap = JSON.stringify(d), X = r2(Math.min(num(l.amount), balanceOf(d)));
+      if (X <= 0.004) return;
+      const applied = applyPayment(d, X);
+      l.paid = true; l.applied = applied; l.snap = snap; n++; sum += applied;
+    });
+    if (!n) { toast("Those debts are already paid."); render(); return; }
+    await saveDebt(); savePlan(); render();
+    toast("Marked " + n + " debt" + (n === 1 ? "" : "s") + " paid \u00b7 " + peso(sum), function () { undoDebts(todo); });
+  }
+  async function undoDebts(ids) {
+    await refreshDebt();
+    ids.forEach(function (id) {
+      const l = wf.cur.dl[id]; if (!l || !l.paid || !l.snap) return;
+      const i = debtState.debts.findIndex(function (x) { return x.id === id; });
+      if (i >= 0) debtState.debts[i] = JSON.parse(l.snap);
+      l.paid = false; delete l.snap; delete l.applied;
+    });
+    sanitizeDebts(); await saveDebt(); savePlan(); render(); toast("Payment undone.");
+  }
+  function payGoals(ids) {
+    if (checkOver()) return;
+    let n = 0;
+    ids.forEach(function (id) {
+      const g = wf.goals.find(function (x) { return x.id === id; }), l = wf.cur.gl[id];
+      if (!g || !l || l.paid || num(l.amount) <= 0.004) return;
+      l.applied = r2(num(l.amount)); g.saved = r2(g.saved + l.applied); l.paid = true; n++;
+    });
+    if (!n) return 0;
+    savePlan(); render();
+    if (ids.length === 1) toast("Added to goal.", function () { undoGoals(ids); });
+    return n;
+  }
+  function undoGoals(ids) {
+    ids.forEach(function (id) {
+      const g = wf.goals.find(function (x) { return x.id === id; }), l = wf.cur.gl[id];
+      if (!g || !l || !l.paid) return;
+      g.saved = r2(Math.max(0, g.saved - num(l.applied))); l.paid = false; l.amount = l.applied; delete l.applied;
+    });
+    savePlan(); render();
+  }
+  async function payAll() {
+    if (checkOver()) return;
+    if (!confirm("Mark every allocated debt and savings line as paid? Debt balances will be updated in the Debt Tracker.")) return;
+    const dIds = Object.keys(wf.cur.dl).filter(function (id) { const l = wf.cur.dl[id]; return l.on && !l.paid && num(l.amount) > 0.004; });
+    const gIds = Object.keys(wf.cur.gl).filter(function (id) { const l = wf.cur.gl[id]; return !l.paid && num(l.amount) > 0.004; });
+    const cIds = wf.cur.cl.filter(function (c) { return !c.paid && num(c.amount) > 0.004; });
+    if (!dIds.length && !gIds.length && !cIds.length) { toast("Nothing allocated yet."); return; }
+    cIds.forEach(function (c) { c.paid = true; });
+    await refreshDebt();
+    let sum = 0;
+    dIds.forEach(function (id) {
+      const d = debtState.debts.find(function (x) { return x.id === id; }), l = wf.cur.dl[id];
+      if (!d) return;
+      const snap = JSON.stringify(d), X = r2(Math.min(num(l.amount), balanceOf(d)));
+      if (X <= 0.004) return;
+      l.applied = applyPayment(d, X); l.snap = snap; l.paid = true; sum += l.applied;
+    });
+    gIds.forEach(function (id) {
+      const g = wf.goals.find(function (x) { return x.id === id; }), l = wf.cur.gl[id];
+      if (!g) return;
+      l.applied = r2(num(l.amount)); g.saved = r2(g.saved + l.applied); l.paid = true; sum += l.applied;
+    });
+    await saveDebt(); savePlan(); render();
+    toast("Marked all paid \u00b7 " + peso(sum), async function () { cIds.forEach(function (c) { c.paid = false; }); await undoDebts(dIds); undoGoals(gIds); });
+  }
+
+  // ---------- events ----------
+  function entryOf(el) { const w = el.closest("[data-eid]"); return w ? wf.cur.entries.find(function (e) { return e.id === w.getAttribute("data-eid"); }) : null; }
+  function rowId(el, attr) { const w = el.closest("[" + attr + "]"); return w ? w.getAttribute(attr) : null; }
+  main.addEventListener("input", function (ev) {
+    const t = ev.target, f = t.getAttribute("data-f");
+    if (!f) return;
+    if (f === "label" || f === "date" || f === "amount") { const e = entryOf(t); if (e) e[f] = t.value; }
+    else if (f === "damt") { const id = rowId(t, "data-did"), l = lineOf(id); l.amount = t.value; if (num(t.value) > 0 && !l.on) { l.on = true; const cb = t.closest(".row").querySelector("[data-act=don]"); if (cb) cb.checked = true; } }
+    else if (f === "gamt") { lineGoal(rowId(t, "data-gid")).amount = t.value; }
+    else if (f === "cname" || f === "camt") { const c = customOf(t); if (c) c[f === "cname" ? "name" : "amount"] = t.value; }
+    persist(); update();
+  });
+  function customOf(el) { const id = rowId(el, "data-cid"); return wf.cur.cl.find(function (c) { return c.id === id; }); }
+  function lineGoal(id) { return wf.cur.gl[id] || (wf.cur.gl[id] = { amount: "", paid: false }); }
+  main.addEventListener("change", function (ev) {
+    const t = ev.target;
+    if (t.id === "auto") { if (t.value) { auto(t.value); persist(); render(); } return; }
+    if (t.getAttribute("data-f") === "damt") { // cap at the remaining balance
+      const id = rowId(t, "data-did"), r = rowsCache.find(function (x) { return x.id === id; });
+      if (r && num(t.value) > r.before) { t.value = r.before.toFixed(2); lineOf(id).amount = t.value; persist(); update(); }
+      return;
+    }
+    if (t.getAttribute("data-act") === "don") {
+      const id = rowId(t, "data-did"), l = lineOf(id), r = rowsCache.find(function (x) { return x.id === id; });
+      l.on = t.checked;
+      if (l.on && num(l.amount) <= 0 && r) {
+        const c = calc(); l.amount = r2(Math.max(0, Math.min(r.before, c.left))).toFixed(2); if (num(l.amount) <= 0) l.amount = "";
+      }
+      persist(); render();
+    }
+  });
+  main.addEventListener("click", function (ev) {
+    const b = ev.target.closest("[data-act]"); if (!b || b.type === "checkbox") return;
+    const act = b.getAttribute("data-act");
+    if (act === "addentry") { wf.cur.entries.push({ id: uid(), label: "", date: todayIso(), amount: "" }); persist(); render(); }
+    else if (act === "quick") {
+      const q = b.getAttribute("data-q");
+      wf.cur.entries.push({ id: uid(), label: q, date: q === "13th Month Pay" ? isoD(new Date().getFullYear(), 11, 15) : todayIso(), amount: "" });
+      persist(); render();
+    }
+    else if (act === "delentry") { const e = entryOf(b); if (e) { wf.cur.entries = wf.cur.entries.filter(function (x) { return x !== e; }); persist(); render(); } }
+    else if (act === "newgoal") { ui.newGoal = true; render(); const n = document.getElementById("ngName"); if (n) n.focus(); }
+    else if (act === "cancelgoal") { ui.newGoal = false; render(); }
+    else if (act === "savegoal") {
+      const name = document.getElementById("ngName").value.trim(), target = num(document.getElementById("ngTarget").value);
+      if (!name || target <= 0) { toast("Enter a goal name and a target amount."); return; }
+      wf.goals.push({ id: uid(), name: name, target: target, saved: num(document.getElementById("ngSaved").value), targetDate: document.getElementById("ngDate").value || "" });
+      ui.newGoal = false; persist(); render();
+    }
+    else if (act === "delgoal") {
+      const id = rowId(b, "data-gid"), g = wf.goals.find(function (x) { return x.id === id; });
+      if (g && confirm("Delete the goal \"" + g.name + "\"?")) { wf.goals = wf.goals.filter(function (x) { return x !== g; }); delete wf.cur.gl[id]; persist(); render(); }
+    }
+    else if (act === "addcustom") { wf.cur.cl.push({ id: uid(), name: "", amount: "", paid: false }); persist(); render(); }
+    else if (act === "delcustom") { const c = customOf(b); if (c) { wf.cur.cl = wf.cur.cl.filter(function (x) { return x !== c; }); persist(); render(); } }
+    else if (act === "paycustom") { const c = customOf(b); if (c && !checkOver()) { if (num(c.amount) <= 0) { toast("Enter an amount first."); return; } c.paid = true; savePlan(); render(); toast("Marked paid (plan only).", function () { c.paid = false; savePlan(); render(); }); } }
+    else if (act === "undocustom") { const c = customOf(b); if (c) { c.paid = false; savePlan(); render(); } }
+    else if (act === "paydebt") payDebts([rowId(b, "data-did")]);
+    else if (act === "undodebt") undoDebts([rowId(b, "data-did")]);
+    else if (act === "paygoal") payGoals([rowId(b, "data-gid")]);
+    else if (act === "undogoal") undoGoals([rowId(b, "data-gid")]);
+    else if (act === "payall") payAll();
+    else if (act === "saveplan") { if (checkOver()) return; savePlan(); render(); toast("Plan saved."); }
+    else if (act === "newplan") { wf.cur = newPlan(); persist(); render(); window.scrollTo(0, 0); }
+    else if (act === "openplan") {
+      const p = wf.plans.find(function (x) { return x.id === rowId(b, "data-pid"); });
+      if (p) { wf.cur = JSON.parse(JSON.stringify(p)); persist(); render(); window.scrollTo(0, 0); toast("Plan opened. Edit it and save again."); }
+    }
+    else if (act === "delplan") {
+      const id = rowId(b, "data-pid");
+      if (confirm("Delete this saved plan? Payments already recorded stay in the Debt Tracker.")) { wf.plans = wf.plans.filter(function (x) { return x.id !== id; }); if (wf.cur.id === id) wf.cur.id = null; persist(); render(); }
+    }
+  });
+
+  // ---------- lock, startup, updates ----------
+  function simpleHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; } return h; }
+  const PASS_HASH = simpleHash("031171");
+  function unlock() {
+    const input = document.getElementById("lockInput"), err = document.getElementById("lockErr");
+    if (simpleHash(input.value) === PASS_HASH) { sessionStorage.setItem("ctUnlocked", "1"); revealApp(); }
+    else { err.textContent = "Wrong passcode. Try again."; input.value = ""; input.focus(); }
+  }
+  function revealApp() {
+    document.getElementById("lock").style.display = "none";
+    document.body.classList.remove("locked");
+    document.getElementById("app").classList.remove("hidden");
+    startApp();
+  }
+  let started = false;
+  async function startApp() {
+    if (started) return; started = true;
+    loadDebtLocal(); loadWfLocal(); render();
+    const before = JSON.stringify(debtState), wasWf = wf.u;
+    await Promise.all([refreshDebt(), loadWfCloud()]);
+    if (JSON.stringify(debtState) !== before || wf.u !== wasWf) {
+      const a = document.activeElement;
+      if (!(a && a.closest && a.closest("#main") && a.tagName === "INPUT")) render(); // never re-render while typing
+    }
+  }
+
+  const APP_VERSION = 185;
+  function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
+  // Manual update only: shows a banner, never auto-reloads.
+  async function checkForUpdate() {
+    setFooterVersion();
+    try {
+      const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      const j = await res.json();
+      if (!(j && typeof j.version === "number" && j.version > APP_VERSION)) return;
+      showUpdateBanner(j.version);
+    } catch (e) {}
+  }
+  function showUpdateBanner(ver) {
+    if (document.getElementById("updateBanner")) return;
+    const bar = document.createElement("div");
+    bar.id = "updateBanner";
+    bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:600;background:#8f8cf5;color:#0f0f1a;font-size:13px;font-weight:700;text-align:center;padding:10px 14px;cursor:pointer;box-shadow:0 -2px 10px rgba(0,0,0,.4)";
+    bar.textContent = "Update available (v" + ver + ") \u2014 tap to refresh";
+    bar.onclick = async function () {
+      bar.textContent = "Updating\u2026";
+      if (window.caches && caches.keys) { try { const ks = await caches.keys(); await Promise.all(ks.map(function (k) { return caches.delete(k); })); } catch (e) {} }
+      const u = new URL(location.href); u.searchParams.set("v", String(ver) + "." + Date.now()); location.replace(u.toString());
+    };
+    document.body.appendChild(bar);
+  }
+
+  document.getElementById("lockBtn").onclick = unlock;
+  document.getElementById("lockInput").addEventListener("keydown", function (e) { if (e.key === "Enter") unlock(); });
+  if (sessionStorage.getItem("ctUnlocked") === "1") revealApp(); else document.getElementById("lockInput").focus();
+  checkForUpdate();
+  setInterval(checkForUpdate, 60000);
+})();
+</script>
+<script src="shell.js"></script>
+</body>
+</html>

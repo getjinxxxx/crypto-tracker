@@ -12,7 +12,7 @@
   window.__shellLoaded = true;
 
   var FILE = (location.pathname.split("/").pop() || "home.html").toLowerCase();
-  var APP_VERSION = 173; // keep in sync with version.json
+  var APP_VERSION = 185; // keep in sync with version.json
 
   var NAV = [
     { group: "Main" },
@@ -24,6 +24,7 @@
     { href: "debt.html", label: "Debt Tracker" },
     { href: "receivables.html", label: "Receivables" },
     { href: "soa.html", label: "Statement of Account" },
+    { href: "windfall.html", label: "Windfall Planner" },
     { href: "itinerary.html", label: "Itinerary" },
     { href: "kanban.html", label: "Kanban" },
     { href: "fittrack.html", label: "FitTrack AI" },
