@@ -384,6 +384,11 @@
   .cs-pill.open { background: rgba(79,140,255,0.18); color: #9db8ff; }
   .cs-act { display: flex; gap: 8px; margin-top: 8px; }
   .cs-btn { background: #262938; color: #b6b4ff; border: 1px solid #3a3e55; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .cs-dup-r { min-width: 0; }
+  .cs-dup-x { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
+  .cs-dup-b { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cs-dup .cs-sel { flex: 1 1 100%; min-width: 0; }
+  .cs-open { display: inline-block; margin-top: 6px; font-size: 12.5px; color: #b6b4ff; text-decoration: none; }
   .cs-links { font-size: 12.5px; margin: 2px 0 8px; }
   .cs-links a { color: #b6b4ff; text-decoration: none; }
   .cs-dup { background: #1b1d26; border: 1px dashed #3a3e55; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
@@ -1016,7 +1021,7 @@ var CE = (function () {
     var out = [], i, t, rows, j;
     for (i = 0; i < S.txns.length; i++) {
       t = S.txns[i];
-      if (t.cardId === card.id && t.date <= today) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn" });
+      if (t.cardId === card.id && t.date <= today) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening });
     }
     var ins = S.installments || [];
     for (i = 0; i < ins.length; i++) {
@@ -1067,7 +1072,9 @@ var CE = (function () {
       else if (s.paid > 0) s.status = "Partial";
       else s.status = "Open";
       s.skip = s.total === 0 && s.paid === 0;
-      s.min = Math.min(s.remaining, Math.max(0, Math.min(s.total, Math.max(minFixed, Math.round(s.total * minPct / 100))) - s.paid));
+      var cFix = card.minFixed == null ? minFixed : card.minFixed, cPct = card.minPct == null ? minPct : card.minPct, mn = Math.max(cFix, Math.round(s.total * cPct / 100));
+      if (card.minCeil) mn = Math.ceil(mn / 100) * 100;
+      s.min = Math.min(s.remaining, Math.max(0, Math.min(s.total, mn) - s.paid));
       var atDue = 0;
       for (i = 0; i < pieces.length; i++) if (pieces[i].date <= s.due) atDue += pieces[i].amt;
       s.remAtDue = s.total - atDue;
@@ -1095,7 +1102,7 @@ var CE = (function () {
         var bal = balance(S, card, today);
         if (bal > 0) owed += bal;
         var ps = postings(S, card, today);
-        for (i = 0; i < ps.length; i++) if (keyOf(ps[i].date) === mk) spent += ps[i].amt;
+        for (i = 0; i < ps.length; i++) if (keyOf(ps[i].date) === mk && !ps[i].open) spent += ps[i].amt;
       }
       for (i = 0; i < list.length; i++) {
         s = list[i];
@@ -1430,18 +1437,20 @@ var CE = (function () {
   // Plan entries that fall in a given month, in payday order.
   function planEntriesFor(d, key) {
     if (!hasPlan(d)) return [];
-    return d.plan.filter(p => p.key === key).sort((a, b) => a.payday - b.payday);
+    return d.plan.filter(p => p.key === key && !(d.cardLink && !p.paid)).sort((a, b) => a.payday - b.payday);
   }
 
   // Is the debt active in the given month? Recurring bills run every month from
   // startMonth onward until stopped (endMonth set); otherwise it's N fixed terms.
   function isActiveIn(d, key) {
-    if (d.cardLink) return false;
+    if (d.cardHide) return false;
     if (hasPlan(d)) return planEntriesFor(d, key).length > 0;
     const idx = termIndexFor(d, key);
     if (idx < 0) return false;
-    if (d.recurring) return !d.endMonth || key <= d.endMonth;
-    return idx < d.terms;
+    const on = d.recurring ? (!d.endMonth || key <= d.endMonth) : idx < d.terms;
+    // Linked to a card: only already-PAID terms stay visible as history; unpaid ones are replaced by the card statement.
+    if (on && d.cardLink) return (d.recurring || d.terms > 1) ? !!(d.paidTerms && d.paidTerms[key]) : !!d.paid;
+    return on;
   }
 
   // ---------- Derived amounts (per item) ----------
@@ -1817,6 +1826,7 @@ var CE = (function () {
           '<span class="cs-nm">' + escH(o.label) + (o.est ? ' <small>(est.)</small>' : '') + '</span>' +
           '<span class="cs-pill ' + cls + '">' + escH(o.status) + '</span>' +
           '<span class="cs-am">' + peso(o.paid ? o.full : o.amount) + '</span></div>';
+        h += '<a class="cs-open" href="cards.html?card=' + encodeURIComponent(o.cardId) + '">\u25B8 Open in Card Tracker</a>';
         if (!o.paid) {
           h += '<div class="cs-act"><button class="cs-btn" data-cspay="' + escH(o.cardId) + '|' + o.key + '">Pay full</button>' +
             '<button class="cs-btn" data-cspart="' + escH(o.cardId) + '|' + o.key + '">Partial\u2026</button></div>';
@@ -1824,33 +1834,51 @@ var CE = (function () {
         h += '</div>';
       });
       h += '<div class="cs-links"><a href="cards.html">Open Card Tracker \u2192</a></div>';
-      // Duplicates: manual credit-card debts that mirror a card
+      // Duplicates: manual credit-card debts that mirror a card. One row per distinct manual debt name + card.
       const cands = state.debts.filter(d => d.category === "creditcard" && !d.cardLink);
-      const sugg = [];
+      const groups = {}, gorder = [];
       cands.forEach(d => {
-        const bc = bankCanon(d.bank || d.name);
-        if (!bc) return;
-        cardsAvail.forEach(c => { if (bankCanon(c.bank) === bc) sugg.push({ d: d, c: c }); });
+        const k = debtDisplayName(d).trim().toLowerCase();
+        if (!groups[k]) { groups[k] = []; gorder.push(k); }
+        groups[k].push(d);
       });
-      if (sugg.length || linked.length || (cands.length && cardsAvail.length)) {
+      const sugg = [];
+      gorder.forEach(k => {
+        const ds = groups[k], bc = bankCanon(ds[0].bank || ds[0].name);
+        if (!bc) return;
+        cardsAvail.forEach(c => {
+          if (bankCanon(c.bank) !== bc) return;
+          const live = ds.filter(d => !(Array.isArray(d.notDup) && d.notDup.indexOf(c.id) >= 0));
+          if (live.length) sugg.push({ ds: live, c: c });
+        });
+      });
+      const lgroups = {}, lorder = [];
+      linked.forEach(d => {
+        const k = debtDisplayName(d).trim().toLowerCase() + "|" + d.cardLink;
+        if (!lgroups[k]) { lgroups[k] = []; lorder.push(k); }
+        lgroups[k].push(d);
+      });
+      if (sugg.length || lorder.length || (cands.length && cardsAvail.length)) {
         h += '<div class="cs-dup"><div class="cs-dup-t">Duplicates</div>';
         sugg.forEach(x => {
-          h += '<div class="cs-dup-r"><span>' + escH(debtDisplayName(x.d)) + ' looks like ' + escH(cardLabel(x.c)) +
-            '</span><button class="cs-btn" data-csauto="' + escH(x.d.id) + '|' + escH(x.c.id) + '">Hide duplicate</button></div>';
+          const ids = escH(x.ds.map(d => d.id).join(",")) + '|' + escH(x.c.id);
+          h += '<div class="cs-dup-r"><span class="cs-dup-x">' + escH(debtDisplayName(x.ds[0])) + (x.ds.length > 1 ? ' (' + x.ds.length + ' entries)' : '') + ' looks like ' + escH(cardLabel(x.c)) + '</span>' +
+            '<span class="cs-dup-b"><button class="cs-btn" data-csg="link|' + ids + '">Link</button>' +
+            '<button class="cs-btn" data-csg="hide|' + ids + '">Hide duplicate</button>' +
+            '<button class="cs-btn" data-csg="nodup|' + ids + '">Not a duplicate</button></span></div>';
         });
         if (cands.length && cardsAvail.length) {
-          h += '<div class="cs-dup-r"><select id="csLinkDebt" class="cs-sel">' + cands.map(d => '<option value="' + escH(d.id) + '">' + escH(debtDisplayName(d)) + '</option>').join("") + '</select>' +
+          h += '<div class="cs-dup-r"><select id="csLinkDebt" class="cs-sel">' + gorder.map(k => '<option value="' + escH(groups[k].map(d => d.id).join(",")) + '">' + escH(debtDisplayName(groups[k][0])) + '</option>').join("") + '</select>' +
             '<select id="csLinkCard" class="cs-sel">' + cardsAvail.map(c => '<option value="' + escH(c.id) + '">' + escH(cardLabel(c)) + '</option>').join("") + '</select>' +
             '<button class="cs-btn" data-cslink="1">Link</button></div>';
         }
-        linked.forEach(d => {
-          const c = cardsState.cards.find(x => x.id === d.cardLink);
-          h += '<div class="cs-dup-r"><span>' + escH(debtDisplayName(d)) + ' \u2192 ' + escH(c ? cardLabel(c) : "card") + ' (hidden)</span>' +
-            '<button class="cs-btn" data-csunlink="' + escH(d.id) + '">Unlink</button></div>';
+        lorder.forEach(k => {
+          const ds = lgroups[k], c = cardsState.cards.find(x => x.id === ds[0].cardLink), hid = ds.some(d => d.cardHide);
+          h += '<div class="cs-dup-r"><span class="cs-dup-x">' + escH(debtDisplayName(ds[0])) + ' \u2192 ' + escH(c ? cardLabel(c) : "card") + (hid ? ' (hidden)' : ' (paid history kept)') + '</span>' +
+            '<span class="cs-dup-b"><button class="cs-btn" data-csunlink="' + escH(ds.map(d => d.id).join(",")) + '">Unlink</button></span></div>';
         });
         h += '</div>';
-      }
-    }
+      }    }
     return h + '</div>';
   }
   (function () {
@@ -1875,24 +1903,32 @@ var CE = (function () {
         if (pid) ccToast(part ? "Partial payment saved" : "Marked paid", function () { removeCardPayment(pid); renderAll(); });
         return;
       }
-      const auto = q("[data-csauto]");
-      if (auto) {
-        const ps = auto.getAttribute("data-csauto").split("|"), d = state.debts.find(x => x.id === ps[0]);
-        if (d) { d.cardLink = ps[1]; saveState(); renderAll(); }
+      const grp = q("[data-csg]");
+      if (grp) {
+        const ps = grp.getAttribute("data-csg").split("|"), ids = ps[1].split(",");
+        state.debts.filter(x => ids.indexOf(x.id) >= 0).forEach(d => {
+          if (ps[0] === "link") { d.cardLink = ps[2]; delete d.cardHide; }
+          else if (ps[0] === "hide") { d.cardLink = ps[2]; d.cardHide = true; }
+          else if (ps[0] === "nodup") { d.notDup = (Array.isArray(d.notDup) ? d.notDup : []).concat(ps[2]); }
+        });
+        saveState(); renderAll();
         return;
       }
       if (q("[data-cslink]")) {
         const ds = document.getElementById("csLinkDebt"), cs = document.getElementById("csLinkCard");
-        const d = ds && state.debts.find(x => x.id === ds.value);
-        if (d && cs && cs.value) { d.cardLink = cs.value; saveState(); renderAll(); }
+        if (ds && cs && cs.value) {
+          const ids = ds.value.split(",");
+          state.debts.filter(x => ids.indexOf(x.id) >= 0).forEach(d => { d.cardLink = cs.value; delete d.cardHide; });
+          saveState(); renderAll();
+        }
         return;
       }
       const un = q("[data-csunlink]");
       if (un) {
-        const d = state.debts.find(x => x.id === un.getAttribute("data-csunlink"));
-        if (d) { delete d.cardLink; saveState(); renderAll(); }
-      }
-    });
+        const ids = un.getAttribute("data-csunlink").split(",");
+        state.debts.filter(x => ids.indexOf(x.id) >= 0).forEach(d => { delete d.cardLink; delete d.cardHide; });
+        saveState(); renderAll();
+      }    });
   })();
 
   function renderList() {
@@ -3609,15 +3645,15 @@ var CE = (function () {
     cardsMemo = all; cardsMemoKey = mk;
     return all;
   }
-  function cardLabel(card) { return (card.nickname || "Card") + " \u2022\u2022" + (card.last4 || ""); }
+  function cardLabel(card) { return (card.nickname || "Card") + " \u2022\u2022\u2022" + (card.last4 || ""); }
   // Card statement occurrences whose due date is inside [start, end] (same shape as debt occurrences).
   function cardOccIn(start, end) {
     const out = [];
     cardsAllStmts().forEach(x => {
       const s = x.s;
       if (s.due < start || s.due > end) return;
-      const label = cardLabel(x.card), paid = s.remaining === 0;
-      out.push({ id: "cs:" + x.card.id, key: s.key, pi: -2, date: s.due, name: label + " statement", grp: label,
+      const label = cardLabel(x.card) + " \uD83D\uDCB3", paid = s.remaining === 0;
+      out.push({ id: "cs:" + x.card.id, key: s.key, pi: -2, date: s.due, name: label, grp: label,
         item: "Statement " + shortDate(s.close) + (s.est ? " (est.)" : ""),
         full: s.total / 100, amount: (paid ? s.total : s.remaining) / 100, paid: paid, over: false, recurring: false,
         card: true, status: s.status, cardId: x.card.id, label: label, est: s.est });
@@ -3646,10 +3682,11 @@ var CE = (function () {
     for (let guard = 0; key <= lastKey && guard < 80; guard++, key = addMonths(key, 1)) {
       const [y, m0] = parseKey(key), D = dimOf(y, m0);
       state.debts.forEach(d => {
-        if (d.cardLink) return; // hidden: replaced by the card statement
+        if (d.cardHide) return; // hidden duplicate: replaced by the card statement
         if (hasPlan(d)) {
           d.plan.forEach((p, pi) => {
             if (p.key !== key) return;
+            if (d.cardLink && !p.paid) return; // linked: only paid history stays
             const date = isoD(y, m0, Math.min(Math.max(1, Math.round(num(p.payday)) || 1), D));
             if (date < start || date > end) return;
             const full = num(p.amount);
@@ -3668,6 +3705,7 @@ var CE = (function () {
         const checked = multi ? !!(d.paidTerms && d.paidTerms[key]) : !!d.paid;
         const part = multi ? (num((d.paidAmt || {})[key]) || 0) : (num(d.paidOnce) || 0);
         const paid = checked || part >= full - 0.009;
+        if (d.cardLink && !paid) return; // linked: only paid history stays
         out.push({ id: d.id, key: key, pi: -1, date: date, name: debtDisplayName(d), grp: grpOf(d), item: itemOf(d), full: full,
           amount: paid ? full : Math.max(0, full - part), paid: paid, over: false, recurring: !!d.recurring });
       });
@@ -3861,7 +3899,7 @@ var CE = (function () {
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 187;
+  const APP_VERSION = 190;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
