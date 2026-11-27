@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<link rel="manifest" href="manifest.json" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="Cards" />
+<title>Card Tracker</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #0b0c10; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #f2f2f7; max-width: 720px; margin: 0 auto; padding: 14px 12px calc(150px + env(safe-area-inset-bottom)); line-height: 1.4; }
+  body.locked { overflow: hidden; }
+  body.shopen { overflow: hidden; }
+  #app.hidden { display: none; }
+
+  #lock { position: fixed; inset: 0; background: #0b0c10; z-index: 500; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #lock .lock-card { background: #1b1d26; border: 1px solid #2e313d; border-radius: 18px; padding: 28px 24px; width: 100%; max-width: 340px; text-align: center; }
+  #lock .lk-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  #lock .lk-sub { color: #a9aebd; font-size: 13px; margin-bottom: 20px; }
+  #lock input { width: 100%; background: #12141b; border: 1px solid #3a3e4d; color: #f2f2f7; border-radius: 12px; padding: 13px 14px; font-size: 20px; text-align: center; letter-spacing: 6px; }
+  #lock input:focus { outline: none; border-color: #8f8cf5; }
+  #lock button { width: 100%; background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 12px; padding: 13px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 14px; }
+  #lock .lk-err { color: #ff9a9a; font-size: 13px; margin-top: 12px; min-height: 16px; }
+
+  .topbar { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; padding-left: 52px; min-height: 44px; }
+  .topbar a, .topbar button { color: #c9ccd8; text-decoration: none; font-size: 13px; border: 1px solid #2e313d; border-radius: 999px; padding: 6px 12px; background: #1b1d26; font-family: inherit; cursor: pointer; }
+  .topbar .ttl { font-size: 16px; font-weight: 800; letter-spacing: .4px; flex: 1; }
+  .topbar button { font-size: 16px; padding: 5px 11px; }
+
+  .card { background: #1b1d26; border: 1px solid #2e313d; border-left: 4px solid #8f8cf5; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .8px; color: #cfcffb; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .card h2 .sp { flex: 1; }
+  .hint { color: #a9aebd; font-size: 12px; margin: 2px 0 8px; }
+  .muted { color: #a9aebd; }
+  .grn { color: #34d399; }
+  .red { color: #ff9a9a; }
+
+  input[type=text], input[type=date], input[type=search], select {
+    background: #12141b; color: #f2f2f7; border: 1px solid #3a3e4d; border-radius: 8px; padding: 9px 10px; font-size: 16px; min-width: 0; font-family: inherit; width: 100%; }
+  input:focus, select:focus { outline: none; border-color: #8f8cf5; }
+  input[type=checkbox] { width: 22px; height: 22px; accent-color: #8f8cf5; flex: none; }
+  label.fl { display: block; font-size: 12px; color: #a9aebd; margin: 10px 0 3px; }
+  label.ck { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 10px; color: #dfe2ec; }
+
+  button { font-family: inherit; cursor: pointer; }
+  .btn { background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 10px; padding: 11px 14px; font-size: 15px; font-weight: 800; }
+  .btn.sec { background: #2a2d3c; color: #f2f2f7; border: 1px solid #3a3e4d; font-weight: 700; }
+  .btn.dng { background: #3a2327; color: #ffb4b4; border: 1px solid #6b3a40; font-weight: 700; }
+  .btn.sm { padding: 7px 10px; font-size: 13px; border-radius: 8px; }
+  .btn.full { width: 100%; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .x { background: transparent; border: 1px solid #3a3e4d; color: #c9ccd8; border-radius: 8px; width: 32px; height: 32px; font-size: 15px; flex: none; }
+  .link { background: transparent; border: 1px dashed #5b5f78; color: #cfcffb; border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 700; width: 100%; margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip { background: #23263a; border: 1px solid #3a3e4d; color: #dcdcfb; border-radius: 999px; padding: 7px 12px; font-size: 13px; }
+  .chip.on { background: #8f8cf5; color: #0f0f1a; border-color: #8f8cf5; font-weight: 800; }
+  .sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #3a3e4d; padding: 0; }
+  .sw.on { border-color: #ffffff; }
+  .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .acts .btn { flex: 1 1 110px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .stat { background: #1b1d26; border: 1px solid #2e313d; border-radius: 12px; padding: 10px 12px; }
+  .stat.wide { grid-column: 1 / -1; }
+  .stat .k { font-size: 11px; font-weight: 800; letter-spacing: .6px; color: #cfcffb; text-transform: uppercase; }
+  .stat .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: #ffffff; }
+  .stat .s { font-size: 12px; color: #a9aebd; }
+
+  .alert { border-radius: 10px; padding: 9px 12px; margin-bottom: 8px; font-size: 13px; font-weight: 700; display: flex; gap: 8px; align-items: center; }
+  .alert.bad { background: #3a2327; color: #ffb4b4; border: 1px solid #6b3a40; }
+  .alert.warn { background: #2b2745; color: #d6d4ff; border: 1px solid #5a55a8; }
+  .alert.info { background: #1f2b3a; color: #bfe0ff; border: 1px solid #3a5878; }
+  .alert span { flex: 1; }
+  .alert button { background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 8px; padding: 6px 10px; font-weight: 800; font-size: 12px; }
+
+  .ctile { background: #1b1d26; border: 1px solid #2e313d; border-left: 6px solid #8f8cf5; border-radius: 12px; padding: 11px 12px; margin-bottom: 10px; cursor: pointer; }
+  .ctile.arch { opacity: .65; }
+  .ctile .t1 { display: flex; justify-content: space-between; gap: 8px; font-weight: 800; }
+  .ctile .t2 { font-size: 12px; color: #a9aebd; margin-top: 2px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .ub { height: 8px; background: #2a2d3c; border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .ub i { display: block; height: 100%; background: #34d399; }
+  .ub i.hi { background: #ff9a9a; }
+  .ub i.bd { background: #8f8cf5; }
+  .ub i.wn { background: #c4b5fd; }
+
+  .trow { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid #2a2d38; cursor: pointer; }
+  .trow:first-child { border-top: none; }
+  .trow .l { flex: 1; min-width: 0; }
+  .trow .m { font-weight: 700; overflow-wrap: anywhere; }
+  .trow .d { font-size: 12px; color: #a9aebd; }
+  .trow .a { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .pill { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 800; }
+  .p-Open { background: #2b2745; color: #d6d4ff; }
+  .p-Paid { background: #123a2c; color: #34d399; }
+  .p-Partial { background: #1c3350; color: #9fd0ff; }
+  .p-Overdue { background: #4a2227; color: #ffb4b4; }
+  .stm { border-top: 1px solid #2a2d38; padding: 10px 0; }
+  .stm:first-of-type { border-top: none; }
+  .stm .r1 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .stm .r1 b { flex: 1; min-width: 0; }
+  .stm .r2 { display: flex; justify-content: space-between; font-size: 13px; color: #dfe2ec; padding: 2px 0; gap: 8px; }
+  .stm .r2 b { font-variant-numeric: tabular-nums; }
+  .stm .pm { font-size: 12px; color: #a9aebd; display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  .stm .pm span { flex: 1; }
+  .stm .pm .x { width: 26px; height: 26px; font-size: 12px; }
+  .dthead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .dthead .nm { flex: 1; font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
+
+  .filt { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .filt .full { grid-column: 1 / -1; }
+  .filt label { font-size: 11px; color: #a9aebd; display: block; margin-bottom: 2px; }
+
+  .bars .br { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+  .bars .br .n { width: 34%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #dfe2ec; }
+  .bars .br .tr { flex: 1; height: 12px; background: #2a2d3c; border-radius: 999px; overflow: hidden; }
+  .bars .br .tr i { display: block; height: 100%; background: #8f8cf5; }
+  .bars .br .v { width: 96px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .trend { display: flex; align-items: flex-end; gap: 8px; height: 150px; padding-top: 6px; }
+  .trend .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+  .trend .col i { display: block; width: 100%; background: #8f8cf5; border-radius: 6px 6px 0 0; min-height: 2px; }
+  .trend .col .tv { font-size: 10px; color: #cfcffb; margin-bottom: 3px; white-space: nowrap; }
+  .trend .col .tl { font-size: 11px; color: #a9aebd; margin-top: 4px; }
+
+  #tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; background: #14161d; border-top: 1px solid #2e313d; display: flex; max-width: 720px; margin: 0 auto; padding-bottom: env(safe-area-inset-bottom); }
+  #tabs button { flex: 1; background: transparent; border: none; color: #a9aebd; padding: 10px 4px 9px; font-size: 12px; font-weight: 700; }
+  #tabs button b { display: block; font-size: 18px; line-height: 1.1; }
+  #tabs button.on { color: #cfcffb; box-shadow: inset 0 3px 0 #8f8cf5; }
+  #fab { position: fixed; right: 14px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 90; background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 999px; padding: 13px 18px; font-size: 15px; font-weight: 800; box-shadow: 0 4px 14px rgba(0,0,0,.55); }
+  body.shopen #fab, body.locked #fab { display: none; }
+
+  #sheet { position: fixed; inset: 0; z-index: 400; display: none; }
+  #sheet.on { display: block; }
+  #sheet .sh-back { position: absolute; inset: 0; background: rgba(0,0,0,.65); }
+  #sheet .sh-box { position: absolute; left: 0; right: 0; bottom: 0; max-width: 720px; margin: 0 auto; max-height: 92vh; overflow-y: auto; background: #1b1d26; border: 1px solid #2e313d; border-radius: 18px 18px 0 0; padding: 16px 14px calc(18px + env(safe-area-inset-bottom)); }
+  #sheet h3 { margin: 0 0 6px; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  #sheet h3 span { flex: 1; }
+  #sheet .sech { font-size: 12px; font-weight: 800; letter-spacing: .7px; color: #cfcffb; text-transform: uppercase; margin: 16px 0 6px; border-top: 1px solid #2a2d38; padding-top: 12px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lrow { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+  .lrow input { flex: 1; }
+  .lrow .t { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+  .big { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  #toast { position: fixed; left: 12px; right: 12px; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 700; max-width: 520px; margin: 0 auto; background: #2a2d3c; color: #f2f2f7; border: 1px solid #5b5f78; border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; box-shadow: 0 4px 18px rgba(0,0,0,.6); font-size: 14px; }
+  #toast span { flex: 1; }
+  #toast button { background: #8f8cf5; color: #0f0f1a; border: none; border-radius: 8px; padding: 7px 12px; font-weight: 800; }
+  .foot { text-align: center; color: #8d92a3; font-size: 11px; margin-top: 18px; }
+  .empty { color: #a9aebd; font-size: 14px; text-align: center; padding: 18px 8px; }
+</style>
+</head>
+<body class="locked">
+
+<div id="lock">
+  <div class="lock-card">
+    <div class="lk-title">Card Tracker</div>
+    <div class="lk-sub">Enter passcode to view</div>
+    <input id="lockInput" type="password" inputmode="numeric" maxlength="12" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="off" />
+    <button id="lockBtn">Unlock</button>
+    <div class="lk-err" id="lockErr"></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <div class="topbar">
+    <a href="home.html">&larr; Home</a>
+    <div class="ttl">&#128179; CARD TRACKER</div>
+    <button type="button" data-act="settings" aria-label="Settings">&#9881;</button>
+  </div>
+  <div id="main"></div>
+  <div class="foot">Card Tracker &bull; <span id="footVer"></span></div>
+  <button type="button" id="fab" data-act="addexp">&#65291; Add expense</button>
+  <div id="tabs">
+    <button type="button" data-tab="home"><b>&#127968;</b>Home</button>
+    <button type="button" data-tab="cards"><b>&#128179;</b>Cards</button>
+    <button type="button" data-tab="txns"><b>&#129534;</b>Txns</button>
+    <button type="button" data-tab="reports"><b>&#128202;</b>Reports</button>
+  </div>
+  <div id="sheet"></div>
+</div>
+
+<script>
+// ===== CARD ENGINE (keep identical in debt.html) =====
+var CE = (function () {
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function dim(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
+  function isoD(y, m0, d) { var t = new Date(y, m0, d); return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate()); }
+  function parseIso(s) { return [parseInt(s.slice(0, 4), 10), parseInt(s.slice(5, 7), 10) - 1, parseInt(s.slice(8, 10), 10)]; }
+  function addMonthsIso(iso, n) {
+    var a = parseIso(iso), t = a[0] * 12 + a[1] + n, y = Math.floor(t / 12), m = t % 12;
+    return isoD(y, m, Math.min(a[2], dim(y, m)));
+  }
+  function keyOf(iso) { return String(iso).slice(0, 7); }
+  function keyParts(key) { return [parseInt(key.slice(0, 4), 10), parseInt(key.slice(5, 7), 10) - 1]; }
+  function keyAdd(key, n) { var p = keyParts(key), t = p[0] * 12 + p[1] + n; return Math.floor(t / 12) + "-" + p2((t % 12) + 1); }
+  function closeDay(card, y, m0) { return Math.min(card.cutoffDay, dim(y, m0)); }
+  function stmtKeyOf(card, iso) {
+    var a = parseIso(iso), k = a[0] + "-" + p2(a[1] + 1);
+    return a[2] <= closeDay(card, a[0], a[1]) ? k : keyAdd(k, 1);
+  }
+  function stmtDates(card, key) {
+    var p = keyParts(key), y = p[0], m0 = p[1];
+    var close = isoD(y, m0, closeDay(card, y, m0));
+    var pk = keyParts(keyAdd(key, -1));
+    var start = isoD(pk[0], pk[1], closeDay(card, pk[0], pk[1]) + 1);
+    var dueKey = card.dueDay > card.cutoffDay ? key : keyAdd(key, 1);
+    var dp = keyParts(dueKey);
+    var due = isoD(dp[0], dp[1], Math.min(card.dueDay, dim(dp[0], dp[1])));
+    return { start: start, close: close, due: due };
+  }
+  function instPmt(inst) {
+    var P = inst.principal, n = inst.months, r = (inst.apr || 0) / 100 / 12;
+    if (n < 1) return P;
+    if (!r) return Math.round(P / n);
+    return Math.round(P * r / (1 - Math.pow(1 + r, -n)));
+  }
+  function instSchedule(inst) {
+    var n = Math.max(1, inst.months), r = (inst.apr || 0) / 100 / 12, pmt = instPmt(inst), bal = inst.principal, rows = [];
+    for (var i = 0; i < n; i++) {
+      var intr = Math.round(bal * r), prin = pmt - intr;
+      if (i === n - 1) prin = bal;
+      bal -= prin;
+      rows.push({ i: i, date: addMonthsIso(inst.startDate, i), pay: prin + intr, int: intr, prin: prin, balAfter: bal });
+    }
+    return rows;
+  }
+  function postings(S, card, today) {
+    var out = [], i, t, rows, j;
+    for (i = 0; i < S.txns.length; i++) {
+      t = S.txns[i];
+      if (t.cardId === card.id && t.date <= today) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn" });
+    }
+    var ins = S.installments || [];
+    for (i = 0; i < ins.length; i++) {
+      if (ins[i].cardId !== card.id) continue;
+      rows = instSchedule(ins[i]);
+      for (j = 0; j < rows.length; j++) {
+        if (rows[j].date <= today) out.push({ date: rows[j].date, amt: rows[j].pay, catId: ins[i].catId, kind: "inst" });
+      }
+    }
+    return out;
+  }
+  function statements(S, card, today) {
+    var posts = postings(S, card, today), pays = [], i, k;
+    for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id) pays.push(S.payments[i]);
+    if (!posts.length && !pays.length) return [];
+    var byKey = {}, payBy = {}, minKey = null, maxKey = stmtKeyOf(card, today);
+    for (i = 0; i < posts.length; i++) {
+      k = stmtKeyOf(card, posts[i].date);
+      byKey[k] = (byKey[k] || 0) + posts[i].amt;
+      if (minKey === null || k < minKey) minKey = k;
+    }
+    for (i = 0; i < pays.length; i++) {
+      k = pays[i].stmtKey;
+      (payBy[k] = payBy[k] || []).push({ date: pays[i].date, amt: pays[i].amt });
+      if (minKey === null || k < minKey) minKey = k;
+      if (k > maxKey) maxKey = k;
+    }
+    var out = [], prev = null, carry = [], key = minKey, guard = 0;
+    var st = S.settings || {}, minFixed = st.minFixed == null ? 50000 : st.minFixed, minPct = st.minPct == null ? 5 : st.minPct;
+    while (key <= maxKey && guard++ < 1200) {
+      var d = stmtDates(card, key), s = { key: key, start: d.start, close: d.close, due: d.due, charges: byKey[key] || 0, interest: 0, total: 0, paid: 0, remaining: 0, min: 0, status: "Open", est: false, skip: false, pieces: [], remAtDue: 0 };
+      if (prev && today > prev.due) s.interest = Math.round(Math.max(0, prev.remAtDue) * (card.apr || 0) / 100 / 12);
+      s.total = Math.max(0, s.charges + s.interest);
+      var pieces = (payBy[key] || []).concat(carry), sum = 0;
+      for (i = 0; i < pieces.length; i++) sum += pieces[i].amt;
+      s.pieces = pieces;
+      s.paid = Math.min(s.total, sum);
+      carry = [];
+      var ex = sum - s.paid;
+      for (i = pieces.length - 1; i >= 0 && ex > 0; i--) {
+        var take = Math.min(ex, pieces[i].amt);
+        if (take > 0) { carry.push({ date: pieces[i].date, amt: take }); ex -= take; }
+      }
+      s.remaining = s.total - s.paid;
+      s.est = s.close > today;
+      if (s.remaining === 0 && s.total > 0) s.status = "Paid";
+      else if (s.remaining > 0 && today > s.due) s.status = "Overdue";
+      else if (s.paid > 0) s.status = "Partial";
+      else s.status = "Open";
+      s.skip = s.total === 0 && s.paid === 0;
+      s.min = Math.min(s.remaining, Math.max(0, Math.min(s.total, Math.max(minFixed, Math.round(s.total * minPct / 100))) - s.paid));
+      var atDue = 0;
+      for (i = 0; i < pieces.length; i++) if (pieces[i].date <= s.due) atDue += pieces[i].amt;
+      s.remAtDue = s.total - atDue;
+      out.push(s);
+      prev = s;
+      key = keyAdd(key, 1);
+    }
+    return out;
+  }
+  function balance(S, card, today) {
+    var posts = postings(S, card, today), stm = statements(S, card, today), b = 0, i;
+    for (i = 0; i < posts.length; i++) b += posts[i].amt;
+    for (i = 0; i < stm.length; i++) b += stm[i].interest;
+    for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id && S.payments[i].date <= today) b -= S.payments[i].amt;
+    return b;
+  }
+  function util(bal, limit) { return bal > 0 && limit > 0 ? Math.round(bal * 1000 / limit) / 10 : 0; }
+  function snapshot(S, today) {
+    var owed = 0, spent = 0, stmts = [], next = null, mk = keyOf(today), prevFirst = keyAdd(mk, -1) + "-01";
+    for (var c = 0; c < S.cards.length; c++) {
+      var card = S.cards[c], list = statements(S, card, today).filter(function (s) { return !s.skip; }), i, s;
+      if (card.archived) {
+        for (i = 0; i < list.length; i++) if (list[i].remaining > 0) owed += list[i].remaining;
+      } else {
+        var bal = balance(S, card, today);
+        if (bal > 0) owed += bal;
+        var ps = postings(S, card, today);
+        for (i = 0; i < ps.length; i++) if (keyOf(ps[i].date) === mk) spent += ps[i].amt;
+      }
+      for (i = 0; i < list.length; i++) {
+        s = list[i];
+        if (s.remaining > 0 || (i >= list.length - 3 && s.due >= prevFirst)) {
+          stmts.push({ cardId: card.id, card: card.nickname, key: s.key, due: s.due, total: s.total, remaining: s.remaining, status: s.status });
+          if (s.remaining > 0 && (!next || s.due < next.date)) next = { cardId: card.id, card: card.nickname, date: s.due, amt: s.remaining };
+        }
+      }
+    }
+    return { at: Date.now(), owed: owed, spentMonth: spent, next: next, stmts: stmts };
+  }
+  return { dim: dim, isoD: isoD, parseIso: parseIso, addMonthsIso: addMonthsIso, keyOf: keyOf, keyAdd: keyAdd, closeDay: closeDay,
+    stmtKeyOf: stmtKeyOf, stmtDates: stmtDates, instPmt: instPmt, instSchedule: instSchedule, postings: postings,
+    statements: statements, balance: balance, util: util, snapshot: snapshot };
+})();
+// ===== END CARD ENGINE =====
+</script>
+
+<script>
+(function () {
+  "use strict";
+  const LS = "cardTrackerV1", LS_PREFS = "cardTrackerPrefs";
+  const DB_URL = "https://crypto-tracker-bfefb-default-rtdb.asia-southeast1.firebasedatabase.app";
+  const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now();
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const DEFAULT_CATS = [["food","Food"],["transport","Transport"],["bills","Bills"],["shopping","Shopping"],["health","Health"],["travel","Travel"],["others","Others"]];
+  const COLORS = ["#8f8cf5","#34d399","#60a5fa","#f472b6","#2dd4bf","#f87171","#a78bfa","#22d3ee","#94a3b8"];
+  const BANKS = ["BDO","BPI","Metrobank","Security Bank","UnionBank","RCBC","PNB","Landbank","China Bank","EastWest","Maybank","HSBC","Citibank","Standard Chartered","AUB","PBCom","GoTyme","Maya","GCash","Home Credit","Tonik","Seabank","UNO Digital","Other"];
+  const $ = function (id) { return document.getElementById(id); };
+
+  // ---------- helpers ----------
+  function num(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function escH(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function todayIso() { const n = new Date(); return CE.isoD(n.getFullYear(), n.getMonth(), n.getDate()); }
+  function shortDate(s) { if (!s || s.length < 10) return ""; const a = CE.parseIso(s); return MONTHS[a[1]] + " " + a[2]; }
+  function fullDate(s) { if (!s || s.length < 10) return ""; const a = CE.parseIso(s); return MONTHS[a[1]] + " " + a[2] + ", " + a[0]; }
+  function monthLabel(k) { return MONTHS[parseInt(k.slice(5, 7), 10) - 1] + " " + k.slice(0, 4); }
+  function dayDiff(a, b) { const x = CE.parseIso(a), y = CE.parseIso(b); return Math.round((Date.UTC(y[0], y[1], y[2]) - Date.UTC(x[0], x[1], x[2])) / 86400000); }
+  function fmt(c) { const a = Math.abs(c); return (c < 0 ? "-" : "") + "\u20B1" + (a / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function toCents(str) {
+    if (str == null) return null;
+    let s = String(str).replace(/[\u20B1,\s]/g, "").replace(/^PHP/i, "");
+    if (!/^-?\d*\.?\d{0,2}$/.test(s) || s === "" || s === "-" || s === "." || s === "-.") return null;
+    const neg = s.charAt(0) === "-"; if (neg) s = s.slice(1);
+    const parts = s.split("."), whole = parseInt(parts[0] || "0", 10), frac = parseInt(((parts[1] || "") + "00").slice(0, 2), 10);
+    const c = whole * 100 + frac; return neg ? -c : c;
+  }
+  function centsStr(c) { const a = Math.abs(c); return (c < 0 ? "-" : "") + Math.floor(a / 100) + "." + (a % 100 < 10 ? "0" : "") + (a % 100); }
+  function toast(msg, undo) {
+    let t = $("toast"); if (t) t.remove();
+    t = document.createElement("div"); t.id = "toast";
+    t.innerHTML = "<span>" + escH(msg) + "</span>" + (undo ? "<button type='button'>Undo</button>" : "");
+    if (undo) t.querySelector("button").onclick = function () { t.remove(); undo(); };
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, undo ? 7000 : 3800);
+  }
+
+  // ---------- state ----------
+  let S = null, prefs = {}, sh = null, saveTimer = null, lastCloud = 0;
+  const ui = { tab: "home", cardId: null, q: "", from: "", to: "", fCard: "", fCat: "", min: "", max: "", page: 1, repMonth: "" };
+
+  function freshState() {
+    return { v: 1, u: 0, settings: { minFixed: 50000, minPct: 5, remindDays: 3, utilWarn: 30, overall: 0, lastBackupAt: 0, backupSnoozeUntil: 0 },
+      cards: [], categories: [], txns: [], payments: [], installments: [], recurring: [], budgets: [], notified: {}, snap: null };
+  }
+  function sanitize(s) {
+    const d = freshState();
+    if (!s || typeof s !== "object") s = d;
+    ["cards", "categories", "txns", "payments", "installments", "recurring", "budgets"].forEach(function (k) {
+      s[k] = Array.isArray(s[k]) ? s[k].filter(function (x) { return x && typeof x === "object"; }) : [];
+    });
+    s.v = 1; s.u = num(s.u);
+    s.settings = Object.assign({}, d.settings, s.settings && typeof s.settings === "object" ? s.settings : {});
+    if (!s.notified || typeof s.notified !== "object") s.notified = {};
+    const now = Date.now();
+    DEFAULT_CATS.forEach(function (c) { if (!s.categories.some(function (x) { return x.id === c[0]; })) s.categories.push({ id: c[0], name: c[1], createdAt: now, updatedAt: now }); });
+    s.cards.forEach(function (c) { c.limit = num(c.limit); c.cutoffDay = Math.min(31, Math.max(1, num(c.cutoffDay) || 1)); c.dueDay = Math.min(31, Math.max(1, num(c.dueDay) || 1)); c.apr = num(c.apr); c.archived = !!c.archived; if (!c.color) c.color = COLORS[0]; });
+    s.txns.forEach(function (t) { t.amt = Math.round(num(t.amt)); if (!t.catId) t.catId = "others"; if (!t.merchant) t.merchant = ""; });
+    s.payments.forEach(function (p) { p.amt = Math.round(num(p.amt)); });
+    s.installments.forEach(function (i) { i.principal = Math.round(num(i.principal)); i.months = Math.max(1, Math.round(num(i.months))); i.apr = num(i.apr); if (!i.catId) i.catId = "others"; });
+    s.recurring.forEach(function (r) { r.amt = Math.round(num(r.amt)); if (!Array.isArray(r.skipMonths)) r.skipMonths = []; });
+    s.budgets.forEach(function (b) { b.amt = Math.round(num(b.amt)); if (b.catId === undefined) b.catId = null; });
+    return s;
+  }
+  function stamp(o) { o.updatedAt = Date.now(); return o; }
+  function mk(o) { const n = Date.now(); o.id = uid(); o.createdAt = n; o.updatedAt = n; return o; }
+
+  function cloudSave() {
+    const payload = JSON.stringify({ stateJson: JSON.stringify(S), updatedAt: S.u, client: CLIENT_ID });
+    return fetch(DB_URL + "/cards/state.json", { method: "PUT", body: payload, keepalive: payload.length < 60000 }).catch(function (e) { console.warn("[cards] cloud save failed", e); });
+  }
+  function persist() {
+    S.u = Date.now();
+    try { S.snap = CE.snapshot(S, todayIso()); } catch (e) { console.warn("[cards] snapshot failed", e); }
+    try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {}
+    clearTimeout(saveTimer); saveTimer = setTimeout(function () { saveTimer = null; cloudSave(); }, 800);
+  }
+  function flush() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; cloudSave(); } }
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") flush(); });
+  function savePrefs() { try { localStorage.setItem(LS_PREFS, JSON.stringify(prefs)); } catch (e) {} }
+
+  function loadLocal() {
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) {}
+    S = sanitize(s);
+    try { prefs = JSON.parse(localStorage.getItem(LS_PREFS) || "{}") || {}; } catch (e) { prefs = {}; }
+  }
+  function adoptLocalIfNewer() {
+    try {
+      const s = JSON.parse(localStorage.getItem(LS) || "null");
+      if (s && typeof s === "object" && num(s.u) > num(S.u)) { S = sanitize(s); return true; }
+    } catch (e) {}
+    return false;
+  }
+  async function loadCloud() {
+    try {
+      const res = await fetch(DB_URL + "/cards/state.json?ts=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return false;
+      const remote = await res.json();
+      if (remote && typeof remote.stateJson === "string") {
+        const s = JSON.parse(remote.stateJson);
+        if (s && typeof s === "object" && num(remote.updatedAt) >= num(S.u)) {
+          const changed = num(remote.updatedAt) > num(S.u);
+          if (changed) { S = sanitize(s); try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} }
+          return changed;
+        }
+      }
+      if (S.u) cloudSave();
+    } catch (e) {}
+    return false;
+  }
+
+  // ---------- lookups ----------
+  function catById(id) { return S.categories.find(function (c) { return c.id === id; }); }
+  function catName(id) { const c = catById(id); return c ? c.name : "Others"; }
+  function cardById(id) { return S.cards.find(function (c) { return c.id === id; }); }
+  function cardLabel(c) { return c ? c.nickname + " \u2022\u2022\u2022" + c.last4 : "(deleted card)"; }
+  function activeCards() { return S.cards.filter(function (c) { return !c.archived; }); }
+  function cardInfo(c) { const t = todayIso(), bal = CE.balance(S, c, t); return { bal: bal, avail: c.limit - bal, util: CE.util(bal, c.limit) }; }
+  function nextDueOf(c) {
+    const list = CE.statements(S, c, todayIso()).filter(function (s) { return !s.skip && s.remaining > 0; });
+    let best = null; list.forEach(function (s) { if (!best || s.due < best.due) best = s; }); return best;
+  }
+
+  // ---------- recurring ----------
+  function generateRecurring() {
+    const t = todayIso(), cur = CE.keyOf(t); let made = 0;
+    const have = {}; S.txns.forEach(function (x) { if (x.recId) have[x.recId + "|" + x.recMonth] = 1; });
+    S.recurring.forEach(function (r) {
+      if (!r.active || !r.startDate) return;
+      let key = CE.keyOf(r.startDate), guard = 0;
+      while (key <= cur && guard++ < 600) {
+        const y = parseInt(key.slice(0, 4), 10), m0 = parseInt(key.slice(5, 7), 10) - 1;
+        const date = CE.isoD(y, m0, Math.min(r.day, CE.dim(y, m0)));
+        if (date >= r.startDate && date <= t && !have[r.id + "|" + key] && r.skipMonths.indexOf(key) < 0) {
+          S.txns.push(mk({ cardId: r.cardId, date: date, amt: r.amt, merchant: r.merchant, catId: r.catId, notes: "", recId: r.id, recMonth: key }));
+          have[r.id + "|" + key] = 1; made++;
+        }
+        key = CE.keyAdd(key, 1);
+      }
+    });
+    if (made) persist();
+    return made;
+  }
+
+  // ---------- budgets and alerts ----------
+  function monthSpend() {
+    const t = todayIso(), mkey = CE.keyOf(t), out = { all: 0, cat: {} };
+    S.txns.forEach(function (x) {
+      if (x.date.slice(0, 7) === mkey && x.date <= t) { out.all += x.amt; out.cat[x.catId] = (out.cat[x.catId] || 0) + x.amt; }
+    });
+    return out;
+  }
+  function budgetRows() {
+    const sp = monthSpend();
+    return S.budgets.filter(function (b) { return b.amt > 0; }).map(function (b) {
+      const spent = b.catId ? (sp.cat[b.catId] || 0) : sp.all;
+      return { id: b.id, catId: b.catId, name: b.catId ? catName(b.catId) : "Overall", spent: spent, limit: b.amt, ratio: spent / b.amt };
+    }).sort(function (a, b) { return (a.catId ? 1 : 0) - (b.catId ? 1 : 0); });
+  }
+  function computeAlerts(St, today) {
+    const out = [], remind = St.settings.remindDays, warn = St.settings.utilWarn;
+    St.cards.forEach(function (c) {
+      if (c.archived) return;
+      CE.statements(St, c, today).forEach(function (s) {
+        if (s.skip || s.remaining <= 0 || s.est) return;
+        if (today > s.due) out.push({ key: "od:" + c.id + ":" + s.key, level: "bad", text: cardLabel(c) + " statement is overdue (due " + shortDate(s.due) + "): " + fmt(s.remaining) });
+        else { const d = dayDiff(today, s.due); if (d <= remind) out.push({ key: "du:" + c.id + ":" + s.key, level: "warn", text: cardLabel(c) + " due " + (d === 0 ? "today" : "in " + d + " day" + (d === 1 ? "" : "s")) + ": " + fmt(s.remaining) }); }
+      });
+      const bal = CE.balance(St, c, today), u = CE.util(bal, c.limit);
+      if (u > warn) out.push({ key: "ut:" + c.id, level: "warn", text: cardLabel(c) + " utilization is " + u + "% (limit " + warn + "%)" });
+    });
+    budgetRows().forEach(function (b) {
+      const mkey = CE.keyOf(today);
+      if (b.ratio >= 1) out.push({ key: "bd:" + (b.catId || "all") + ":100:" + mkey, level: "bad", text: b.name + " budget reached: " + fmt(b.spent) + " of " + fmt(b.limit) });
+      else if (b.ratio >= 0.8) out.push({ key: "bd:" + (b.catId || "all") + ":80:" + mkey, level: "warn", text: b.name + " budget at " + Math.round(b.ratio * 100) + "%: " + fmt(b.spent) + " of " + fmt(b.limit) });
+    });
+    return out;
+  }
+  function fireNotifications() {
+    try {
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      const t = todayIso(); let changed = false;
+      Object.keys(S.notified).forEach(function (k) { if (S.notified[k] !== t) { delete S.notified[k]; changed = true; } });
+      computeAlerts(S, t).forEach(function (a) {
+        if (S.notified[a.key] === t) return;
+        S.notified[a.key] = t; changed = true;
+        try { new Notification("Card Tracker", { body: a.text }); } catch (e) {}
+      });
+      if (changed) persist();
+    } catch (e) {}
+  }
+
+  // ---------- views ----------
+  function utilBar(u, warn) { return "<div class='ub'><i class='" + (u > warn ? "hi" : "") + "' style='width:" + Math.min(100, u) + "%'></i></div>"; }
+  function tileHtml(c) {
+    const i = cardInfo(c), nd = nextDueOf(c);
+    return "<div class='ctile" + (c.archived ? " arch" : "") + "' data-act='opencard' data-id='" + escH(c.id) + "' style='border-left-color:" + escH(c.color) + "'>" +
+      "<div class='t1'><span>" + escH(c.nickname) + " \u2022\u2022\u2022" + escH(c.last4) + (c.archived ? " (archived)" : "") + "</span><span>" + fmt(i.bal) + "</span></div>" +
+      "<div class='t2'><span>" + escH(c.bank || "") + " \u00b7 limit " + fmt(c.limit) + "</span><span>" + i.util + "% used</span></div>" +
+      utilBar(i.util, S.settings.utilWarn) +
+      "<div class='t2'><span>" + (nd ? "Due " + shortDate(nd.due) + " \u00b7 " + fmt(nd.remaining) : "Nothing due") + "</span><span>Avail " + fmt(i.avail) + "</span></div></div>";
+  }
+  function txRowHtml(t, showCard) {
+    const c = cardById(t.cardId);
+    return "<div class='trow' data-act='edittx' data-id='" + escH(t.id) + "'><div class='l'><div class='m'>" + (t.recId ? "\u21BB " : "") + escH(t.merchant || "(no merchant)") + "</div>" +
+      "<div class='d'>" + shortDate(t.date) + " \u00b7 " + escH(catName(t.catId)) + (showCard ? " \u00b7 " + escH(cardLabel(c)) : "") + "</div></div>" +
+      "<div class='a " + (t.amt < 0 ? "grn" : "") + "'>" + fmt(t.amt) + "</div></div>";
+  }
+  function backupDue() {
+    if (!S.txns.length) return false;
+    const now = Date.now(), st = S.settings;
+    if (now <= num(st.backupSnoozeUntil)) return false;
+    if (!st.lastBackupAt) { let first = now; S.txns.forEach(function (t) { if (t.createdAt && t.createdAt < first) first = t.createdAt; }); return now - first > 7 * 86400000; }
+    return now - st.lastBackupAt > 30 * 86400000;
+  }
+  function viewHome() {
+    const t = todayIso(), snap = CE.snapshot(S, t), cards = activeCards(), warn = S.settings.utilWarn;
+    let h = "";
+    if (backupDue()) h += "<div class='alert info'><span>Back up your Card Tracker data</span><button data-act='backupnow'>Backup now</button><button data-act='snooze'>Later (7 days)</button></div>";
+    computeAlerts(S, t).forEach(function (a) { h += "<div class='alert " + a.level + "'><span>" + (a.level === "bad" ? "\u26D4 " : "\u26A0 ") + escH(a.text) + "</span></div>"; });
+    h += "<div class='grid'><div class='stat wide'><div class='k'>Total owed</div><div class='v'>" + fmt(snap.owed) + "</div></div>" +
+      "<div class='stat'><div class='k'>Spent this month</div><div class='v'>" + fmt(snap.spentMonth) + "</div></div>" +
+      "<div class='stat'><div class='k'>Next due</div><div class='v' style='font-size:18px'>" + (snap.next ? shortDate(snap.next.date) : "None") + "</div>" +
+      "<div class='s'>" + (snap.next ? escH(snap.next.card) + " \u00b7 " + fmt(snap.next.amt) + " \u00b7 " + dayLabel(dayDiff(t, snap.next.date)) : "All clear") + "</div></div></div>";
+    if (!cards.length) h += "<div class='card'><div class='empty'>No cards yet.</div><button class='btn full' data-act='addcard'>\uFF0B Add card</button></div>";
+    else { h += "<div class='card'><h2>Cards</h2>"; cards.forEach(function (c) { h += tileHtml(c); }); h += "</div>"; }
+    const br = budgetRows();
+    h += "<div class='card'><h2>Budgets this month<span class='sp'></span><button class='btn sm sec' data-act='budgets'>Edit budgets</button></h2>";
+    if (!br.length) h += "<div class='hint'>No budgets set.</div>";
+    br.forEach(function (b) {
+      const pct = Math.round(b.ratio * 100), cls = b.ratio >= 1 ? "hi" : b.ratio >= 0.8 ? "wn" : "bd";
+      h += "<div style='margin:8px 0'><div class='t2' style='display:flex;justify-content:space-between;font-size:13px'><span>" + (b.ratio >= 1 ? "\u26D4 " : b.ratio >= 0.8 ? "\u26A0 " : "") + escH(b.name) + "</span><span class='" + (b.ratio >= 1 ? "red" : "") + "'>" + fmt(b.spent) + " / " + fmt(b.limit) + " (" + pct + "%)</span></div><div class='ub'><i class='" + cls + "' style='width:" + Math.min(100, Math.max(0, pct)) + "%'></i></div></div>";
+    });
+    h += "</div>";
+    const recent = S.txns.slice().sort(txSort).slice(0, 8);
+    h += "<div class='card'><h2>Recent</h2>" + (recent.length ? recent.map(function (x) { return txRowHtml(x, true); }).join("") : "<div class='hint'>No transactions yet.</div>") + "</div>";
+    h += "<button class='btn full' data-act='addexp'>\uFF0B Add expense</button>";
+    return h;
+  }
+  function dayLabel(d) { return d < 0 ? Math.abs(d) + " day" + (d === -1 ? "" : "s") + " overdue" : d === 0 ? "today" : "in " + d + " day" + (d === 1 ? "" : "s"); }
+  function txSort(a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (b.createdAt || 0) - (a.createdAt || 0); }
+
+  function viewCards() {
+    const act = activeCards(), arch = S.cards.filter(function (c) { return c.archived; });
+    let h = "<div class='card'><h2>Cards<span class='sp'></span><button class='btn sm' data-act='addcard'>\uFF0B Add card</button></h2>";
+    if (!act.length) h += "<div class='empty'>No cards yet. Add your first card.</div>";
+    act.forEach(function (c) { h += tileHtml(c); });
+    h += "</div>";
+    if (arch.length) { h += "<div class='card'><h2>Archived</h2>"; arch.forEach(function (c) { h += tileHtml(c); }); h += "</div>"; }
+    return h;
+  }
+
+  function stmtBlock(c) {
+    const t = todayIso(), list = CE.statements(S, c, t).filter(function (s) { return !s.skip; }).reverse();
+    if (!list.length) return "<div class='hint'>No statements yet.</div>";
+    return list.map(function (s) {
+      const pays = S.payments.filter(function (p) { return p.cardId === c.id && p.stmtKey === s.key; });
+      return "<div class='stm'><div class='r1'><b>" + shortDate(s.start) + " \u2013 " + shortDate(s.close) + (s.est ? " \u00b7 running" : "") + "</b><span class='pill p-" + s.status + "'>" + s.status + "</span></div>" +
+        "<div class='r2'><span>Due " + fullDate(s.due) + "</span><b>" + fmt(s.total) + "</b></div>" +
+        (s.interest > 0 ? "<div class='r2'><span class='red'>Includes interest</span><b class='red'>" + fmt(s.interest) + "</b></div>" : "") +
+        "<div class='r2'><span>Paid</span><b>" + fmt(s.paid) + "</b></div>" +
+        "<div class='r2'><span>Remaining" + (s.remaining > 0 ? " \u00b7 min due " + fmt(s.min) : "") + "</span><b>" + fmt(s.remaining) + "</b></div>" +
+        pays.map(function (p) { return "<div class='pm'><span>" + shortDate(p.date) + " \u00b7 " + escH(p.kind) + " \u00b7 " + fmt(p.amt) + "</span><button class='x' data-act='delpay' data-id='" + escH(p.id) + "'>\u2715</button></div>"; }).join("") +
+        (s.remaining > 0 ? "<div class='acts'><button class='btn sm' data-act='pay' data-id='" + escH(c.id) + "' data-key='" + escH(s.key) + "'>Pay \u25BE</button></div>" : "") + "</div>";
+    }).join("");
+  }
+  function instBlock(c) {
+    const t = todayIso(), list = S.installments.filter(function (i) { return i.cardId === c.id; });
+    let h = "";
+    list.forEach(function (i) {
+      const rows = CE.instSchedule(i), posted = rows.filter(function (r) { return r.date <= t; });
+      const left = rows.length - posted.length, remaining = posted.length ? posted[posted.length - 1].balAfter : i.principal;
+      h += "<div class='stm'><div class='r1'><b>" + escH(i.title) + "</b><button class='x' data-act='delinst' data-id='" + escH(i.id) + "'>\u2715</button></div>" +
+        "<div class='r2'><span>Monthly</span><b>" + fmt(CE.instPmt(i)) + "</b></div>" +
+        "<div class='r2'><span>Months left</span><b>" + left + " of " + rows.length + "</b></div>" +
+        "<div class='r2'><span>Remaining balance</span><b>" + fmt(remaining) + "</b></div></div>";
+    });
+    return h || "<div class='hint'>No installments.</div>";
+  }
+  function filterBar(showCard) {
+    let h = "<div class='filt'><div class='full'><input type='search' data-f='q' placeholder='Search merchant or notes' value='" + escH(ui.q) + "'></div>" +
+      "<div><label>From</label><input type='date' data-f='from' value='" + escH(ui.from) + "'></div><div><label>To</label><input type='date' data-f='to' value='" + escH(ui.to) + "'></div>";
+    if (showCard) h += "<div><label>Card</label><select data-f='fCard'><option value=''>All cards</option>" + S.cards.map(function (c) { return "<option value='" + escH(c.id) + "'" + (ui.fCard === c.id ? " selected" : "") + ">" + escH(cardLabel(c)) + "</option>"; }).join("") + "</select></div>";
+    h += "<div" + (showCard ? "" : " class='full'") + "><label>Category</label><select data-f='fCat'><option value=''>All categories</option>" + S.categories.map(function (c) { return "<option value='" + escH(c.id) + "'" + (ui.fCat === c.id ? " selected" : "") + ">" + escH(c.name) + "</option>"; }).join("") + "</select></div>" +
+      "<div><label>Min amount</label><input type='text' inputmode='decimal' data-f='min' value='" + escH(ui.min) + "'></div><div><label>Max amount</label><input type='text' inputmode='decimal' data-f='max' value='" + escH(ui.max) + "'></div></div>";
+    return h;
+  }
+  function viewDetail() {
+    const c = cardById(ui.cardId);
+    if (!c) { ui.cardId = null; return viewCards(); }
+    const i = cardInfo(c), attached = S.txns.some(function (x) { return x.cardId === c.id; }) || S.payments.some(function (x) { return x.cardId === c.id; }) || S.installments.some(function (x) { return x.cardId === c.id; }) || S.recurring.some(function (x) { return x.cardId === c.id; });
+    let h = "<div class='dthead'><button class='x' data-act='back'>\u2190</button><div class='nm'>" + escH(cardLabel(c)) + "</div></div>" +
+      "<div class='card' style='border-left-color:" + escH(c.color) + "'><div class='grid' style='margin:0 0 8px'>" +
+      "<div class='stat'><div class='k'>Balance</div><div class='v'>" + fmt(i.bal) + "</div></div><div class='stat'><div class='k'>Available</div><div class='v'>" + fmt(i.avail) + "</div></div></div>" +
+      "<div class='t2' style='display:flex;justify-content:space-between;font-size:13px'><span>Limit " + fmt(c.limit) + " \u00b7 " + escH(c.bank || "") + "</span><span>" + i.util + "% used</span></div>" + utilBar(i.util, S.settings.utilWarn) +
+      "<div class='hint' style='margin-top:8px'>Cutoff day " + c.cutoffDay + " \u00b7 due day " + c.dueDay + " \u00b7 APR " + c.apr + "%</div>" +
+      "<div class='acts'><button class='btn sec sm' data-act='editcard' data-id='" + escH(c.id) + "'>Edit</button><button class='btn sec sm' data-act='archcard' data-id='" + escH(c.id) + "'>" + (c.archived ? "Unarchive" : "Archive") + "</button>" +
+      (attached ? "" : "<button class='btn dng sm' data-act='delcard' data-id='" + escH(c.id) + "'>Delete</button>") + "</div></div>" +
+      "<div class='card'><h2>Statements</h2>" + stmtBlock(c) + "</div>" +
+      "<div class='card'><h2>Installments<span class='sp'></span><button class='btn sm' data-act='addinst' data-id='" + escH(c.id) + "'>\uFF0B Add</button></h2>" + instBlock(c) + "</div>" +
+      "<div class='card'><h2>Transactions</h2>" + filterBar(false) + "<div class='hint' id='txCount'></div><div id='txList'></div></div>";
+    return h;
+  }
+  function viewTxns() {
+    return "<div class='card'><h2>Transactions</h2>" + filterBar(true) + "<div class='hint' id='txCount'></div><div id='txList'></div>" +
+      "<div class='acts'><button class='btn sec sm' data-act='exportcsv'>Export CSV</button><button class='btn sec sm' data-act='importcsv'>Import CSV</button></div></div>";
+  }
+  function filtered() {
+    const q = ui.q.trim().toLowerCase(), mn = ui.min.trim() === "" ? null : toCents(ui.min), mx = ui.max.trim() === "" ? null : toCents(ui.max);
+    const forced = ui.tab === "cards" && ui.cardId ? ui.cardId : ui.fCard;
+    return S.txns.filter(function (t) {
+      if (forced && t.cardId !== forced) return false;
+      if (ui.fCat && t.catId !== ui.fCat) return false;
+      if (ui.from && t.date < ui.from) return false;
+      if (ui.to && t.date > ui.to) return false;
+      if (mn !== null && t.amt < mn) return false;
+      if (mx !== null && t.amt > mx) return false;
+      if (q && (t.merchant || "").toLowerCase().indexOf(q) < 0 && (t.notes || "").toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort(txSort);
+  }
+  function renderTxList() {
+    const box = $("txList"); if (!box) return;
+    const list = filtered(), shown = list.slice(0, ui.page * 100), showCard = !(ui.tab === "cards" && ui.cardId);
+    let total = 0; list.forEach(function (t) { total += t.amt; });
+    $("txCount").textContent = list.length + " transaction" + (list.length === 1 ? "" : "s") + " \u00b7 net " + fmt(total);
+    box.innerHTML = shown.length ? shown.map(function (t) { return txRowHtml(t, showCard); }).join("") : "<div class='empty'>No transactions match.</div>";
+    if (list.length > shown.length) box.innerHTML += "<button class='link' data-act='more'>Show more (" + (list.length - shown.length) + " left)</button>";
+  }
+  function viewReports() {
+    const t = todayIso(), cur = CE.keyOf(t); if (!ui.repMonth) ui.repMonth = cur;
+    const byM = {}; // one pass over txns
+    S.txns.forEach(function (x) {
+      const m = x.date.slice(0, 7), e = byM[m] || (byM[m] = { total: 0, cat: {}, card: {} });
+      e.total += x.amt; e.cat[x.catId] = (e.cat[x.catId] || 0) + x.amt; e.card[x.cardId] = (e.card[x.cardId] || 0) + x.amt;
+    });
+    let opts = ""; for (let i = 0; i < 12; i++) { const k = CE.keyAdd(cur, -i); opts += "<option value='" + k + "'" + (k === ui.repMonth ? " selected" : "") + ">" + monthLabel(k) + "</option>"; }
+    const e = byM[ui.repMonth] || { total: 0, cat: {}, card: {} };
+    function bars(map, nameFn) {
+      const rows = Object.keys(map).map(function (k) { return { n: nameFn(k), v: map[k] }; }).filter(function (r) { return r.v > 0; }).sort(function (a, b) { return b.v - a.v; });
+      if (!rows.length) return "<div class='hint'>No spending this month.</div>";
+      const mx = rows[0].v;
+      return "<div class='bars'>" + rows.map(function (r) { return "<div class='br'><div class='n'>" + escH(r.n) + "</div><div class='tr'><i style='width:" + Math.max(2, Math.round(r.v * 100 / mx)) + "%'></i></div><div class='v'>" + fmt(r.v) + "</div></div>"; }).join("") + "</div>";
+    }
+    const months = []; for (let i = 5; i >= 0; i--) months.push(CE.keyAdd(ui.repMonth, -i));
+    let mxv = 1; months.forEach(function (m) { mxv = Math.max(mxv, byM[m] ? byM[m].total : 0); });
+    return "<div class='card'><h2>Month<span class='sp'></span></h2><select data-f='repMonth'>" + opts + "</select><div class='hint'>Net spending: <b>" + fmt(e.total) + "</b></div></div>" +
+      "<div class='card'><h2>Spending by category</h2>" + bars(e.cat, catName) + "</div>" +
+      "<div class='card'><h2>Monthly trend</h2><div class='trend'>" + months.map(function (m) {
+        const v = Math.max(0, byM[m] ? byM[m].total : 0);
+        return "<div class='col'><div class='tv'>" + (v ? fmt(v).replace(".00", "") : "") + "</div><i style='height:" + Math.round(v * 100 / mxv * 0.9) + "%'></i><div class='tl'>" + MONTHS[parseInt(m.slice(5, 7), 10) - 1] + "</div></div>";
+      }).join("") + "</div></div>" +
+      "<div class='card'><h2>By card</h2>" + bars(e.card, function (id) { return cardLabel(cardById(id)); }) + "</div>";
+  }
+  function render() {
+    let h;
+    if (ui.tab === "home") h = viewHome(); else if (ui.tab === "cards") h = ui.cardId ? viewDetail() : viewCards(); else if (ui.tab === "txns") h = viewTxns(); else h = viewReports();
+    $("main").innerHTML = h;
+    document.querySelectorAll("#tabs button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === ui.tab); });
+    if (ui.tab === "txns" || (ui.tab === "cards" && ui.cardId)) renderTxList();
+  }
+  function sheetOpen() { return $("sheet").classList.contains("on"); }
+  function typing() { const a = document.activeElement; return !!(a && a.closest && a.closest("#main") && (a.tagName === "INPUT" || a.tagName === "SELECT")); }
+
+  // ---------- sheets ----------
+  function openSheet(html) { $("sheet").innerHTML = "<div class='sh-back' data-act='closesheet'></div><div class='sh-box'>" + html + "</div>"; $("sheet").classList.add("on"); document.body.classList.add("shopen"); }
+  function closeSheet() { $("sheet").classList.remove("on"); $("sheet").innerHTML = ""; document.body.classList.remove("shopen"); sh = null; }
+  function head(title) { return "<h3><span>" + escH(title) + "</span><button class='x' data-act='closesheet'>\u2715</button></h3>"; }
+  function chipsHtml(items, sel, act) { return "<div class='chips'>" + items.map(function (i) { return "<button type='button' class='chip" + (i.id === sel ? " on" : "") + "' data-act='" + act + "' data-id='" + escH(i.id) + "'>" + escH(i.label) + "</button>"; }).join("") + "</div>"; }
+
+  function openExpense(id) {
+    const t = id ? S.txns.find(function (x) { return x.id === id; }) : null;
+    const cards = S.cards.filter(function (c) { return !c.archived || (t && t.cardId === c.id); });
+    if (!cards.length) { toast("Add a card first"); ui.tab = "cards"; ui.cardId = null; render(); openCardSheet(); return; }
+    const lastOk = prefs.lastCard && cards.some(function (c) { return c.id === prefs.lastCard; });
+    sh = { type: "exp", id: id || null, cardId: t ? t.cardId : (lastOk ? prefs.lastCard : cards[0].id), catId: t ? t.catId : (prefs.lastCat && catById(prefs.lastCat) ? prefs.lastCat : "others") };
+    openSheet(head(t ? "Edit expense" : "Add expense") +
+      "<label class='fl'>Amount</label><input id='exAmt' type='text' inputmode='decimal' placeholder='0.00' value='" + (t ? escH(centsStr(Math.abs(t.amt))) : "") + "'>" +
+      "<label class='fl'>Card</label>" + chipsHtml(cards.map(function (c) { return { id: c.id, label: cardLabel(c) }; }), sh.cardId, "pickcard") +
+      "<label class='fl'>Category</label>" + chipsHtml(S.categories.map(function (c) { return { id: c.id, label: c.name }; }), sh.catId, "pickcat") +
+      "<label class='fl'>Merchant</label><input id='exMer' type='text' value='" + (t ? escH(t.merchant) : "") + "'>" +
+      "<label class='fl'>Date</label><input id='exDate' type='date' value='" + (t ? escH(t.date) : todayIso()) + "'>" +
+      (t ? (t.recId ? "<div class='hint'>\u21BB This expense was generated by a recurring template.</div>" : "") : "<label class='ck'><input id='exRec' type='checkbox'> \u21BB Recurring monthly</label>") +
+      "<label class='ck'><input id='exRef' type='checkbox'" + (t && t.amt < 0 ? " checked" : "") + "> Refund (credit)</label>" +
+      "<label class='fl'>Notes</label><input id='exNotes' type='text' value='" + (t ? escH(t.notes || "") : "") + "'>" +
+      "<div class='acts'><button class='btn' id='exSave' data-act='savetx'>Save</button>" + (t ? "<button class='btn dng' data-act='deltx'>Delete</button>" : "") + "</div>");
+    updExpSave(); setTimeout(function () { const a = $("exAmt"); if (a && !t) a.focus(); }, 60);
+  }
+  function updExpSave() { const b = $("exSave"); if (!b) return; const c = toCents($("exAmt").value); b.disabled = !(c !== null && c > 0 && sh && sh.cardId); }
+  function saveTx() {
+    const amt = toCents($("exAmt").value), date = $("exDate").value;
+    if (!(amt > 0) || !sh.cardId) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast("Enter a valid date"); return; }
+    const signed = $("exRef").checked ? -amt : amt, before = ratios(), isNew = !sh.id;
+    let t;
+    if (sh.id) {
+      t = S.txns.find(function (x) { return x.id === sh.id; }); if (!t) return;
+      t.cardId = sh.cardId; t.date = date; t.amt = signed; t.merchant = $("exMer").value.trim(); t.catId = sh.catId; t.notes = $("exNotes").value.trim(); stamp(t);
+    } else {
+      t = mk({ cardId: sh.cardId, date: date, amt: signed, merchant: $("exMer").value.trim(), catId: sh.catId, notes: $("exNotes").value.trim() });
+      if ($("exRec") && $("exRec").checked) {
+        const r = mk({ cardId: t.cardId, amt: signed, merchant: t.merchant, catId: t.catId, day: CE.parseIso(date)[2], startDate: date, active: true, skipMonths: [] });
+        S.recurring.push(r); t.recId = r.id; t.recMonth = CE.keyOf(date);
+      }
+      S.txns.push(t);
+    }
+    prefs.lastCard = sh.cardId; prefs.lastCat = sh.catId; savePrefs();
+    persist(); closeSheet(); render();
+    if (isNew) crossToast(before, ratios()); else toast("Saved");
+  }
+  function ratios() { const o = {}; budgetRows().forEach(function (b) { o[b.catId || "all"] = b; }); return o; }
+  function crossToast(b, a) {
+    const msgs = [];
+    Object.keys(a).forEach(function (k) {
+      const r0 = b[k] ? b[k].ratio : 0, r1 = a[k].ratio;
+      if (r1 >= 1 && r0 < 1) msgs.push("\u26D4 " + a[k].name + " budget reached");
+      else if (r1 >= 0.8 && r0 < 0.8) msgs.push("\u26A0 " + a[k].name + " budget at " + Math.round(r1 * 100) + "%");
+    });
+    toast(msgs.length ? msgs.join(" \u00b7 ") : "Saved");
+  }
+
+  function openCardSheet(id) {
+    const c = id ? cardById(id) : null;
+    sh = { type: "card", id: id || null, color: c ? c.color : COLORS[0] };
+    openSheet(head(c ? "Edit card" : "Add card") +
+      "<label class='fl'>Nickname</label><input id='cdNick' type='text' value='" + (c ? escH(c.nickname) : "") + "'>" +
+      "<label class='fl'>Bank / issuer</label><input id='cdBank' type='text' list='bankList' value='" + (c ? escH(c.bank) : "") + "'><datalist id='bankList'>" + BANKS.map(function (b) { return "<option value='" + escH(b) + "'>"; }).join("") + "</datalist>" +
+      "<div class='two'><div><label class='fl'>Last 4 digits</label><input id='cdL4' type='text' inputmode='numeric' maxlength='4' value='" + (c ? escH(c.last4) : "") + "'></div>" +
+      "<div><label class='fl'>Credit limit</label><input id='cdLim' type='text' inputmode='decimal' value='" + (c ? escH(centsStr(c.limit)) : "") + "'></div>" +
+      "<div><label class='fl'>Statement cutoff day</label><input id='cdCut' type='text' inputmode='numeric' maxlength='2' value='" + (c ? c.cutoffDay : "") + "'></div>" +
+      "<div><label class='fl'>Due day</label><input id='cdDue' type='text' inputmode='numeric' maxlength='2' value='" + (c ? c.dueDay : "") + "'></div></div>" +
+      "<label class='fl'>Interest rate APR (%)</label><input id='cdApr' type='text' inputmode='decimal' value='" + (c ? c.apr : "") + "'>" +
+      "<label class='fl'>Color</label><div class='chips' id='cdColors'>" + COLORS.map(function (k) { return "<button type='button' class='sw" + (k === sh.color ? " on" : "") + "' data-act='pickcolor' data-id='" + k + "' style='background:" + k + "'></button>"; }).join("") + "</div>" +
+      "<div class='hint'>Only the last 4 digits are stored. Never enter the full card number, CVV or PIN.</div>" +
+      "<div class='acts'><button class='btn' data-act='savecard'>Save card</button></div>");
+  }
+  function saveCard() {
+    const nick = $("cdNick").value.trim(), l4 = $("cdL4").value.trim(), lim = toCents($("cdLim").value), cut = parseInt($("cdCut").value, 10), due = parseInt($("cdDue").value, 10), apr = parseFloat($("cdApr").value || "0");
+    if (!nick) { toast("Enter a nickname"); return; }
+    if (!/^\d{4}$/.test(l4)) { toast("Last 4 digits must be exactly 4 numbers"); return; }
+    if (lim === null || lim < 0) { toast("Enter a valid credit limit"); return; }
+    if (!(cut >= 1 && cut <= 31) || !(due >= 1 && due <= 31)) { toast("Cutoff and due day must be 1 to 31"); return; }
+    if (isNaN(apr) || apr < 0) { toast("Enter a valid APR"); return; }
+    if (sh.id) { const c = cardById(sh.id); Object.assign(c, { nickname: nick, bank: $("cdBank").value.trim(), last4: l4, limit: lim, cutoffDay: cut, dueDay: due, apr: apr, color: sh.color }); stamp(c); }
+    else S.cards.push(mk({ nickname: nick, bank: $("cdBank").value.trim(), last4: l4, limit: lim, cutoffDay: cut, dueDay: due, apr: apr, color: sh.color, archived: false }));
+    persist(); closeSheet(); render(); toast("Card saved");
+  }
+
+  function openPay(cardId, key) {
+    const c = cardById(cardId), s = CE.statements(S, c, todayIso()).find(function (x) { return x.key === key; });
+    if (!s || s.remaining <= 0) return;
+    sh = { type: "pay", cardId: cardId, key: key, kind: "full" };
+    openSheet(head("Pay " + c.nickname) + "<div class='hint'>Statement " + shortDate(s.start) + " \u2013 " + shortDate(s.close) + " \u00b7 due " + fullDate(s.due) + "</div>" +
+      "<div class='r2' style='display:flex;justify-content:space-between'><span>Remaining</span><b>" + fmt(s.remaining) + "</b></div>" +
+      "<div class='chips'><button type='button' class='chip on' data-act='paykind' data-id='full'>Full " + fmt(s.remaining) + "</button><button type='button' class='chip' data-act='paykind' data-id='min'>Minimum " + fmt(s.min) + "</button><button type='button' class='chip' data-act='paykind' data-id='custom'>Custom</button></div>" +
+      "<div id='payCustom' style='display:none'><label class='fl'>Custom amount</label><input id='payAmt' type='text' inputmode='decimal' placeholder='0.00'><div class='hint' id='payWarn'></div></div>" +
+      "<div class='acts'><button class='btn' data-act='savepay'>Record payment</button></div>");
+  }
+  function savePay() {
+    const c = cardById(sh.cardId), s = CE.statements(S, c, todayIso()).find(function (x) { return x.key === sh.key; }); if (!s) return;
+    let amt;
+    if (sh.kind === "full") amt = s.remaining; else if (sh.kind === "min") amt = s.min; else amt = toCents($("payAmt").value);
+    if (!(amt > 0)) { toast("Enter an amount above zero"); return; }
+    S.payments.push(mk({ cardId: c.id, stmtKey: s.key, date: todayIso(), amt: amt, kind: sh.kind, note: "" }));
+    persist(); closeSheet(); render(); toast("Payment recorded: " + fmt(amt));
+  }
+
+  function openInst(cardId) {
+    sh = { type: "inst", cardId: cardId, catId: "others" };
+    openSheet(head("Add installment") + "<div class='hint'>Do not also enter this purchase as an expense. The installment posts its monthly amount to the card.</div>" +
+      "<div id='instForm'><label class='fl'>Title</label><input id='inTitle' type='text'>" +
+      "<div class='two'><div><label class='fl'>Principal</label><input id='inPrin' type='text' inputmode='decimal'></div><div><label class='fl'>Months</label><input id='inMon' type='text' inputmode='numeric' maxlength='3'></div>" +
+      "<div><label class='fl'>APR % (0 = none)</label><input id='inApr' type='text' inputmode='decimal' value='0'></div><div><label class='fl'>First posting date</label><input id='inDate' type='date' value='" + todayIso() + "'></div></div>" +
+      "<label class='fl'>Category</label>" + chipsHtml(S.categories.map(function (c) { return { id: c.id, label: c.name }; }), sh.catId, "pickcat") +
+      "<div class='hint' style='margin-top:10px'>Monthly: <b id='inPrev'>\u2013</b></div></div>" +
+      "<div class='acts'><button class='btn' data-act='saveinst'>Save installment</button></div>");
+  }
+  function instFromForm() {
+    const p = toCents($("inPrin").value), m = parseInt($("inMon").value, 10), a = parseFloat($("inApr").value || "0");
+    if (!(p > 0) || !(m >= 1) || isNaN(a) || a < 0) return null;
+    return { principal: p, months: m, apr: a };
+  }
+  function updInstPrev() { const i = instFromForm(); $("inPrev").textContent = i ? fmt(CE.instPmt(i)) : "\u2013"; }
+  function saveInst() {
+    const i = instFromForm(), title = $("inTitle").value.trim(), d = $("inDate").value;
+    if (!i) { toast("Enter principal, months and APR"); return; }
+    if (!title) { toast("Enter a title"); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast("Enter a valid date"); return; }
+    S.installments.push(mk({ cardId: sh.cardId, title: title, principal: i.principal, months: i.months, apr: i.apr, startDate: d, catId: sh.catId }));
+    persist(); closeSheet(); render(); toast("Installment added");
+  }
+
+  function openBudgets() {
+    const ov = S.budgets.find(function (b) { return !b.catId; });
+    sh = { type: "bud" };
+    openSheet(head("Monthly budgets") + "<div class='hint'>Leave blank or 0 for no budget.</div>" +
+      "<div class='lrow'><div class='t'><b>Overall</b></div><input type='text' inputmode='decimal' data-bud='' value='" + (ov && ov.amt ? escH(centsStr(ov.amt)) : "") + "'></div>" +
+      S.categories.map(function (c) { const b = S.budgets.find(function (x) { return x.catId === c.id; }); return "<div class='lrow'><div class='t'>" + escH(c.name) + "</div><input type='text' inputmode='decimal' data-bud='" + escH(c.id) + "' value='" + (b && b.amt ? escH(centsStr(b.amt)) : "") + "'></div>"; }).join("") +
+      "<div class='acts'><button class='btn' data-act='savebud'>Save budgets</button></div>");
+  }
+  function saveBudgets() {
+    const inputs = document.querySelectorAll("#sheet [data-bud]"); let bad = false;
+    inputs.forEach(function (inp) { const v = inp.value.trim(); if (v !== "" && (toCents(v) === null || toCents(v) < 0)) bad = true; });
+    if (bad) { toast("Enter valid amounts"); return; }
+    inputs.forEach(function (inp) {
+      const catId = inp.getAttribute("data-bud") || null, v = inp.value.trim() === "" ? 0 : toCents(inp.value);
+      const idx = S.budgets.findIndex(function (b) { return (b.catId || null) === catId; });
+      if (v > 0) { if (idx >= 0) { S.budgets[idx].amt = v; stamp(S.budgets[idx]); } else S.budgets.push(mk({ catId: catId, amt: v })); }
+      else if (idx >= 0) S.budgets.splice(idx, 1);
+    });
+    persist(); closeSheet(); render(); toast("Budgets saved");
+  }
+
+  function openSettings() {
+    const st = S.settings; sh = { type: "set" };
+    openSheet(head("Settings") +
+      "<div class='sech' style='margin-top:6px;border-top:none;padding-top:0'>Alerts and minimum due</div>" +
+      "<div class='two'><div><label class='fl'>Min payment fixed</label><input id='stFix' type='text' inputmode='decimal' value='" + escH(centsStr(st.minFixed)) + "'></div><div><label class='fl'>Min payment % of balance</label><input id='stPct' type='text' inputmode='decimal' value='" + st.minPct + "'></div>" +
+      "<div><label class='fl'>Remind N days before due</label><input id='stRem' type='text' inputmode='numeric' value='" + st.remindDays + "'></div><div><label class='fl'>Utilization warning %</label><input id='stUtil' type='text' inputmode='decimal' value='" + st.utilWarn + "'></div></div>" +
+      "<div class='acts'><button class='btn sm' data-act='savesettings'>Save</button><button class='btn sec sm' data-act='notifperm'>Enable browser alerts</button></div>" +
+      "<div class='sech'>Categories</div>" +
+      S.categories.map(function (c) { return "<div class='lrow'><input type='text' data-catname='" + escH(c.id) + "' value='" + escH(c.name) + "'>" + (c.id === "others" ? "<span style='width:32px'></span>" : "<button class='x' data-act='delcat' data-id='" + escH(c.id) + "'>\u2715</button>") + "</div>"; }).join("") +
+      "<div class='lrow'><input type='text' id='newCat' placeholder='New category'><button class='btn sm' data-act='addcat'>Add</button></div>" +
+      "<div class='sech'>Recurring expenses</div>" +
+      (S.recurring.filter(function (r) { return r.active; }).map(function (r) { return "<div class='lrow'><div class='t'>\u21BB " + escH(r.merchant || "(no merchant)") + " \u00b7 " + fmt(r.amt) + " \u00b7 day " + r.day + " \u00b7 " + escH(cardLabel(cardById(r.cardId))) + "</div><button class='btn sec sm' data-act='stoprec' data-id='" + escH(r.id) + "'>Stop</button></div>"; }).join("") || "<div class='hint'>No active recurring expenses.</div>") +
+      "<div class='sech'>Data</div><div class='acts'><button class='btn sec sm' data-act='backupnow'>Backup JSON</button><button class='btn sec sm' data-act='restore'>Restore JSON</button>" +
+      "<button class='btn sec sm' data-act='exportall'>Export CSV</button><button class='btn sec sm' data-act='importcsv'>Import CSV</button></div>" +
+      "<div class='hint'>Last backup: " + (st.lastBackupAt ? new Date(st.lastBackupAt).toLocaleDateString() : "never") + "</div>");
+  }
+  function saveSettings() {
+    const fx = toCents($("stFix").value), pc = parseFloat($("stPct").value), rd = parseInt($("stRem").value, 10), ut = parseFloat($("stUtil").value);
+    if (fx === null || fx < 0 || isNaN(pc) || pc < 0 || isNaN(rd) || rd < 0 || isNaN(ut) || ut < 0) { toast("Enter valid numbers"); return; }
+    Object.assign(S.settings, { minFixed: fx, minPct: pc, remindDays: rd, utilWarn: ut }); persist(); render(); toast("Settings saved");
+  }
+  function deleteCategory(id) {
+    if (id === "others") return;
+    const hasOthersBud = S.budgets.some(function (b) { return b.catId === "others"; });
+    S.txns.forEach(function (t) { if (t.catId === id) { t.catId = "others"; stamp(t); } });
+    S.installments.forEach(function (t) { if (t.catId === id) { t.catId = "others"; stamp(t); } });
+    S.recurring.forEach(function (t) { if (t.catId === id) { t.catId = "others"; stamp(t); } });
+    S.budgets = S.budgets.filter(function (b) { if (b.catId !== id) return true; if (hasOthersBud) return false; b.catId = "others"; stamp(b); return true; });
+    S.categories = S.categories.filter(function (c) { return c.id !== id; });
+  }
+
+  // ---------- backup, CSV ----------
+  function download(name, text, type) {
+    const blob = new Blob([text], { type: type }), url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { a.remove(); URL.revokeObjectURL(url); }, 500);
+  }
+  function backupNow() {
+    download("card-tracker-backup-" + todayIso() + ".json", JSON.stringify(S, null, 1), "application/json");
+    S.settings.lastBackupAt = Date.now(); persist(); if (!sheetOpen()) render(); toast("Backup downloaded");
+  }
+  function restoreFile(file) {
+    const rd = new FileReader();
+    rd.onload = function () {
+      try {
+        const o = JSON.parse(String(rd.result));
+        if (!o || typeof o !== "object" || !o.v || !Array.isArray(o.cards) || !Array.isArray(o.txns) || !Array.isArray(o.payments)) throw new Error("bad");
+        if (!confirm("Replace all current data with this backup (" + o.cards.length + " cards, " + o.txns.length + " transactions)?")) return;
+        S = sanitize(o); persist(); flush(); closeSheet(); render(); toast("Backup restored");
+      } catch (e) { toast("Not a valid Card Tracker backup"); }
+    };
+    rd.readAsText(file);
+  }
+  function csvField(v) { const s = String(v == null ? "" : v); return /[",\r\n]/.test(s) ? "\"" + s.replace(/"/g, "\"\"") + "\"" : s; }
+  function exportCsv(list) {
+    const rows = [["date", "card", "last4", "category", "merchant", "amount", "notes", "recurring"]];
+    list.forEach(function (t) { const c = cardById(t.cardId); rows.push([t.date, c ? c.nickname : "", c ? c.last4 : "", catName(t.catId), t.merchant, centsStr(t.amt), t.notes || "", t.recId ? "yes" : ""]); });
+    download("card-transactions-" + todayIso() + ".csv", "\uFEFF" + rows.map(function (r) { return r.map(csvField).join(","); }).join("\r\n") + "\r\n", "text/csv;charset=utf-8");
+  }
+  function parseCSV(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows = []; let row = [], f = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === "\"") { if (text[i + 1] === "\"") { f += "\""; i++; } else q = false; } else f += ch; }
+      else if (ch === "\"") q = true;
+      else if (ch === ",") { row.push(f); f = ""; }
+      else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(f); f = ""; rows.push(row); row = []; }
+      else f += ch;
+    }
+    if (f !== "" || row.length) { row.push(f); rows.push(row); }
+    return rows.filter(function (r) { return r.length > 1 || (r[0] && r[0].trim() !== ""); });
+  }
+  let imp = null;
+  function colOpts(sel, withNone) { return (withNone ? "<option value='-1'>(none)</option>" : "") + imp.hdr.map(function (h, i) { return "<option value='" + i + "'" + (i === sel ? " selected" : "") + ">" + escH(h || "Column " + (i + 1)) + "</option>"; }).join(""); }
+  function findCol(re) { for (let i = 0; i < imp.hdr.length; i++) if (re.test(imp.hdr[i].trim())) return i; return -1; }
+  function openImport(text) {
+    const rows = parseCSV(text);
+    if (rows.length < 2) { toast("CSV has no data rows"); return; }
+    imp = { hdr: rows[0].map(function (x) { return x.trim(); }), rows: rows.slice(1) };
+    const cd = findCol(/date/i), cm = findCol(/merchant|description|details|particulars|name/i), ca = findCol(/amount|amt|debit|value/i);
+    const cards = activeCards();
+    if (!cards.length) { toast("Add a card first"); return; }
+    sh = { type: "imp" };
+    openSheet(head("Import CSV") + "<div class='hint'>First row is treated as the header. " + imp.rows.length + " rows found.</div>" +
+      "<div class='two'><div><label class='fl'>Date column</label><select id='imD'>" + colOpts(Math.max(0, cd), false) + "</select></div><div><label class='fl'>Merchant / description</label><select id='imM'>" + colOpts(cm >= 0 ? cm : Math.min(1, imp.hdr.length - 1), false) + "</select></div>" +
+      "<div><label class='fl'>Amount column</label><select id='imA'>" + colOpts(ca >= 0 ? ca : Math.min(2, imp.hdr.length - 1), false) + "</select></div><div><label class='fl'>Date format</label><select id='imF'><option value='iso'>YYYY-MM-DD</option><option value='mdy'>MM/DD/YYYY</option><option value='dmy'>DD/MM/YYYY</option></select></div>" +
+      "<div><label class='fl'>Category column</label><select id='imC'>" + colOpts(findCol(/categor/i), true) + "</select></div><div><label class='fl'>Notes column</label><select id='imN'>" + colOpts(findCol(/notes?/i), true) + "</select></div>" +
+      "<div><label class='fl'>Card last4 column</label><select id='imL'>" + colOpts(findCol(/last\s*4|last4/i), true) + "</select></div><div><label class='fl'>Target card</label><select id='imT'>" + cards.map(function (c) { return "<option value='" + escH(c.id) + "'>" + escH(cardLabel(c)) + "</option>"; }).join("") + "</select></div>" +
+      "<div class='full' style='grid-column:1/-1'><label class='fl'>Default category</label><select id='imDC'>" + S.categories.map(function (c) { return "<option value='" + escH(c.id) + "'" + (c.id === "others" ? " selected" : "") + ">" + escH(c.name) + "</option>"; }).join("") + "</select></div></div>" +
+      "<label class='ck'><input id='imS' type='checkbox' checked> Negative values are refunds</label><div class='hint'>Unchecked: negative values are charges and positive values are refunds.</div>" +
+      "<div class='sech' style='margin-top:10px'>Preview</div><div id='imPrev'></div>" +
+      "<div class='acts'><button class='btn' data-act='doimport'>Import</button></div>");
+    updImpPrev();
+  }
+  function parseDate(s, fmtK) {
+    s = String(s || "").trim(); let y, m, d, p;
+    if (fmtK === "iso") { p = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (!p) return null; y = +p[1]; m = +p[2]; d = +p[3]; }
+    else { p = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (!p) return null; if (fmtK === "mdy") { m = +p[1]; d = +p[2]; } else { d = +p[1]; m = +p[2]; } y = +p[3]; if (y < 100) y += 2000; }
+    if (m < 1 || m > 12 || d < 1 || d > CE.dim(y, m - 1)) return null;
+    return CE.isoD(y, m - 1, d);
+  }
+  function parseAmt(s) {
+    let v = String(s || "").trim(), neg = false;
+    if (/^\(.*\)$/.test(v)) { neg = true; v = v.slice(1, -1); }
+    const c = toCents(v.replace(/PHP|php/g, "")); if (c === null) return null; return neg ? -c : c;
+  }
+  function impRows() {
+    const iD = +$("imD").value, iM = +$("imM").value, iA = +$("imA").value, iC = +$("imC").value, iN = +$("imN").value, iL = +$("imL").value, f = $("imF").value, keep = $("imS").checked;
+    const target = $("imT").value, dc = $("imDC").value, out = [];
+    imp.rows.forEach(function (r) {
+      const date = parseDate(r[iD], f), a = parseAmt(r[iA]); if (!date || a === null) return;
+      let cardId = target; if (iL >= 0) { const l4 = String(r[iL] || "").trim(), c = S.cards.find(function (x) { return x.last4 === l4; }); if (c) cardId = c.id; }
+      let catId = dc; if (iC >= 0) { const nm = String(r[iC] || "").trim().toLowerCase(), cat = S.categories.find(function (x) { return x.name.toLowerCase() === nm; }); if (cat) catId = cat.id; }
+      out.push({ cardId: cardId, date: date, amt: keep ? a : -a, merchant: String(r[iM] || "").trim(), catId: catId, notes: iN >= 0 ? String(r[iN] || "").trim() : "" });
+    });
+    return out;
+  }
+  function updImpPrev() {
+    const rows = impRows(), box = $("imPrev"); if (!box) return;
+    box.innerHTML = (rows.slice(0, 5).map(function (t) { return "<div class='trow'><div class='l'><div class='m'>" + escH(t.merchant || "(no merchant)") + "</div><div class='d'>" + t.date + " \u00b7 " + escH(catName(t.catId)) + "</div></div><div class='a'>" + fmt(t.amt) + "</div></div>"; }).join("") || "<div class='hint'>No valid rows with these columns.</div>") + "<div class='hint'>" + rows.length + " valid of " + imp.rows.length + " rows</div>";
+  }
+  function doImport() {
+    const rows = impRows(), seen = {}; let added = 0, skipped = 0;
+    S.txns.forEach(function (t) { seen[t.cardId + "|" + t.date + "|" + t.amt + "|" + (t.merchant || "").toLowerCase()] = 1; });
+    rows.forEach(function (t) {
+      const k = t.cardId + "|" + t.date + "|" + t.amt + "|" + t.merchant.toLowerCase();
+      if (seen[k]) { skipped++; return; }
+      seen[k] = 1; S.txns.push(mk(t)); added++;
+    });
+    if (added) persist();
+    closeSheet(); render(); toast("Imported " + added + (skipped ? ", skipped " + skipped + " duplicates" : ""));
+  }
+  function pickFile(accept, cb) {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = accept; inp.style.display = "none";
+    inp.onchange = function () { if (inp.files && inp.files[0]) cb(inp.files[0]); inp.remove(); };
+    document.body.appendChild(inp); inp.click();
+  }
+
+  // ---------- events ----------
+  document.addEventListener("click", function (e) {
+    const tb = e.target.closest("#tabs button");
+    if (tb) { ui.tab = tb.getAttribute("data-tab"); ui.cardId = null; render(); window.scrollTo(0, 0); return; }
+    const b = e.target.closest("[data-act]"); if (!b) return;
+    const act = b.getAttribute("data-act"), id = b.getAttribute("data-id");
+    switch (act) {
+      case "settings": openSettings(); break;
+      case "closesheet": closeSheet(); break;
+      case "addexp": openExpense(); break;
+      case "edittx": openExpense(id); break;
+      case "pickcard": sh.cardId = id; b.parentNode.querySelectorAll(".chip").forEach(function (c) { c.classList.toggle("on", c === b); }); updExpSave(); break;
+      case "pickcat": sh.catId = id; b.parentNode.querySelectorAll(".chip").forEach(function (c) { c.classList.toggle("on", c === b); }); break;
+      case "pickcolor": sh.color = id; b.parentNode.querySelectorAll(".sw").forEach(function (c) { c.classList.toggle("on", c === b); }); break;
+      case "savetx": saveTx(); break;
+      case "deltx": {
+        if (!confirm("Delete this transaction?")) break;
+        const t = S.txns.find(function (x) { return x.id === sh.id; });
+        if (t && t.recId) { const r = S.recurring.find(function (x) { return x.id === t.recId; }); if (r && r.skipMonths.indexOf(t.recMonth) < 0) { r.skipMonths.push(t.recMonth); stamp(r); } }
+        S.txns = S.txns.filter(function (x) { return x.id !== sh.id; }); persist(); closeSheet(); render(); toast("Deleted"); break;
+      }
+      case "addcard": openCardSheet(); break;
+      case "editcard": openCardSheet(id); break;
+      case "savecard": saveCard(); break;
+      case "opencard": ui.tab = "cards"; ui.cardId = id; ui.page = 1; render(); window.scrollTo(0, 0); break;
+      case "back": ui.cardId = null; render(); break;
+      case "archcard": { const c = cardById(id); if (c && (c.archived || confirm("Archive this card? Its history stays."))) { c.archived = !c.archived; stamp(c); persist(); render(); } break; }
+      case "delcard": if (confirm("Delete this card?")) { S.cards = S.cards.filter(function (c) { return c.id !== id; }); ui.cardId = null; persist(); render(); } break;
+      case "pay": openPay(id, b.getAttribute("data-key")); break;
+      case "paykind": sh.kind = id; b.parentNode.querySelectorAll(".chip").forEach(function (c) { c.classList.toggle("on", c === b); }); $("payCustom").style.display = id === "custom" ? "block" : "none"; break;
+      case "savepay": savePay(); break;
+      case "delpay": if (confirm("Delete this payment?")) { S.payments = S.payments.filter(function (p) { return p.id !== id; }); persist(); render(); } break;
+      case "addinst": openInst(id); break;
+      case "saveinst": saveInst(); break;
+      case "delinst": if (confirm("Delete this installment plan?")) { S.installments = S.installments.filter(function (p) { return p.id !== id; }); persist(); render(); } break;
+      case "budgets": openBudgets(); break;
+      case "savebud": saveBudgets(); break;
+      case "more": ui.page++; renderTxList(); break;
+      case "savesettings": saveSettings(); break;
+      case "addcat": { const v = $("newCat").value.trim(); if (v) { S.categories.push(mk({ name: v })); persist(); openSettings(); } break; }
+      case "delcat": if (confirm("Delete this category? Its items move to Others.")) { deleteCategory(id); persist(); openSettings(); render(); } break;
+      case "stoprec": { const r = S.recurring.find(function (x) { return x.id === id; }); if (r) { r.active = false; stamp(r); persist(); openSettings(); } break; }
+      case "backupnow": backupNow(); break;
+      case "snooze": S.settings.backupSnoozeUntil = Date.now() + 7 * 86400000; persist(); render(); break;
+      case "restore": pickFile(".json,application/json", restoreFile); break;
+      case "exportcsv": exportCsv(filtered()); break;
+      case "exportall": exportCsv(S.txns.slice().sort(txSort)); break;
+      case "importcsv": pickFile(".csv,text/csv", function (f) { const rd = new FileReader(); rd.onload = function () { openImport(String(rd.result)); }; rd.readAsText(f); }); break;
+      case "doimport": doImport(); break;
+      case "notifperm":
+        try { if (!("Notification" in window)) toast("Notifications are not supported here"); else Notification.requestPermission().then(function (p) { toast(p === "granted" ? "Browser alerts enabled" : "Permission " + p); fireNotifications(); }); } catch (er) { toast("Notifications are not supported here"); }
+        break;
+    }
+  });
+  document.addEventListener("input", function (e) {
+    const t = e.target;
+    if (t.id === "exAmt") updExpSave();
+    else if (t.closest && t.closest("#instForm")) updInstPrev();
+    else if (t.id === "payAmt") { const c = cardById(sh.cardId), s = CE.statements(S, c, todayIso()).find(function (x) { return x.key === sh.key; }), v = toCents(t.value); $("payWarn").textContent = s && v !== null && v > s.remaining ? "Above the remaining amount. The excess carries to the next statement as credit." : ""; }
+    else if (t.getAttribute && t.getAttribute("data-f") && t.tagName === "INPUT") { ui[t.getAttribute("data-f")] = t.value; ui.page = 1; renderTxList(); }
+  });
+  document.addEventListener("change", function (e) {
+    const t = e.target, f = t.getAttribute && t.getAttribute("data-f");
+    if (f && t.tagName === "SELECT") { ui[f] = t.value; ui.page = 1; if (f === "repMonth") render(); else renderTxList(); return; }
+    if (f && t.tagName === "INPUT") { ui[f] = t.value; ui.page = 1; renderTxList(); return; }
+    if (t.getAttribute && t.getAttribute("data-catname")) {
+      const c = catById(t.getAttribute("data-catname")), v = t.value.trim();
+      if (c && v) { c.name = v; stamp(c); persist(); } else if (c) t.value = c.name;
+      return;
+    }
+    if (t.closest && t.closest("#sheet") && sh && sh.type === "imp") updImpPrev();
+  });
+
+  // ---------- lock, startup, updates ----------
+  function simpleHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); h |= 0; } return h; }
+  const PASS_HASH = simpleHash("031171");
+  function unlock() {
+    const input = $("lockInput"), err = $("lockErr");
+    if (simpleHash(input.value) === PASS_HASH) { sessionStorage.setItem("ctUnlocked", "1"); revealApp(); }
+    else { err.textContent = "Wrong passcode. Try again."; input.value = ""; input.focus(); }
+  }
+  function revealApp() {
+    $("lock").style.display = "none";
+    document.body.classList.remove("locked");
+    $("app").classList.remove("hidden");
+    startApp();
+  }
+  async function refreshAll() {
+    let changed = adoptLocalIfNewer();
+    if (generateRecurring()) changed = true;
+    if (Date.now() - lastCloud > 20000) { lastCloud = Date.now(); if (await loadCloud()) { changed = true; generateRecurring(); } }
+    if (changed && !sheetOpen() && !typing()) render();
+  }
+  let started = false;
+  async function startApp() {
+    if (started) return; started = true;
+    loadLocal(); generateRecurring(); render(); fireNotifications();
+    lastCloud = Date.now();
+    if (await loadCloud()) { generateRecurring(); if (!sheetOpen() && !typing()) render(); }
+    fireNotifications();
+    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") refreshAll(); });
+    window.addEventListener("focus", refreshAll);
+  }
+
+  const APP_VERSION = 187;
+  function setFooterVersion() { const fv = $("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
+  // Manual update only: shows a banner, never auto-reloads.
+  async function checkForUpdate() {
+    setFooterVersion();
+    try {
+      const res = await fetch("version.json?ts=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      const j = await res.json();
+      if (!(j && typeof j.version === "number" && j.version > APP_VERSION)) return;
+      showUpdateBanner(j.version);
+    } catch (e) {}
+  }
+  function showUpdateBanner(ver) {
+    if ($("updateBanner")) return;
+    const bar = document.createElement("div");
+    bar.id = "updateBanner";
+    bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:600;background:#8f8cf5;color:#0f0f1a;font-size:13px;font-weight:700;text-align:center;padding:10px 14px;cursor:pointer;box-shadow:0 -2px 10px rgba(0,0,0,.4)";
+    bar.textContent = "Update available (v" + ver + ") \u2014 tap to refresh";
+    bar.onclick = async function () {
+      bar.textContent = "Updating\u2026";
+      if (window.caches && caches.keys) { try { const ks = await caches.keys(); await Promise.all(ks.map(function (k) { return caches.delete(k); })); } catch (e) {} }
+      const u = new URL(location.href); u.searchParams.set("v", String(ver) + "." + Date.now()); location.replace(u.toString());
+    };
+    document.body.appendChild(bar);
+  }
+
+  $("lockBtn").onclick = unlock;
+  $("lockInput").addEventListener("keydown", function (e) { if (e.key === "Enter") unlock(); });
+  if (sessionStorage.getItem("ctUnlocked") === "1") revealApp(); else $("lockInput").focus();
+  checkForUpdate();
+  setInterval(checkForUpdate, 60000);
+})();
+</script>
+<script src="shell.js"></script>
+</body>
+</html>

@@ -370,6 +370,26 @@
   .btn.primary { background: var(--gold); color: #000; border-color: var(--gold); }
   .btn:hover { border-color: var(--gold); }
 
+  /* Card statements block */
+  .cs-row { background: #1b1d26; border: 1px solid #2f3242; border-radius: 12px; padding: 9px 12px; margin-bottom: 8px; }
+  .cs-top { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .cs-dt { color: #a9aebd; font-size: 12px; min-width: 44px; }
+  .cs-nm { flex: 1; font-weight: 700; color: #f2f2f7; }
+  .cs-nm small { color: #a9aebd; font-weight: 500; }
+  .cs-am { font-weight: 800; color: #f2f2f7; font-variant-numeric: tabular-nums; }
+  .cs-pill { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+  .cs-pill.paid { background: rgba(52,211,153,0.18); color: #34d399; }
+  .cs-pill.over { background: rgba(255,107,107,0.18); color: #ff9a9a; }
+  .cs-pill.part { background: rgba(143,140,245,0.2); color: #b6b4ff; }
+  .cs-pill.open { background: rgba(79,140,255,0.18); color: #9db8ff; }
+  .cs-act { display: flex; gap: 8px; margin-top: 8px; }
+  .cs-btn { background: #262938; color: #b6b4ff; border: 1px solid #3a3e55; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .cs-links { font-size: 12.5px; margin: 2px 0 8px; }
+  .cs-links a { color: #b6b4ff; text-decoration: none; }
+  .cs-dup { background: #1b1d26; border: 1px dashed #3a3e55; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
+  .cs-dup-t { font-size: 11px; font-weight: 700; color: #a9aebd; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+  .cs-dup-r { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: #f2f2f7; padding: 4px 0; }
+  .cs-sel { flex: 1; min-width: 110px; background: #262938; color: #f2f2f7; border: 1px solid #3a3e55; border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12.5px; }
   .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 10px 0; }
   .note { color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 2px; }
 
@@ -948,6 +968,153 @@
   </div>
 
 <script>
+// ===== CARD ENGINE (keep identical in debt.html) =====
+var CE = (function () {
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function dim(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
+  function isoD(y, m0, d) { var t = new Date(y, m0, d); return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate()); }
+  function parseIso(s) { return [parseInt(s.slice(0, 4), 10), parseInt(s.slice(5, 7), 10) - 1, parseInt(s.slice(8, 10), 10)]; }
+  function addMonthsIso(iso, n) {
+    var a = parseIso(iso), t = a[0] * 12 + a[1] + n, y = Math.floor(t / 12), m = t % 12;
+    return isoD(y, m, Math.min(a[2], dim(y, m)));
+  }
+  function keyOf(iso) { return String(iso).slice(0, 7); }
+  function keyParts(key) { return [parseInt(key.slice(0, 4), 10), parseInt(key.slice(5, 7), 10) - 1]; }
+  function keyAdd(key, n) { var p = keyParts(key), t = p[0] * 12 + p[1] + n; return Math.floor(t / 12) + "-" + p2((t % 12) + 1); }
+  function closeDay(card, y, m0) { return Math.min(card.cutoffDay, dim(y, m0)); }
+  function stmtKeyOf(card, iso) {
+    var a = parseIso(iso), k = a[0] + "-" + p2(a[1] + 1);
+    return a[2] <= closeDay(card, a[0], a[1]) ? k : keyAdd(k, 1);
+  }
+  function stmtDates(card, key) {
+    var p = keyParts(key), y = p[0], m0 = p[1];
+    var close = isoD(y, m0, closeDay(card, y, m0));
+    var pk = keyParts(keyAdd(key, -1));
+    var start = isoD(pk[0], pk[1], closeDay(card, pk[0], pk[1]) + 1);
+    var dueKey = card.dueDay > card.cutoffDay ? key : keyAdd(key, 1);
+    var dp = keyParts(dueKey);
+    var due = isoD(dp[0], dp[1], Math.min(card.dueDay, dim(dp[0], dp[1])));
+    return { start: start, close: close, due: due };
+  }
+  function instPmt(inst) {
+    var P = inst.principal, n = inst.months, r = (inst.apr || 0) / 100 / 12;
+    if (n < 1) return P;
+    if (!r) return Math.round(P / n);
+    return Math.round(P * r / (1 - Math.pow(1 + r, -n)));
+  }
+  function instSchedule(inst) {
+    var n = Math.max(1, inst.months), r = (inst.apr || 0) / 100 / 12, pmt = instPmt(inst), bal = inst.principal, rows = [];
+    for (var i = 0; i < n; i++) {
+      var intr = Math.round(bal * r), prin = pmt - intr;
+      if (i === n - 1) prin = bal;
+      bal -= prin;
+      rows.push({ i: i, date: addMonthsIso(inst.startDate, i), pay: prin + intr, int: intr, prin: prin, balAfter: bal });
+    }
+    return rows;
+  }
+  function postings(S, card, today) {
+    var out = [], i, t, rows, j;
+    for (i = 0; i < S.txns.length; i++) {
+      t = S.txns[i];
+      if (t.cardId === card.id && t.date <= today) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn" });
+    }
+    var ins = S.installments || [];
+    for (i = 0; i < ins.length; i++) {
+      if (ins[i].cardId !== card.id) continue;
+      rows = instSchedule(ins[i]);
+      for (j = 0; j < rows.length; j++) {
+        if (rows[j].date <= today) out.push({ date: rows[j].date, amt: rows[j].pay, catId: ins[i].catId, kind: "inst" });
+      }
+    }
+    return out;
+  }
+  function statements(S, card, today) {
+    var posts = postings(S, card, today), pays = [], i, k;
+    for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id) pays.push(S.payments[i]);
+    if (!posts.length && !pays.length) return [];
+    var byKey = {}, payBy = {}, minKey = null, maxKey = stmtKeyOf(card, today);
+    for (i = 0; i < posts.length; i++) {
+      k = stmtKeyOf(card, posts[i].date);
+      byKey[k] = (byKey[k] || 0) + posts[i].amt;
+      if (minKey === null || k < minKey) minKey = k;
+    }
+    for (i = 0; i < pays.length; i++) {
+      k = pays[i].stmtKey;
+      (payBy[k] = payBy[k] || []).push({ date: pays[i].date, amt: pays[i].amt });
+      if (minKey === null || k < minKey) minKey = k;
+      if (k > maxKey) maxKey = k;
+    }
+    var out = [], prev = null, carry = [], key = minKey, guard = 0;
+    var st = S.settings || {}, minFixed = st.minFixed == null ? 50000 : st.minFixed, minPct = st.minPct == null ? 5 : st.minPct;
+    while (key <= maxKey && guard++ < 1200) {
+      var d = stmtDates(card, key), s = { key: key, start: d.start, close: d.close, due: d.due, charges: byKey[key] || 0, interest: 0, total: 0, paid: 0, remaining: 0, min: 0, status: "Open", est: false, skip: false, pieces: [], remAtDue: 0 };
+      if (prev && today > prev.due) s.interest = Math.round(Math.max(0, prev.remAtDue) * (card.apr || 0) / 100 / 12);
+      s.total = Math.max(0, s.charges + s.interest);
+      var pieces = (payBy[key] || []).concat(carry), sum = 0;
+      for (i = 0; i < pieces.length; i++) sum += pieces[i].amt;
+      s.pieces = pieces;
+      s.paid = Math.min(s.total, sum);
+      carry = [];
+      var ex = sum - s.paid;
+      for (i = pieces.length - 1; i >= 0 && ex > 0; i--) {
+        var take = Math.min(ex, pieces[i].amt);
+        if (take > 0) { carry.push({ date: pieces[i].date, amt: take }); ex -= take; }
+      }
+      s.remaining = s.total - s.paid;
+      s.est = s.close > today;
+      if (s.remaining === 0 && s.total > 0) s.status = "Paid";
+      else if (s.remaining > 0 && today > s.due) s.status = "Overdue";
+      else if (s.paid > 0) s.status = "Partial";
+      else s.status = "Open";
+      s.skip = s.total === 0 && s.paid === 0;
+      s.min = Math.min(s.remaining, Math.max(0, Math.min(s.total, Math.max(minFixed, Math.round(s.total * minPct / 100))) - s.paid));
+      var atDue = 0;
+      for (i = 0; i < pieces.length; i++) if (pieces[i].date <= s.due) atDue += pieces[i].amt;
+      s.remAtDue = s.total - atDue;
+      out.push(s);
+      prev = s;
+      key = keyAdd(key, 1);
+    }
+    return out;
+  }
+  function balance(S, card, today) {
+    var posts = postings(S, card, today), stm = statements(S, card, today), b = 0, i;
+    for (i = 0; i < posts.length; i++) b += posts[i].amt;
+    for (i = 0; i < stm.length; i++) b += stm[i].interest;
+    for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id && S.payments[i].date <= today) b -= S.payments[i].amt;
+    return b;
+  }
+  function util(bal, limit) { return bal > 0 && limit > 0 ? Math.round(bal * 1000 / limit) / 10 : 0; }
+  function snapshot(S, today) {
+    var owed = 0, spent = 0, stmts = [], next = null, mk = keyOf(today), prevFirst = keyAdd(mk, -1) + "-01";
+    for (var c = 0; c < S.cards.length; c++) {
+      var card = S.cards[c], list = statements(S, card, today).filter(function (s) { return !s.skip; }), i, s;
+      if (card.archived) {
+        for (i = 0; i < list.length; i++) if (list[i].remaining > 0) owed += list[i].remaining;
+      } else {
+        var bal = balance(S, card, today);
+        if (bal > 0) owed += bal;
+        var ps = postings(S, card, today);
+        for (i = 0; i < ps.length; i++) if (keyOf(ps[i].date) === mk) spent += ps[i].amt;
+      }
+      for (i = 0; i < list.length; i++) {
+        s = list[i];
+        if (s.remaining > 0 || (i >= list.length - 3 && s.due >= prevFirst)) {
+          stmts.push({ cardId: card.id, card: card.nickname, key: s.key, due: s.due, total: s.total, remaining: s.remaining, status: s.status });
+          if (s.remaining > 0 && (!next || s.due < next.date)) next = { cardId: card.id, card: card.nickname, date: s.due, amt: s.remaining };
+        }
+      }
+    }
+    return { at: Date.now(), owed: owed, spentMonth: spent, next: next, stmts: stmts };
+  }
+  return { dim: dim, isoD: isoD, parseIso: parseIso, addMonthsIso: addMonthsIso, keyOf: keyOf, keyAdd: keyAdd, closeDay: closeDay,
+    stmtKeyOf: stmtKeyOf, stmtDates: stmtDates, instPmt: instPmt, instSchedule: instSchedule, postings: postings,
+    statements: statements, balance: balance, util: util, snapshot: snapshot };
+})();
+// ===== END CARD ENGINE =====
+</script>
+
+<script>
   // =========================================================
   // Debt Tracker (month-based)
   // Each debt with N terms spans N consecutive months from its start month,
@@ -1269,6 +1436,7 @@
   // Is the debt active in the given month? Recurring bills run every month from
   // startMonth onward until stopped (endMonth set); otherwise it's N fixed terms.
   function isActiveIn(d, key) {
+    if (d.cardLink) return false;
     if (hasPlan(d)) return planEntriesFor(d, key).length > 0;
     const idx = termIndexFor(d, key);
     if (idx < 0) return false;
@@ -1308,6 +1476,7 @@
   }
   // For recurring bills, "remaining" = this month's amount minus what's paid this month.
   function remainingOf(d) {
+    if (d.cardLink) return 0;
     if (hasPlan(d)) {
       // total remaining across ALL future plan entries (unpaid), not just this month
       return d.plan.reduce((s, p) => s + (p.paid ? 0 : num(p.amount)), 0);
@@ -1355,6 +1524,14 @@
         monthPaid += paidOfMonth(d); // counts partials too
       }
     });
+    totalRemaining += cardsOutstanding();
+    {
+      const [vy, vm0] = parseKey(viewMonth);
+      cardOccIn(isoD(vy, vm0, 1), isoD(vy, vm0, dimOf(vy, vm0))).forEach(o => {
+        monthDue += o.full;
+        monthPaid += o.paid ? o.full : Math.max(0, o.full - o.amount);
+      });
+    }
     const cut = cutoffFilter;
     let due = monthDue, paid = monthPaid, rem = Math.max(0, monthDue - monthPaid), word = "month", range = "";
     if (cut === "1st" || cut === "2nd") {
@@ -1616,8 +1793,112 @@
     '</div>';
   }
 
+  // ---------- Card statements block (above "To Pay") ----------
+  function stmtOccsInView() {
+    let a, b;
+    if (cutoffFilter === "1st" || cutoffFilter === "2nd") { const P = cutPeriodFor(cutoffFilter); a = P.start; b = P.end; }
+    else { const [y, m0] = parseKey(viewMonth); a = isoD(y, m0, 1); b = isoD(y, m0, dimOf(y, m0)); }
+    return cardOccIn(a, b);
+  }
+  function stmtBlockHtml(occs) {
+    if (!cardsState) return "";
+    const linked = state.debts.filter(d => d.cardLink);
+    const cardsAvail = cardsState.cards.filter(c => !c.archived);
+    if (!occs.length && !linked.length && !cardsAvail.length) return "";
+    const due = occs.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0);
+    const open = catOpen["cs:block"] !== false;
+    let h = '<div class="cat-group cs-block"><div class="cat-header" data-cattoggle="cs:block"><span class="cat-title"><span class="cat-chev">' + (open ? "\u25BC" : "\u25B6") +
+      '</span> Card statements</span><span class="cat-total">Due: ' + peso(due) + '</span></div>';
+    if (open) {
+      if (!occs.length) h += '<div class="empty">No card statements due in this view</div>';
+      occs.forEach(o => {
+        const cls = o.paid ? "paid" : (o.status === "Overdue" ? "over" : (o.status === "Partial" ? "part" : "open"));
+        h += '<div class="cs-row"><div class="cs-top"><span class="cs-dt">' + shortDate(o.date) + '</span>' +
+          '<span class="cs-nm">' + escH(o.label) + (o.est ? ' <small>(est.)</small>' : '') + '</span>' +
+          '<span class="cs-pill ' + cls + '">' + escH(o.status) + '</span>' +
+          '<span class="cs-am">' + peso(o.paid ? o.full : o.amount) + '</span></div>';
+        if (!o.paid) {
+          h += '<div class="cs-act"><button class="cs-btn" data-cspay="' + escH(o.cardId) + '|' + o.key + '">Pay full</button>' +
+            '<button class="cs-btn" data-cspart="' + escH(o.cardId) + '|' + o.key + '">Partial\u2026</button></div>';
+        }
+        h += '</div>';
+      });
+      h += '<div class="cs-links"><a href="cards.html">Open Card Tracker \u2192</a></div>';
+      // Duplicates: manual credit-card debts that mirror a card
+      const cands = state.debts.filter(d => d.category === "creditcard" && !d.cardLink);
+      const sugg = [];
+      cands.forEach(d => {
+        const bc = bankCanon(d.bank || d.name);
+        if (!bc) return;
+        cardsAvail.forEach(c => { if (bankCanon(c.bank) === bc) sugg.push({ d: d, c: c }); });
+      });
+      if (sugg.length || linked.length || (cands.length && cardsAvail.length)) {
+        h += '<div class="cs-dup"><div class="cs-dup-t">Duplicates</div>';
+        sugg.forEach(x => {
+          h += '<div class="cs-dup-r"><span>' + escH(debtDisplayName(x.d)) + ' looks like ' + escH(cardLabel(x.c)) +
+            '</span><button class="cs-btn" data-csauto="' + escH(x.d.id) + '|' + escH(x.c.id) + '">Hide duplicate</button></div>';
+        });
+        if (cands.length && cardsAvail.length) {
+          h += '<div class="cs-dup-r"><select id="csLinkDebt" class="cs-sel">' + cands.map(d => '<option value="' + escH(d.id) + '">' + escH(debtDisplayName(d)) + '</option>').join("") + '</select>' +
+            '<select id="csLinkCard" class="cs-sel">' + cardsAvail.map(c => '<option value="' + escH(c.id) + '">' + escH(cardLabel(c)) + '</option>').join("") + '</select>' +
+            '<button class="cs-btn" data-cslink="1">Link</button></div>';
+        }
+        linked.forEach(d => {
+          const c = cardsState.cards.find(x => x.id === d.cardLink);
+          h += '<div class="cs-dup-r"><span>' + escH(debtDisplayName(d)) + ' \u2192 ' + escH(c ? cardLabel(c) : "card") + ' (hidden)</span>' +
+            '<button class="cs-btn" data-csunlink="' + escH(d.id) + '">Unlink</button></div>';
+        });
+        h += '</div>';
+      }
+    }
+    return h + '</div>';
+  }
+  (function () {
+    const el = document.getElementById("debtList");
+    if (!el) return;
+    el.addEventListener("click", async (e) => {
+      const t = e.target, q = s => (t.closest ? t.closest(s) : null);
+      const pay = q("[data-cspay]"), part = q("[data-cspart]");
+      if (pay || part) {
+        const ps = (pay || part).getAttribute(pay ? "data-cspay" : "data-cspart").split("|");
+        let cents = null;
+        if (part) {
+          const v = prompt("Amount to pay (PHP):", "");
+          if (v == null) return;
+          const sv = String(v).replace(/[,\s]|PHP|\u20B1/gi, "");
+          if (!/^\d+(\.\d{1,2})?$/.test(sv)) { alert("Enter a valid amount."); return; }
+          cents = Math.round(parseFloat(sv) * 100);
+          if (!(cents > 0)) return;
+        }
+        const pid = await payCardStmt(ps[0], ps[1], cents);
+        renderAll();
+        if (pid) ccToast(part ? "Partial payment saved" : "Marked paid", function () { removeCardPayment(pid); renderAll(); });
+        return;
+      }
+      const auto = q("[data-csauto]");
+      if (auto) {
+        const ps = auto.getAttribute("data-csauto").split("|"), d = state.debts.find(x => x.id === ps[0]);
+        if (d) { d.cardLink = ps[1]; saveState(); renderAll(); }
+        return;
+      }
+      if (q("[data-cslink]")) {
+        const ds = document.getElementById("csLinkDebt"), cs = document.getElementById("csLinkCard");
+        const d = ds && state.debts.find(x => x.id === ds.value);
+        if (d && cs && cs.value) { d.cardLink = cs.value; saveState(); renderAll(); }
+        return;
+      }
+      const un = q("[data-csunlink]");
+      if (un) {
+        const d = state.debts.find(x => x.id === un.getAttribute("data-csunlink"));
+        if (d) { delete d.cardLink; saveState(); renderAll(); }
+      }
+    });
+  })();
+
   function renderList() {
     const el = document.getElementById("debtList");
+    const stmtOccs = stmtOccsInView();
+    const stmtHtml = stmtBlockHtml(stmtOccs);
     const activeThisMonth = state.debts.filter(d => isActiveIn(d, viewMonth) && passesCutoffFilter(d));
     if (!activeThisMonth.length) {
       // Find the nearest month that DOES have active debts, so the user can jump there.
@@ -1643,7 +1924,12 @@
         msg += 'Add one below.';
       }
       msg += '</div>';
-      el.innerHTML = '<div class="card">' + msg + '</div>';
+      el.innerHTML = stmtHtml + '<div class="card">' + msg + '</div>';
+      el.querySelectorAll("[data-cattoggle]").forEach(h => h.addEventListener("click", () => {
+        const c = h.getAttribute("data-cattoggle");
+        catOpen[c] = (catOpen[c] === false) ? true : false;
+        renderList();
+      }));
       const jb = document.getElementById("jumpBtn");
       if (jb) jb.addEventListener("click", () => { viewMonth = jumpMonth; renderAll(); });
       return;
@@ -1693,10 +1979,11 @@
 
     // This-month remaining (plan-aware): this month's due minus what's paid this month.
     // (remainingOf counts ALL future plan paydays, which would over-count the section.)
-    const toPayTotal = toPayDebts.reduce((s, d) => s + Math.max(0, perTermOf(d) - paidOfMonth(d)), 0);
+    const toPayTotal = toPayDebts.reduce((s, d) => s + Math.max(0, perTermOf(d) - paidOfMonth(d)), 0) +
+      stmtOccs.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0);
     const paidTotal  = paidDebts.reduce((s, d) => s + perTermOf(d), 0);
 
-    let html = "";
+    let html = stmtHtml;
     // TO PAY section
     html += '<div class="sec-head topay"><span class="sec-title">To Pay</span>' +
       '<span class="sec-total">' + peso(toPayTotal) + '</span></div>';
@@ -3040,10 +3327,12 @@
     if (appStarted) return;
     appStarted = true;
     loadState();
+    loadCardsLocal();
     viewMonth = monthKey(new Date());
 
     // Firebase: connect and watch notes for any person already shared
     fbInit();
+    cardsRefreshCloud();
     Object.keys(state.shareIds || {}).forEach(k => fbWatchNote(state.shareIds[k]));
 
     document.getElementById("addBtn").addEventListener("click", addDebt);
@@ -3220,6 +3509,135 @@
     return nm || grpOf(d);
   }
   function escH(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  // ---------- Card Tracker link (source of truth = cards state; statements computed live by CE) ----------
+  var cardsState = null, cardsMemoKey = "", cardsMemo = null, cardsBusy = false;
+  const CARDS_LS = "cardTrackerV1";
+  function cardsToday() { const n = new Date(); return isoD(n.getFullYear(), n.getMonth(), n.getDate()); }
+  function cardsNormalize(s) {
+    if (!s || !Array.isArray(s.cards) || !Array.isArray(s.payments) || !Array.isArray(s.txns)) return null;
+    if (!Array.isArray(s.installments)) s.installments = [];
+    if (!s.settings || typeof s.settings !== "object") s.settings = { minFixed: 50000, minPct: 5 };
+    if (typeof s.u !== "number") s.u = 0;
+    return s;
+  }
+  function cardsInvalidate() { cardsMemoKey = ""; cardsMemo = null; }
+  function loadCardsLocal() {
+    try {
+      const raw = localStorage.getItem(CARDS_LS);
+      if (!raw) return false;
+      const s = cardsNormalize(JSON.parse(raw));
+      if (s && (!cardsState || s.u > cardsState.u)) { cardsState = s; cardsInvalidate(); return true; }
+    } catch (e) {}
+    return false;
+  }
+  function cardsUrl() { return FIREBASE_CONFIG.databaseURL.replace(/\/$/, "") + "/cards/state.json"; }
+  function cardsPush() {
+    if (!cardsState) return;
+    try {
+      const payload = JSON.stringify({ stateJson: JSON.stringify(cardsState), updatedAt: cardsState.u, client: CLIENT_ID });
+      fetch(cardsUrl(), { method: "PUT", body: payload, keepalive: true }).catch(() => {});
+    } catch (e) {}
+  }
+  function cardsPersist() {
+    cardsState.u = Date.now();
+    try { cardsState.snap = CE.snapshot(cardsState, cardsToday()); } catch (e) {}
+    try { localStorage.setItem(CARDS_LS, JSON.stringify(cardsState)); } catch (e) {}
+    cardsInvalidate();
+    cardsPush();
+  }
+  // Adopt a newer local copy (written by cards.html) or cloud copy. silent = caller renders.
+  async function cardsRefreshCloud(silent) {
+    let changed = loadCardsLocal();
+    try {
+      const ctrl = ("AbortController" in window) ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 4000) : null;
+      const res = await fetch(cardsUrl() + "?ts=" + Date.now(), { cache: "no-store", signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      if (res.ok) {
+        const j = await res.json();
+        const cs = j && j.stateJson ? cardsNormalize(JSON.parse(j.stateJson)) : null;
+        const lu = cardsState ? cardsState.u : 0;
+        if (cs && num(j.updatedAt) >= lu && cs.u > lu) {
+          cardsState = cs; cardsInvalidate(); changed = true;
+          try { localStorage.setItem(CARDS_LS, JSON.stringify(cardsState)); } catch (e) {}
+        } else if (cardsState && lu > num(j && j.updatedAt)) {
+          cardsPush();
+        }
+      }
+    } catch (e) {}
+    if (changed && !silent && appStarted) renderAll();
+    return changed;
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && appStarted) cardsRefreshCloud();
+  });
+  // Pay a statement. cents == null pays the current remaining. Returns the payment id or null.
+  async function payCardStmt(cardId, key, cents, skipRefresh) {
+    if (!skipRefresh) await cardsRefreshCloud(true);
+    if (!cardsState) return null;
+    const card = cardsState.cards.find(c => c.id === cardId);
+    if (!card) return null;
+    const st = CE.statements(cardsState, card, cardsToday()).find(s => s.key === key);
+    if (!st) return null;
+    let amt = cents == null ? st.remaining : Math.min(cents, st.remaining);
+    if (!(amt > 0)) return null;
+    const now = Date.now(), id = uid();
+    cardsState.payments.push({ id: id, cardId: cardId, stmtKey: key, date: cardsToday(), amt: amt, kind: "debt", note: "Paid via Debt Tracker", createdAt: now, updatedAt: now });
+    cardsPersist();
+    return id;
+  }
+  function removeCardPayment(pid) {
+    if (!cardsState || !pid) return;
+    const n = cardsState.payments.length;
+    cardsState.payments = cardsState.payments.filter(p => p.id !== pid);
+    if (cardsState.payments.length !== n) cardsPersist();
+  }
+  function cardsAllStmts() {
+    if (!cardsState) return [];
+    const today = cardsToday(), mk = cardsState.u + "|" + today;
+    if (cardsMemo && cardsMemoKey === mk) return cardsMemo;
+    const all = [];
+    cardsState.cards.forEach(card => {
+      let list = [];
+      try { list = CE.statements(cardsState, card, today); } catch (e) {}
+      list.forEach(s => {
+        if (s.skip) return;
+        if (card.archived && !(s.remaining > 0)) return;
+        all.push({ card: card, s: s });
+      });
+    });
+    cardsMemo = all; cardsMemoKey = mk;
+    return all;
+  }
+  function cardLabel(card) { return (card.nickname || "Card") + " \u2022\u2022" + (card.last4 || ""); }
+  // Card statement occurrences whose due date is inside [start, end] (same shape as debt occurrences).
+  function cardOccIn(start, end) {
+    const out = [];
+    cardsAllStmts().forEach(x => {
+      const s = x.s;
+      if (s.due < start || s.due > end) return;
+      const label = cardLabel(x.card), paid = s.remaining === 0;
+      out.push({ id: "cs:" + x.card.id, key: s.key, pi: -2, date: s.due, name: label + " statement", grp: label,
+        item: "Statement " + shortDate(s.close) + (s.est ? " (est.)" : ""),
+        full: s.total / 100, amount: (paid ? s.total : s.remaining) / 100, paid: paid, over: false, recurring: false,
+        card: true, status: s.status, cardId: x.card.id, label: label, est: s.est });
+    });
+    return out;
+  }
+  // Total outstanding balance (billed + running) across active cards, in pesos.
+  function cardsOutstanding() {
+    if (!cardsState) return 0;
+    const today = cardsToday();
+    let sum = 0;
+    cardsState.cards.forEach(card => {
+      try {
+        if (card.archived) CE.statements(cardsState, card, today).forEach(s => { if (!s.skip && s.remaining > 0) sum += s.remaining; });
+        else { const b = CE.balance(cardsState, card, today); if (b > 0) sum += b; }
+      } catch (e) {}
+    });
+    return sum / 100;
+  }
+
   // All dated payments falling inside [start, end] (inclusive ISO dates).
   function occurrencesIn(start, end) {
     const out = [];
@@ -3228,6 +3646,7 @@
     for (let guard = 0; key <= lastKey && guard < 80; guard++, key = addMonths(key, 1)) {
       const [y, m0] = parseKey(key), D = dimOf(y, m0);
       state.debts.forEach(d => {
+        if (d.cardLink) return; // hidden: replaced by the card statement
         if (hasPlan(d)) {
           d.plan.forEach((p, pi) => {
             if (p.key !== key) return;
@@ -3253,6 +3672,7 @@
           amount: paid ? full : Math.max(0, full - part), paid: paid, over: false, recurring: !!d.recurring });
       });
     }
+    cardOccIn(start, end).forEach(o => out.push(o));
     out.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.name < b.name ? -1 : 1));
     return out;
   }
@@ -3381,11 +3801,17 @@
   (function () {
     const el = document.getElementById("cutoffCard");
     if (!el) return;
-    el.addEventListener("click", (e) => {
+    el.addEventListener("click", async (e) => {
       const t = e.target;
       const pay = t.closest && t.closest("[data-ccpay]");
       if (pay) {
         const parts = pay.getAttribute("data-ccpay").split("|");
+        if (parts[0].indexOf("cs:") === 0) {
+          const pid = await payCardStmt(parts[0].slice(3), parts[1], null);
+          renderAll();
+          if (pid) ccToast("Marked paid", function () { removeCardPayment(pid); renderAll(); });
+          return;
+        }
         const dd = state.debts.find(x => x.id === parts[0]);
         const snap = dd ? JSON.stringify(dd) : null;
         markCutPaid(parts[0], parts[1], parseInt(parts[2], 10));
@@ -3398,13 +3824,21 @@
       const payg = t.closest && t.closest("[data-ccpayg]");
       if (payg) {
         const items = payg.getAttribute("data-ccpayg").split(";").filter(Boolean).map(s => s.split("|"));
-        const snaps = {};
-        items.forEach(p => { const dd = state.debts.find(x => x.id === p[0]); if (dd && !snaps[p[0]]) snaps[p[0]] = JSON.stringify(dd); });
-        items.forEach(p => markCutPaid(p[0], p[1], parseInt(p[2], 10), true));
-        saveState(); renderAll();
+        const snaps = {}, cardItems = items.filter(p => p[0].indexOf("cs:") === 0), debtItems = items.filter(p => p[0].indexOf("cs:") !== 0);
+        debtItems.forEach(p => { const dd = state.debts.find(x => x.id === p[0]); if (dd && !snaps[p[0]]) snaps[p[0]] = JSON.stringify(dd); });
+        debtItems.forEach(p => markCutPaid(p[0], p[1], parseInt(p[2], 10), true));
+        if (debtItems.length) saveState();
+        const pids = [];
+        if (cardItems.length) {
+          await cardsRefreshCloud(true);
+          for (const p of cardItems) { const pid = await payCardStmt(p[0].slice(3), p[1], null, true); if (pid) pids.push(pid); }
+        }
+        renderAll();
         ccToast("Marked " + items.length + " paid", function () {
           Object.keys(snaps).forEach(id => { const i = state.debts.findIndex(x => x.id === id); if (i >= 0) state.debts[i] = JSON.parse(snaps[id]); });
-          saveState(); renderAll();
+          if (debtItems.length) saveState();
+          pids.forEach(removeCardPayment);
+          renderAll();
         });
         return;
       }
@@ -3427,7 +3861,7 @@
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 185;
+  const APP_VERSION = 187;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {

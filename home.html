@@ -169,6 +169,7 @@
         <a class="nav-item" href="signals.html" data-tool="signals">Market Signals</a>
         <a class="nav-item" href="salary.html" data-tool="salary">Salary</a>
         <a class="nav-item" href="debt.html" data-tool="debt">Debt Tracker</a>
+        <a class="nav-item" href="cards.html" data-tool="cards">Card Tracker</a>
         <a class="nav-item" href="receivables.html" data-tool="receivables">Receivables</a>
         <a class="nav-item" href="soa.html" data-tool="soa">Statement of Account</a>
         <a class="nav-item" href="windfall.html" data-tool="windfall">Windfall Planner</a>
@@ -246,7 +247,7 @@
   }
 
   // ---------- Version / update chip (dashboard right side; no bottom banner) ----------
-  const APP_VERSION = 185;
+  const APP_VERSION = 187;
   function setVersionChipIdle() {
     const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION;
     const chip = document.getElementById("versionChip");
@@ -289,7 +290,7 @@
     appId: "1:901782471631:web:5c7ec398e607b1777548ba"
   };
   let fbDb = null;
-  const DASH = { crypto: null, debt: null, receivables: null, salary: null, kanban: null };
+  const DASH = { crypto: null, debt: null, receivables: null, salary: null, kanban: null, cards: null };
 
   function fbInit() {
     try {
@@ -301,6 +302,7 @@
       watch("receivables/state", "receivables");
       watch("salary/state", "salary");
       watch("kanban/state", "kanban");
+      watch("cards/state", "cards");
     } catch (e) { fbDb = null; }
   }
   function watch(path, key) {
@@ -360,14 +362,25 @@
     const co = currentCutoff();
     let total = 0;
     st.debts.forEach(d => {
-      if (d.paid) return;
+      if (d.paid || d.cardLink) return;
       const dueDay = num(d.dueDay);
       if (!(dueDay >= co.lo && dueDay <= co.hi)) return;   // only the upcoming cutoff window
       const amt = num(d.amount), terms = Math.max(1, num(d.terms));
       const perTerm = terms > 1 ? amt / terms : amt;
       total += Math.max(0, perTerm - num(d.paidOnce));
     });
+    const cur = ladCurrent(), P = ladPeriod(cur.key, cur.cut);
+    total += cardStmtDue(P.start, P.end, true);
     return total;
+  }
+  // Card Tracker snapshot (written by cards.html / debt.html): statements due inside [start, end], in pesos.
+  function cardSnap() { const st = DASH.cards || localState("cardTrackerV1"); return st && st.snap ? st.snap : null; }
+  function cardStmtDue(start, end, onlyRemaining) {
+    const sn = cardSnap();
+    if (!sn || !Array.isArray(sn.stmts)) return 0;
+    let t = 0;
+    sn.stmts.forEach(s => { if (s && s.due >= start && s.due <= end) t += onlyRemaining ? Math.max(0, num(s.remaining)) : Math.max(0, num(s.total)); });
+    return t / 100;
   }
   // ---------- Left after debts (same pure logic as debt.html) ----------
   // Current cutoff = pay period containing today: 29th..13th = "13th", 14th..28th = "28th".
@@ -383,7 +396,7 @@
   }
   // Bills due inside the pay period of cutoff `cut` of month `key`: 29th..13th ("1st") or 14th..28th ("2nd"),
   // the same periods as the "Due this cutoff" card on the debt page.
-  function ladBills(st, key, cut) {
+  function ladPeriod(key, cut) {
     let a = 13, b = 28;
     try { const j = JSON.parse(localStorage.getItem("debtCutoffDays") || "null"); if (j) { a = Math.round(Number(j.a)); b = Math.round(Number(j.b)); } } catch (e) {}
     if (!(a >= 1 && a <= 28)) a = 13;
@@ -398,11 +411,19 @@
       start = pc2 >= dim(pm.getFullYear(), pm.getMonth()) ? iso(ky, km, 1) : iso(pm.getFullYear(), pm.getMonth(), pc2 + 1);
       end = iso(ky, km, a);
     } else { start = iso(ky, km, a + 1); end = iso(ky, km, c2); }
+    return { start: start, end: end };
+  }
+  function ladBills(st, key, cut) {
+    const ky = parseInt(key.slice(0, 4), 10), km = parseInt(key.slice(5, 7), 10) - 1;
+    const iso = (y, m, d) => { const t = new Date(y, m, d); return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); };
+    const dim = (y, m) => new Date(y, m + 1, 0).getDate();
+    const P = ladPeriod(key, cut), start = P.start, end = P.end;
     const now = new Date(), nowKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
     let total = 0;
     const keys = [new Date(ky, km - 1, 1), new Date(ky, km, 1), new Date(ky, km + 1, 1)].map(t => ({ y: t.getFullYear(), m: t.getMonth(), k: t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") }));
     keys.forEach(K => {
       st.debts.forEach(d => {
+        if (d.cardLink) return;
         const hasPlan = Array.isArray(d.plan) && d.plan.length > 0;
         const terms = Math.max(1, num(d.terms)), amt = num(d.amount);
         if (hasPlan) {
@@ -425,7 +446,14 @@
         if (per > 0) total += per;
       });
     });
-    return total;
+    return total + cardStmtDue(start, end, false);
+  }
+  function ladCurrent() {
+    const now = new Date(), day = now.getDate();
+    const cut = (day >= 14 && day <= 28) ? "2nd" : "1st";
+    const mo = (day > 28) ? now.getMonth() + 1 : now.getMonth();
+    const t = new Date(now.getFullYear(), mo, 1);
+    return { cut: cut, key: t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") };
   }
   function leftAfterDebts() {
     const st = DASH.debt || localState("debtTrackerV3");
@@ -517,6 +545,15 @@
           sparkline(lad.left >= 0 ? 13 : 17, col) +
         '</div>';
       }
+    }
+    const csn = cardSnap();
+    if (csn) {
+      const nx = csn.next ? ("Next: " + String(csn.next.card || "card").replace(/</g, "&lt;") + " \u00b7 " + csn.next.date) : "No statement due";
+      html += '<div class="stat" id="cardsTile" onclick="location.href=\'cards.html\'" style="cursor:pointer;">' +
+        '<div class="s-top"><div class="s-label" style="color:#a9aebd;">Cards owed</div></div>' +
+        '<div class="s-val" style="color:#b6b4ff;">' + (shown ? fmtPeso(num(csn.owed) / 100) : "\u2022\u2022\u2022\u2022\u2022\u2022") + '</div>' +
+        '<div class="s-sub" style="color:#a9aebd;">' + (shown ? nx : "Tap to open Card Tracker") + '</div>' +
+        sparkline(19, "#8f8cf5") + '</div>';
     }
     document.getElementById("stats").innerHTML = html;
     const eye = document.getElementById("eyeBtn");
