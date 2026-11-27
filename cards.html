@@ -560,6 +560,23 @@ var CE = (function () {
   // Keeps the posted/real one; never drops one with notes (user edit) or a skipped one. Returns number removed.
   function repairRecurringDups() {
     const drop = {}, byKey = {}; let n = 0;
+    // Re-anchor: if the first occurrence (the template) was moved to another date (e.g. created Nov 27, edited to Dec 5), the series follows it.
+    // Generated scheduled occurrences on the old day are removed (they are rebuilt on the new day); edited/noted ones stay.
+    S.recurring.forEach(function (r) {
+      if (!r.startDate) return;
+      const k0 = CE.keyOf(r.startDate);
+      const tpl = S.txns.find(function (x) { return x.recId === r.id && x.recMonth === k0 && !x.skipped && x.date !== r.startDate; });
+      if (!tpl) return;
+      const nd = CE.parseIso(tpl.date)[2];
+      S.txns.forEach(function (x) {
+        if (x.recId === r.id && x !== tpl && !x.skipped && x.status === "scheduled" && !x.notes && CE.parseIso(x.date)[2] !== nd) drop[x.id] = 1;
+      });
+      r.startDate = tpl.date; r.day = nd; stamp(r);
+      tpl.recMonth = CE.keyOf(tpl.date); stamp(tpl);
+      n++;
+      if (!S.mig || typeof S.mig !== "object") S.mig = {};
+      S.mig.reanchor_rec_v196 = { at: Date.now(), series: r.id, startDate: r.startDate };
+    });
     S.txns.forEach(function (x) {
       if (!x.recId || x.skipped) return;
       (byKey[x.recId + "|" + x.date] = byKey[x.recId + "|" + x.date] || []).push(x);
@@ -587,6 +604,7 @@ var CE = (function () {
     S.txns.forEach(function (x) {
       if (x.recId) {
         have[x.recId + "|" + x.recMonth] = 1; have[x.recId + "|" + x.date] = 1;
+        { const cd = !x.skipped && cardById(x.cardId); if (cd) have[x.recId + "|S" + CE.stmtKeyOf(cd, x.date)] = 1; }
         if (!x.skipped && !x.status && x.date > t) { x.status = "scheduled"; stamp(x); made++; }
         else if (x.status === "scheduled" && x.date <= t) { delete x.status; stamp(x); made++; }
       }
@@ -599,7 +617,7 @@ var CE = (function () {
         const y = parseInt(key.slice(0, 4), 10), m0 = parseInt(key.slice(5, 7), 10) - 1;
         const date = CE.isoD(y, m0, Math.min(r.day, CE.dim(y, m0)));
         if (date > lim) break;
-        if (date >= r.startDate && !have[r.id + "|" + key] && !have[r.id + "|" + date] && r.skipMonths.indexOf(key) < 0) {
+        if (date >= r.startDate && !have[r.id + "|" + key] && !have[r.id + "|" + date] && !(cardById(r.cardId) && have[r.id + "|S" + CE.stmtKeyOf(cardById(r.cardId), date)]) && r.skipMonths.indexOf(key) < 0) {
           // An unlinked original with the same card/merchant/amount/date is occurrence #1: adopt it instead of adding a copy.
           const orig = S.txns.find(function (x) { return !x.recId && !x.skipped && !x.opening && sameOcc(x, { cardId: r.cardId, date: date, amt: r.amt, merchant: r.merchant }); });
           if (orig) { orig.recId = r.id; orig.recMonth = key; stamp(orig); have[r.id + "|" + key] = 1; have[r.id + "|" + date] = 1; made++; key = CE.keyAdd(key, 1); idx++; continue; }
@@ -858,28 +876,27 @@ var CE = (function () {
   function renderTxList() {
     const box = $("txList"); if (!box) return;
     const list = filtered(), showCard = !(ui.tab === "cards" && ui.cardId);
-    let shown = list.slice(0, ui.page * 100), sched = [], pgHtml = "";
-    if (!showCard) {
-      // Card detail: scheduled items under a collapsed group, the rest paginated 20 per page when > 20.
-      sched = list.filter(function (t) { return !t.skipped && isSched(t); });
-      const rest = list.filter(function (t) { return sched.indexOf(t) < 0; }), PER = 20, np = Math.max(1, Math.ceil(rest.length / PER));
-      if (ui.page > np) ui.page = np;
-      if (rest.length > PER) {
-        shown = rest.slice((ui.page - 1) * PER, ui.page * PER);
-        pgHtml = "<div class='pgr'><button class='btn sec sm' data-act='txpg' data-d='-1'" + (ui.page <= 1 ? " disabled" : "") + ">\u2039 Prev</button><span>" + ui.page + " / " + np + "</span><button class='btn sec sm' data-act='txpg' data-d='1'" + (ui.page >= np ? " disabled" : "") + ">Next \u203A</button></div>";
-      } else shown = rest;
-    }
-    let total = 0; list.forEach(function (t) { total += t.amt; });
+    // Scheduled occurrences collapse into one group (10 per page); posted rows are newest first, 20 per page.
+    const sched = list.filter(function (t) { return !t.skipped && isSched(t); }).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    const rest = list.filter(function (t) { return sched.indexOf(t) < 0; }), PER = 20, np = Math.max(1, Math.ceil(rest.length / PER));
+    if (ui.page > np) ui.page = np; if (ui.page < 1) ui.page = 1;
+    const shown = rest.slice((ui.page - 1) * PER, ui.page * PER);
+    const pager = function (act, pg, n) { return n > 1 ? "<div class='pgr'><button class='btn sec sm' data-act='" + act + "' data-d='-1'" + (pg <= 1 ? " disabled" : "") + ">\u2039 Prev</button><span>" + pg + " / " + n + "</span><button class='btn sec sm' data-act='" + act + "' data-d='1'" + (pg >= n ? " disabled" : "") + ">Next \u203A</button></div>" : ""; };
+    let total = 0; rest.forEach(function (t) { total += t.amt; });
+    let schedTot = 0; sched.forEach(function (t) { schedTot += t.amt; });
     const fb = $("filtBtn");
     if (fb) fb.textContent = "\uD83D\uDD0D Filter " + (prefs.filtOpen ? "\u25BE" : "\u25B8") + (ui.q || ui.from || ui.to || ui.fCard || ui.fCat || ui.min || ui.max ? " \u00b7 on" : "");
-    $("txCount").textContent = list.length + " transaction" + (list.length === 1 ? "" : "s") + " \u00b7 net " + fmt(total);
-    box.innerHTML = shown.length || sched.length ? shown.map(function (t) { return txRowHtml(t, showCard); }).join("") : "<div class='empty'>No transactions match.</div>";
-    if (!showCard) {
-      box.innerHTML += pgHtml;
-      if (sched.length) box.innerHTML += "<button class='link' data-act='schedtoggle'>Scheduled (" + sched.length + ") " + (prefs.schedOpen ? "\u25B4" : "\u25BE") + "</button>" + (prefs.schedOpen ? sched.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }).map(function (t) { return txRowHtml(t, false); }).join("") : "");
-    } else if (list.length > shown.length) box.innerHTML += "<button class='link' data-act='more'>Show more (" + (list.length - shown.length) + " left)</button>";
-  }
-  function viewReports() {
+    $("txCount").textContent = rest.length + " transaction" + (rest.length === 1 ? "" : "s") + " \u00b7 net " + fmt(total) + (sched.length ? " \u00b7 " + sched.length + " scheduled" : "");
+    let h = shown.length ? shown.map(function (t) { return txRowHtml(t, showCard); }).join("") : (sched.length ? "" : "<div class='empty'>No transactions match.</div>");
+    h += pager("txpg", ui.page, np);
+    if (sched.length) {
+      const SP = 10, sn = Math.max(1, Math.ceil(sched.length / SP));
+      if (!(ui.sp >= 1)) ui.sp = 1; if (ui.sp > sn) ui.sp = sn;
+      h += "<button class='link' data-act='schedtoggle'>Scheduled (" + sched.length + ") \u00b7 " + fmt(schedTot) + " " + (prefs.schedOpen ? "\u25B4" : "\u25B8") + "</button>";
+      if (prefs.schedOpen) h += sched.slice((ui.sp - 1) * SP, ui.sp * SP).map(function (t) { return txRowHtml(t, showCard); }).join("") + pager("schpg", ui.sp, sn);
+    }
+    box.innerHTML = h;
+  }  function viewReports() {
     const t = todayIso(), cur = CE.keyOf(t); if (!ui.repMonth) ui.repMonth = cur;
     const byM = {}; // one pass over txns
     S.txns.forEach(function (x) {
@@ -1323,6 +1340,7 @@ var CE = (function () {
       case "savebud": saveBudgets(); break;
       case "more": ui.page++; renderTxList(); break;
       case "txpg": ui.page = Math.max(1, ui.page + parseInt(b.getAttribute("data-d"), 10)); renderTxList(); break;
+      case "schpg": ui.sp = Math.max(1, (ui.sp || 1) + parseInt(b.getAttribute("data-d"), 10)); renderTxList(); break;
       case "schedtoggle": prefs.schedOpen = !prefs.schedOpen; savePrefs(); renderTxList(); break;
       case "stmexp": { const P = stmPrefs(), cur = P.open[id], c = cardById(ui.cardId), key = id.split("|")[1], s = c && CE.statements(S, c, todayIso()).find(function (x) { return x.key === key; }), def = !!s && (s.status === "Open" || s.status === "Partial" || s.status === "Overdue"); P.open[id] = !(cur === undefined ? def : cur); savePrefs(); render(); break; }
       case "stmtoggle": { const P = stmPrefs(); P[id] = !P[id]; savePrefs(); render(); break; }
@@ -1418,7 +1436,7 @@ var CE = (function () {
     window.addEventListener("focus", refreshAll);
   }
 
-  const APP_VERSION = 195;
+  const APP_VERSION = 196;
   function setFooterVersion() { const fv = $("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // Manual update only: shows a banner, never auto-reloads.
   async function checkForUpdate() {
