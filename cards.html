@@ -893,7 +893,8 @@ var CE = (function () {
       "<div class='sech'>Recurring expenses</div>" +
       (S.recurring.filter(function (r) { return r.active; }).map(function (r) { return "<div class='lrow'><div class='t'>\u21BB " + escH(r.merchant || "(no merchant)") + " \u00b7 " + fmt(r.amt) + " \u00b7 day " + r.day + " \u00b7 " + escH(cardLabel(cardById(r.cardId))) + "</div><button class='btn sec sm' data-act='stoprec' data-id='" + escH(r.id) + "'>Stop</button></div>"; }).join("") || "<div class='hint'>No active recurring expenses.</div>") +
       "<div class='sech'>Data</div><div class='acts'><button class='btn sec sm' data-act='backupnow'>Backup JSON</button><button class='btn sec sm' data-act='restore'>Restore JSON</button>" +
-      "<button class='btn sec sm' data-act='exportall'>Export CSV</button><button class='btn sec sm' data-act='importcsv'>Import CSV</button></div>" +
+      "<button class='btn sec sm' data-act='exportall'>Export CSV</button><button class='btn sec sm' data-act='importcsv'>Import CSV</button>" +
+      "<button class='btn sec sm' data-act='rmtest'>" + (testPlan().cards.length ? "Remove test data" : "No test data found") + "</button></div>" +
       "<div class='hint'>Last backup: " + (st.lastBackupAt ? new Date(st.lastBackupAt).toLocaleDateString() : "never") + "</div>");
   }
   function saveSettings() {
@@ -920,6 +921,32 @@ var CE = (function () {
   function backupNow() {
     download("card-tracker-backup-" + todayIso() + ".json", JSON.stringify(S, null, 1), "application/json");
     S.settings.lastBackupAt = Date.now(); persist(); if (!sheetOpen()) render(); toast("Backup downloaded");
+  }
+  // ---------- remove development test data (hard delete, one-off cleanup) ----------
+  const TEST_CARDS = [["bdo rewards", "1234"], ["metrobank travel", "5678"], ["unionbank rewards", "9012"]];
+  const TEST_BUDGETS = { food: 500000, shopping: 610000 };
+  function testPlan() {
+    const ids = {};
+    S.cards.forEach(function (c) { if (TEST_CARDS.some(function (t) { return String(c.nickname || "").trim().toLowerCase() === t[0] && String(c.last4) === t[1]; })) ids[c.id] = 1; });
+    const inIds = function (x) { return !!ids[x.cardId]; };
+    const cards = S.cards.filter(function (c) { return ids[c.id]; });
+    let stmts = 0; cards.forEach(function (c) { try { stmts += CE.statements(S, c, todayIso()).filter(function (s) { return !s.skip; }).length; } catch (e) {} });
+    const left = S.cards.length - cards.length;
+    const buds = (cards.length && left === 0) ? S.budgets.filter(function (b) { return b.catId && TEST_BUDGETS[b.catId] === b.amt; }) : [];
+    return { ids: ids, cards: cards, txns: S.txns.filter(inIds), payments: S.payments.filter(inIds), installments: S.installments.filter(inIds), recurring: S.recurring.filter(inIds), budgets: buds, stmts: stmts };
+  }
+  function removeTestData() {
+    const p = testPlan();
+    if (!p.cards.length) { toast("No test data found"); return; }
+    const msg = "Remove Card Tracker test data?\n\n" + p.cards.length + " cards, " + p.txns.length + " transactions, " + p.stmts + " statements, " + p.payments.length + " payments, " + p.installments.length + " installments, " + p.recurring.length + " recurring rules, " + p.budgets.length + " budgets\n\nA JSON backup downloads first. This cannot be undone.";
+    if (!confirm(msg)) return;
+    download("card-tracker-backup-before-cleanup-" + todayIso() + ".json", JSON.stringify(S, null, 1), "application/json");
+    const bud = {}; p.budgets.forEach(function (b) { bud[b.id] = 1; });
+    S.cards = S.cards.filter(function (c) { return !p.ids[c.id]; });
+    ["txns", "payments", "installments", "recurring"].forEach(function (k) { S[k] = S[k].filter(function (x) { return !p.ids[x.cardId]; }); });
+    S.budgets = S.budgets.filter(function (b) { return !bud[b.id]; });
+    persist(); flush(); closeSheet(); render();
+    toast("Removed " + p.cards.length + " cards, " + p.txns.length + " transactions, " + p.stmts + " statements, " + p.payments.length + " payments, " + p.installments.length + " installments, " + p.budgets.length + " budgets");
   }
   function restoreFile(file) {
     const rd = new FileReader();
@@ -1065,6 +1092,7 @@ var CE = (function () {
       case "delcat": if (confirm("Delete this category? Its items move to Others.")) { deleteCategory(id); persist(); openSettings(); render(); } break;
       case "stoprec": { const r = S.recurring.find(function (x) { return x.id === id; }); if (r) { r.active = false; stamp(r); persist(); openSettings(); } break; }
       case "backupnow": backupNow(); break;
+      case "rmtest": removeTestData(); break;
       case "snooze": S.settings.backupSnoozeUntil = Date.now() + 7 * 86400000; persist(); render(); break;
       case "restore": pickFile(".json,application/json", restoreFile); break;
       case "exportcsv": exportCsv(filtered()); break;
@@ -1130,7 +1158,7 @@ var CE = (function () {
     window.addEventListener("focus", refreshAll);
   }
 
-  const APP_VERSION = 188;
+  const APP_VERSION = 189;
   function setFooterVersion() { const fv = $("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // Manual update only: shows a banner, never auto-reloads.
   async function checkForUpdate() {
