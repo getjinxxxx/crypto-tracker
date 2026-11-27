@@ -95,6 +95,9 @@
   .trow .d { font-size: 12px; color: #a9aebd; }
   .trow .a { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+  .trow.sch .m, .trow.sch .a { color: #a9aebd; font-weight: 600; }
+  .trow.skp .m, .trow.skp .a { color: #a9aebd; text-decoration: line-through; font-weight: 600; }
+  .tag { display: inline-block; background: #2b2745; color: #d6d4ff; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; text-decoration: none; }
   .pill { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 800; }
   .p-Open { background: #2b2745; color: #d6d4ff; }
   .p-Paid { background: #123a2c; color: #34d399; }
@@ -235,7 +238,7 @@ var CE = (function () {
     var out = [], i, t, rows, j;
     for (i = 0; i < S.txns.length; i++) {
       t = S.txns[i];
-      if (t.cardId === card.id && (all || t.date <= today)) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening });
+      if (t.cardId === card.id && !t.skipped && (all || t.date <= today)) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening, sched: t.status === "scheduled" && t.date > today });
     }
     var ins = S.installments || [];
     for (i = 0; i < ins.length; i++) {
@@ -251,11 +254,12 @@ var CE = (function () {
     var posts = postings(S, card, today, true), pays = [], i, k;
     for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id) pays.push(S.payments[i]);
     if (!posts.length && !pays.length) return [];
-    var byKey = {}, payBy = {}, minKey = null, maxKey = stmtKeyOf(card, today);
+    var byKey = {}, schBy = {}, payBy = {}, minKey = null, maxKey = stmtKeyOf(card, today);
     for (i = 0; i < posts.length; i++) { k = stmtKeyOf(card, posts[i].date); if (k > maxKey) maxKey = k; }
     for (i = 0; i < posts.length; i++) {
       k = stmtKeyOf(card, posts[i].date);
       byKey[k] = (byKey[k] || 0) + posts[i].amt;
+      if (posts[i].sched) schBy[k] = (schBy[k] || 0) + posts[i].amt;
       if (minKey === null || k < minKey) minKey = k;
     }
     for (i = 0; i < pays.length; i++) {
@@ -267,7 +271,7 @@ var CE = (function () {
     var out = [], prev = null, carry = [], key = minKey, guard = 0;
     var st = S.settings || {}, minFixed = st.minFixed == null ? 50000 : st.minFixed, minPct = st.minPct == null ? 5 : st.minPct;
     while (key <= maxKey && guard++ < 1200) {
-      var d = stmtDates(card, key), s = { key: key, start: d.start, close: d.close, due: d.due, charges: byKey[key] || 0, interest: 0, total: 0, paid: 0, remaining: 0, min: 0, status: "Open", est: false, skip: false, pieces: [], remAtDue: 0 };
+      var d = stmtDates(card, key), s = { key: key, start: d.start, close: d.close, due: d.due, charges: byKey[key] || 0, sched: schBy[key] || 0, interest: 0, total: 0, paid: 0, remaining: 0, min: 0, status: "Open", est: false, skip: false, pieces: [], remAtDue: 0 };
       if (prev && today > prev.due) s.interest = Math.round(Math.max(0, prev.remAtDue) * (card.apr || 0) / 100 / 12);
       s.total = Math.max(0, s.charges + s.interest);
       var pieces = (payBy[key] || []).concat(carry), sum = 0;
@@ -302,10 +306,16 @@ var CE = (function () {
   }
   function balance(S, card, today) {
     var posts = postings(S, card, today, true), stm = statements(S, card, today), b = 0, i;
-    for (i = 0; i < posts.length; i++) b += posts[i].amt;
+    for (i = 0; i < posts.length; i++) if (!posts[i].sched) b += posts[i].amt;
     for (i = 0; i < stm.length; i++) b += stm[i].interest;
     for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id && S.payments[i].date <= today) b -= S.payments[i].amt;
     return b;
+  }
+  // Scheduled (future recurring) charges: not in balance until their date; they do count in statement totals (dues).
+  function schedTotal(S, card, today) {
+    var posts = postings(S, card, today, true), r = { total: 0, count: 0 };
+    for (var i = 0; i < posts.length; i++) if (posts[i].sched) { r.total += posts[i].amt; r.count++; }
+    return r;
   }
   function util(bal, limit) { return bal > 0 && limit > 0 ? Math.round(bal * 1000 / limit) / 10 : 0; }
   // Default Pay-on = latest payday (13th or 28th) on or before the due date.
@@ -345,7 +355,7 @@ var CE = (function () {
   }
   return { dim: dim, isoD: isoD, parseIso: parseIso, addMonthsIso: addMonthsIso, keyOf: keyOf, keyAdd: keyAdd, closeDay: closeDay,
     stmtKeyOf: stmtKeyOf, stmtDates: stmtDates, instPmt: instPmt, instSchedule: instSchedule, postings: postings,
-    statements: statements, balance: balance, util: util, snapshot: snapshot, payDefault: payDefault, payOf: payOf };
+    statements: statements, balance: balance, schedTotal: schedTotal, util: util, snapshot: snapshot, payDefault: payDefault, payOf: payOf };
 })();
 // ===== END CARD ENGINE =====
 </script>
@@ -521,36 +531,77 @@ var CE = (function () {
     return true;
   }
   function runRcbcFixes() {
-    const m = migrateRcbc(), r = repairRcbcDup();
+    const m = migrateRcbc(), r = repairRcbcDup(), a = migrateAnytime();
     if (m) toast("RCBC \u2022\u2022\u20228009 updated from your Nov 4 statement");
-    return m || r;
+    else if (a) toast("Anytime Fitness scheduled for 12 months (Dec 5 2026 to Nov 5 2027)");
+    return m || r || a;
   }
   // ---------- recurring ----------
+  function isSched(x) { return x.status === "scheduled" && x.date > todayIso() && !x.skipped; }
+  // Last date a series may have an occurrence: the earlier of "N months" and "end date"; open-ended rolls 12 months ahead of today.
+  function recLimit(r, t) {
+    let lim = CE.addMonthsIso(t, 12), n = num(r.months);
+    if (r.endDate || n > 0) {
+      lim = "9999-12-31";
+      if (n > 0) { const k = CE.keyAdd(CE.keyOf(r.startDate), n - 1), y = parseInt(k.slice(0, 4), 10), m0 = parseInt(k.slice(5, 7), 10) - 1; lim = CE.isoD(y, m0, CE.dim(y, m0)); }
+      if (r.endDate && r.endDate < lim) lim = r.endDate;
+    }
+    return lim;
+  }
+  // Creates every future occurrence up front as a "scheduled" txn (dimmed, not in balance until its date). Never duplicates (recId|recMonth), never recreates a skipped or deleted one.
   function generateRecurring() {
-    const t = todayIso(), cur = CE.keyOf(t); let made = 0;
-    const have = {}; S.txns.forEach(function (x) { if (x.recId) have[x.recId + "|" + x.recMonth] = 1; });
+    const t = todayIso(); let made = 0;
+    const have = {};
+    S.txns.forEach(function (x) {
+      if (x.recId) {
+        have[x.recId + "|" + x.recMonth] = 1;
+        if (!x.skipped && !x.status && x.date > t) { x.status = "scheduled"; stamp(x); made++; }
+        else if (x.status === "scheduled" && x.date <= t) { delete x.status; stamp(x); made++; }
+      }
+    });
     S.recurring.forEach(function (r) {
       if (!r.active || !r.startDate) return;
-      let key = CE.keyOf(r.startDate), guard = 0;
-      while (key <= cur && guard++ < 600) {
+      const lim = recLimit(r, t), nMax = num(r.months) > 0 ? num(r.months) : 100000;
+      let key = CE.keyOf(r.startDate), guard = 0, idx = 0;
+      while (guard++ < 600 && idx < nMax) {
         const y = parseInt(key.slice(0, 4), 10), m0 = parseInt(key.slice(5, 7), 10) - 1;
         const date = CE.isoD(y, m0, Math.min(r.day, CE.dim(y, m0)));
-        if (date >= r.startDate && date <= t && !have[r.id + "|" + key] && r.skipMonths.indexOf(key) < 0) {
-          S.txns.push(mk({ cardId: r.cardId, date: date, amt: r.amt, merchant: r.merchant, catId: r.catId, notes: "", recId: r.id, recMonth: key }));
+        if (date > lim) break;
+        if (date >= r.startDate && !have[r.id + "|" + key] && r.skipMonths.indexOf(key) < 0) {
+          const o = { cardId: r.cardId, date: date, amt: r.amt, merchant: r.merchant, catId: r.catId, notes: "", recId: r.id, recMonth: key };
+          if (date > t) o.status = "scheduled";
+          S.txns.push(mk(o));
           have[r.id + "|" + key] = 1; made++;
         }
-        key = CE.keyAdd(key, 1);
+        key = CE.keyAdd(key, 1); idx++;
       }
+      // Term shortened (months / end date / stop): drop scheduled occurrences beyond it. Posted ones stay.
+      const before = S.txns.length;
+      S.txns = S.txns.filter(function (x) { return !(x.recId === r.id && x.status === "scheduled" && x.date > t && x.date > lim); });
+      if (S.txns.length !== before) made++;
     });
     if (made) persist();
     return made;
+  }
+  // One-time: Anytime Fitness (PHP 2,250 Health, RCBC 8009) is a 12-month contract from Dec 5 2026 (Dec 5 2026 .. Nov 5 2027).
+  const MIG_SCHED = "mig_anytime12_v195";
+  function migrateAnytime() {
+    if (!S.mig || typeof S.mig !== "object") S.mig = {};
+    if (S.mig[MIG_SCHED]) return false;
+    const c = rcbcCard(); if (!c) return false;
+    const r = S.recurring.find(function (x) { return x.cardId === c.id && /anytime\s*fitness/i.test(String(x.merchant || "")) && num(x.amt) === 225000; });
+    if (!r) return false;
+    if (!(num(r.months) > 0) && !r.endDate) { r.months = 12; stamp(r); }
+    S.mig[MIG_SCHED] = Date.now();
+    generateRecurring(); persist(); flush();
+    return true;
   }
 
   // ---------- budgets and alerts ----------
   function monthSpend() {
     const t = todayIso(), mkey = CE.keyOf(t), out = { all: 0, cat: {} };
     S.txns.forEach(function (x) {
-      if (!x.opening && x.date.slice(0, 7) === mkey && x.date <= t) { out.all += x.amt; out.cat[x.catId] = (out.cat[x.catId] || 0) + x.amt; }
+      if (!x.opening && !x.skipped && x.date.slice(0, 7) === mkey && x.date <= t) { out.all += x.amt; out.cat[x.catId] = (out.cat[x.catId] || 0) + x.amt; }
     });
     return out;
   }
@@ -606,9 +657,11 @@ var CE = (function () {
   }
   function txRowHtml(t, showCard) {
     const c = cardById(t.cardId);
-    return "<div class='trow' data-act='edittx' data-id='" + escH(t.id) + "'><div class='l'><div class='m'>" + (t.recId ? "\u21BB " : "") + escH(t.merchant || "(no merchant)") + "</div>" +
+    const sk = !!t.skipped, sc = !sk && isSched(t);
+    return "<div class='trow" + (sk ? " skp" : sc ? " sch" : "") + "' data-act='edittx' data-id='" + escH(t.id) + "'><div class='l'><div class='m'>" + (t.recId ? "\u21BB " : "") + escH(t.merchant || "(no merchant)") +
+      (sk ? " <span class='tag'>skipped</span>" : sc ? " <span class='tag'>scheduled</span>" : "") + "</div>" +
       "<div class='d'>" + shortDate(t.date) + " \u00b7 " + escH(catName(t.catId)) + (showCard ? " \u00b7 " + escH(cardLabel(c)) : "") + "</div></div>" +
-      "<div class='a " + (t.amt < 0 ? "grn" : "") + "'>" + fmt(t.amt) + "</div></div>";
+      "<div class='a " + (t.amt < 0 && !sk && !sc ? "grn" : "") + "'>" + fmt(t.amt) + "</div></div>";
   }
   function backupDue() {
     if (!S.txns.length) return false;
@@ -636,7 +689,7 @@ var CE = (function () {
       h += "<div style='margin:8px 0'><div class='t2' style='display:flex;justify-content:space-between;font-size:13px'><span>" + (b.ratio >= 1 ? "\u26D4 " : b.ratio >= 0.8 ? "\u26A0 " : "") + escH(b.name) + "</span><span class='" + (b.ratio >= 1 ? "red" : "") + "'>" + fmt(b.spent) + " / " + fmt(b.limit) + " (" + pct + "%)</span></div><div class='ub'><i class='" + cls + "' style='width:" + Math.min(100, Math.max(0, pct)) + "%'></i></div></div>";
     });
     h += "</div>";
-    const recent = S.txns.slice().sort(txSort).slice(0, 8);
+    const recent = S.txns.filter(function (x) { return !x.skipped && !isSched(x); }).sort(txSort).slice(0, 8);
     h += "<div class='card'><h2>Recent</h2>" + (recent.length ? recent.map(function (x) { return txRowHtml(x, true); }).join("") : "<div class='hint'>No transactions yet.</div>") + "</div>";
     h += "<button class='btn full' data-act='addexp'>\uFF0B Add expense</button>";
     return h;
@@ -656,10 +709,12 @@ var CE = (function () {
 
   function upcomingHint(c) {
     const t = todayIso(); let up = 0;
-    CE.statements(S, c, t).forEach(function (s) { if (!s.skip && s.status === "Upcoming") up += s.remaining; });
-    if (up <= 0) return "";
-    const bal = CE.balance(S, c, t);
-    return "<div class='hint' style='margin-top:6px'>Current " + fmt(bal - up) + " \u00b7 Upcoming " + fmt(up) + "</div>";
+    CE.statements(S, c, t).forEach(function (s) { if (!s.skip && s.status === "Upcoming") up += s.remaining - s.sched; });
+    const sc = CE.schedTotal(S, c, t);
+    let h = "";
+    if (up > 0) h += "<div class='hint' style='margin-top:6px'>Current " + fmt(CE.balance(S, c, t) - up) + " \u00b7 Upcoming " + fmt(up) + "</div>";
+    if (sc.count > 0) h += "<div class='hint' style='margin-top:6px'>Scheduled " + fmt(sc.total) + " \u00b7 " + sc.count + " recurring charge" + (sc.count === 1 ? "" : "s") + " (not in balance until their date)</div>";
+    return h;
   }
   function stmtBlock(c) {
     const t = todayIso(), list = CE.statements(S, c, t).filter(function (s) { return !s.skip; }).reverse();
@@ -668,6 +723,7 @@ var CE = (function () {
       const pays = S.payments.filter(function (p) { return p.cardId === c.id && p.stmtKey === s.key; });
       return "<div class='stm'><div class='r1'><b>" + shortDate(s.start) + " \u2013 " + shortDate(s.close) + (s.status === "Upcoming" ? " \u00b7 upcoming" : (s.est ? " \u00b7 running" : "")) + "</b><span class='pill p-" + s.status + "'>" + s.status + "</span></div>" +
         "<div class='r2'><span>Due " + fullDate(s.due) + "</span><b>" + fmt(s.total) + "</b></div>" +
+        (s.sched > 0 ? "<div class='r2'><span>Includes scheduled</span><b>" + fmt(s.sched) + "</b></div>" : "") +
         (s.interest > 0 ? "<div class='r2'><span class='red'>Includes interest</span><b class='red'>" + fmt(s.interest) + "</b></div>" : "") +
         "<div class='r2'><span>Paid</span><b>" + fmt(s.paid) + "</b></div>" +
         "<div class='r2'><span>Remaining" + (s.remaining > 0 ? " \u00b7 min due " + fmt(s.min) : "") + "</span><b>" + fmt(s.remaining) + "</b></div>" +
@@ -750,7 +806,7 @@ var CE = (function () {
     const t = todayIso(), cur = CE.keyOf(t); if (!ui.repMonth) ui.repMonth = cur;
     const byM = {}; // one pass over txns
     S.txns.forEach(function (x) {
-      if (x.opening) return;
+      if (x.opening || x.skipped || isSched(x)) return;
       const m = x.date.slice(0, 7), e = byM[m] || (byM[m] = { total: 0, cat: {}, card: {} });
       e.total += x.amt; e.cat[x.catId] = (e.cat[x.catId] || 0) + x.amt; e.card[x.cardId] = (e.card[x.cardId] || 0) + x.amt;
     });
@@ -795,14 +851,21 @@ var CE = (function () {
     const lastOk = prefs.lastCard && cards.some(function (c) { return c.id === prefs.lastCard; });
     sh = { type: "exp", id: id || null };
     const hasMore = !!(t && ((t.notes || "") || t.amt < 0 || t.recId));
+    const rt = t && t.recId ? S.recurring.find(function (x) { return x.id === t.recId; }) : null;
+    const repOn = !!rt;
+    const repBox = "<label class='ck'><input id='exRec' type='checkbox'" + (repOn ? " checked" : "") + (t ? " disabled" : "") + "> \u21BB Repeat monthly</label>" +
+      "<div id='exRecBox' style='display:" + (repOn ? "block" : "none") + "'><div class='two'><div><label class='fl' for='exMonths'>Number of months</label><input id='exMonths' type='text' inputmode='numeric' maxlength='3' placeholder='blank = no end' value='" + (rt && num(rt.months) > 0 ? num(rt.months) : "") + "'></div>" +
+      "<div><label class='fl' for='exEnd'>or End date</label><input id='exEnd' type='date' value='" + escH(rt && rt.endDate ? rt.endDate : "") + "'></div></div>" +
+      "<div class='ferr' id='exERec'></div><div class='hint'>All future months are scheduled up front (shown dimmed). They count in statement dues, not in the balance, until their date." + (t ? " Changing the amount updates the scheduled ones only." : "") + "</div></div>";
     openSheet(head(t ? "Edit expense" : "Add expense") +
       txFields("ex", { date: t ? t.date : todayIso(), name: t ? t.merchant : "", cardId: t ? t.cardId : defCard(cards), catId: t ? t.catId : defCat(), amt: t ? centsStr(Math.abs(t.amt)) : "", cards: cards }) +
       "<button type='button' class='link' data-act='moreopts' id='exMoreBtn'>More options " + (hasMore ? "\u25BE" : "\u25B8") + "</button>" +
       "<div id='exMore' style='display:" + (hasMore ? "block" : "none") + "'>" +
-      (t ? (t.recId ? "<div class='hint'>\u21BB This expense was generated by a recurring template.</div>" : "") : "<label class='ck'><input id='exRec' type='checkbox'> \u21BB Recurring monthly</label>") +
+      (t && !t.recId ? "" : repBox) +
       "<label class='ck'><input id='exRef' type='checkbox'" + (t && t.amt < 0 ? " checked" : "") + "> Refund (credit)</label>" +
       "<label class='fl' for='exNotes'>Notes</label><input id='exNotes' type='text' value='" + (t ? escH(t.notes || "") : "") + "'></div>" +
-      "<div class='acts'><button class='btn' id='exSave' data-act='savetx'>" + (t ? "Save" : "\uFF0B Save") + "</button>" + (t ? "<button class='btn dng' data-act='deltx'>Delete</button>" : "") + "</div>");
+      "<div class='acts'><button class='btn' id='exSave' data-act='savetx'>" + (t ? "Save" : "\uFF0B Save") + "</button>" + (t ? "<button class='btn dng' data-act='deltx'>Delete</button>" : "") + "</div>" +
+      (t && rt ? "<div class='acts'><button class='btn sec sm' data-act='skiptx'>" + (t.skipped ? "Unskip this one" : "Skip this one") + "</button><button class='btn sec sm' data-act='stopfrom'>Stop recurring from here</button></div>" : ""));
     setTimeout(function () { const a = $("exName"); if (a && !t) a.focus(); }, 60);
   }
   function defCard(cards) { return prefs.lastCard && cards.some(function (c) { return c.id === prefs.lastCard; }) ? prefs.lastCard : cards[0].id; }
@@ -826,20 +889,41 @@ var CE = (function () {
     const needName = !sh.id || !!(S.txns.find(function (x) { return x.id === sh.id; }) || {}).merchant;
     const v = readTxForm("ex", needName); if (!v) return;
     const signed = $("exRef").checked ? -v.amt : v.amt, before = ratios(), isNew = !sh.id;
-    let t;
+    let t, term = { months: null, endDate: null };
+    const recOn = !!($("exRec") && $("exRec").checked);
+    if (recOn) {
+      const ms = $("exMonths").value.trim(), ed = $("exEnd").value, mn = ms === "" ? null : parseInt(ms, 10), er = $("exERec");
+      let msg = "";
+      if (ms !== "" && (!/^\d{1,3}$/.test(ms) || mn < 1 || mn > 120)) msg = "Months must be 1 to 120 (or blank for no end)";
+      else if (ed && (!/^\d{4}-\d{2}-\d{2}$/.test(ed) || ed < v.date)) msg = "End date must be on or after the start date";
+      er.textContent = msg;
+      if (msg) return;
+      term = { months: mn, endDate: ed || null };
+    }
     if (sh.id) {
       t = S.txns.find(function (x) { return x.id === sh.id; }); if (!t) return;
+      const oldAmt = t.amt;
       t.cardId = v.cardId; t.date = v.date; t.amt = signed; t.merchant = v.name; t.catId = v.catId; t.notes = $("exNotes").value.trim(); stamp(t);
+      const r = t.recId ? S.recurring.find(function (x) { return x.id === t.recId; }) : null;
+      if (r && recOn) {
+        r.months = term.months; r.endDate = term.endDate;
+        if (signed !== oldAmt) {
+          // Series amount change: this one plus future scheduled ones only. Posted history is never touched.
+          r.amt = signed; r.merchant = v.name; r.catId = v.catId; stamp(r);
+          S.txns.forEach(function (x) { if (x.recId === r.id && x.id !== t.id && x.status === "scheduled" && x.date > todayIso() && !x.skipped) { x.amt = signed; x.merchant = v.name; x.catId = v.catId; stamp(x); } });
+        }
+        stamp(r);
+      }
     } else {
       t = mk({ cardId: v.cardId, date: v.date, amt: signed, merchant: v.name, catId: v.catId, notes: $("exNotes").value.trim() });
-      if ($("exRec") && $("exRec").checked) {
-        const r = mk({ cardId: t.cardId, amt: signed, merchant: t.merchant, catId: t.catId, day: CE.parseIso(v.date)[2], startDate: v.date, active: true, skipMonths: [] });
+      if (recOn) {
+        const r = mk({ cardId: t.cardId, amt: signed, merchant: t.merchant, catId: t.catId, day: CE.parseIso(v.date)[2], startDate: v.date, active: true, skipMonths: [], months: term.months, endDate: term.endDate });
         S.recurring.push(r); t.recId = r.id; t.recMonth = CE.keyOf(v.date);
       }
       S.txns.push(t);
     }
     prefs.lastCard = v.cardId; prefs.lastCat = v.catId; savePrefs();
-    persist(); closeSheet(); render();
+    generateRecurring(); persist(); closeSheet(); render();
     if (isNew) crossToast(before, ratios()); else toast("Saved");
   }
   function saveInline() {
@@ -965,7 +1049,7 @@ var CE = (function () {
       S.categories.map(function (c) { return "<div class='lrow'><input type='text' data-catname='" + escH(c.id) + "' value='" + escH(c.name) + "'>" + (c.id === "others" ? "<span style='width:32px'></span>" : "<button class='x' data-act='delcat' data-id='" + escH(c.id) + "'>\u2715</button>") + "</div>"; }).join("") +
       "<div class='lrow'><input type='text' id='newCat' placeholder='New category'><button class='btn sm' data-act='addcat'>Add</button></div>" +
       "<div class='sech'>Recurring expenses</div>" +
-      (S.recurring.filter(function (r) { return r.active; }).map(function (r) { return "<div class='lrow'><div class='t'>\u21BB " + escH(r.merchant || "(no merchant)") + " \u00b7 " + fmt(r.amt) + " \u00b7 day " + r.day + " \u00b7 " + escH(cardLabel(cardById(r.cardId))) + "</div><button class='btn sec sm' data-act='stoprec' data-id='" + escH(r.id) + "'>Stop</button></div>"; }).join("") || "<div class='hint'>No active recurring expenses.</div>") +
+      (S.recurring.filter(function (r) { return r.active; }).map(function (r) { return "<div class='lrow'><div class='t'>\u21BB " + escH(r.merchant || "(no merchant)") + " \u00b7 " + fmt(r.amt) + " \u00b7 day " + r.day + " \u00b7 " + (num(r.months) > 0 ? num(r.months) + " months" : r.endDate ? "until " + shortDate(r.endDate) : "no end") + " \u00b7 " + escH(cardLabel(cardById(r.cardId))) + "</div><button class='btn sec sm' data-act='stoprec' data-id='" + escH(r.id) + "'>Stop</button></div>"; }).join("") || "<div class='hint'>No active recurring expenses.</div>") +
       "<div class='sech'>Data</div><div class='acts'><button class='btn sec sm' data-act='backupnow'>Backup JSON</button><button class='btn sec sm' data-act='restore'>Restore JSON</button>" +
       "<button class='btn sec sm' data-act='exportall'>Export CSV</button><button class='btn sec sm' data-act='importcsv'>Import CSV</button>" +
       "<button class='btn sec sm' data-act='rmtest'>" + (testPlan().cards.length ? "Remove test data" : "No test data found") + "</button></div>" +
@@ -1164,7 +1248,20 @@ var CE = (function () {
       case "savesettings": saveSettings(); break;
       case "addcat": { const v = $("newCat").value.trim(); if (v) { S.categories.push(mk({ name: v })); persist(); openSettings(); } break; }
       case "delcat": if (confirm("Delete this category? Its items move to Others.")) { deleteCategory(id); persist(); openSettings(); render(); } break;
-      case "stoprec": { const r = S.recurring.find(function (x) { return x.id === id; }); if (r) { r.active = false; stamp(r); persist(); openSettings(); } break; }
+      case "stoprec": { const r = S.recurring.find(function (x) { return x.id === id; }); if (r) { r.active = false; stamp(r); S.txns = S.txns.filter(function (x) { return !(x.recId === r.id && x.status === "scheduled" && x.date > todayIso()); }); persist(); openSettings(); render(); } break; }
+      case "skiptx": {
+        const t = S.txns.find(function (x) { return x.id === sh.id; });
+        if (t) { t.skipped = !t.skipped; if (!t.skipped && t.date > todayIso() && !t.status) t.status = "scheduled"; stamp(t); persist(); closeSheet(); render(); toast(t.skipped ? "Skipped. It no longer counts in the statement." : "Unskipped"); }
+        break;
+      }
+      case "stopfrom": {
+        const t = S.txns.find(function (x) { return x.id === sh.id; }), r = t && S.recurring.find(function (x) { return x.id === t.recId; });
+        if (!t || !r || !confirm("Stop this recurring expense from " + fullDate(t.date) + "? Scheduled occurrences from this date on are removed. Earlier ones stay.")) break;
+        const wasSched = t.status === "scheduled" && t.date > todayIso(), a = CE.parseIso(t.date);
+        r.endDate = wasSched ? CE.isoD(a[0], a[1], a[2] - 1) : t.date; r.months = null; stamp(r);
+        S.txns = S.txns.filter(function (x) { return !(x.recId === r.id && x.status === "scheduled" && x.date > todayIso() && x.date >= t.date); });
+        generateRecurring(); persist(); closeSheet(); render(); toast("Recurring stopped from " + shortDate(t.date)); break;
+      }
       case "backupnow": backupNow(); break;
       case "rmtest": removeTestData(); break;
       case "snooze": S.settings.backupSnoozeUntil = Date.now() + 7 * 86400000; persist(); render(); break;
@@ -1191,6 +1288,7 @@ var CE = (function () {
   });
   document.addEventListener("change", function (e) {
     const t = e.target, f = t.getAttribute && t.getAttribute("data-f");
+    if (t.id === "exRec") { $("exRecBox").style.display = t.checked ? "block" : "none"; return; }
     if (f && t.tagName === "SELECT") { ui[f] = t.value; ui.page = 1; if (f === "repMonth") render(); else renderTxList(); return; }
     if (f && t.tagName === "INPUT") { ui[f] = t.value; ui.page = 1; renderTxList(); return; }
     if (t.getAttribute && t.getAttribute("data-catname")) {
@@ -1227,6 +1325,7 @@ var CE = (function () {
     loadLocal();
     const dl = new URLSearchParams(location.search).get("card");
     if (dl && cardById(dl)) { ui.tab = "cards"; ui.cardId = dl; }
+    try { migrateAnytime(); } catch (e) { console.warn("[cards] anytime migration", e); }
     generateRecurring(); render(); fireNotifications();
     lastCloud = Date.now();
     const cloudChanged = await loadCloud();
@@ -1237,7 +1336,7 @@ var CE = (function () {
     window.addEventListener("focus", refreshAll);
   }
 
-  const APP_VERSION = 194;
+  const APP_VERSION = 195;
   function setFooterVersion() { const fv = $("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // Manual update only: shows a banner, never auto-reloads.
   async function checkForUpdate() {

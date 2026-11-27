@@ -395,6 +395,40 @@
   .cs-open { display: inline-block; margin-top: 6px; font-size: 12.5px; color: #b6b4ff; text-decoration: none; }
   .cs-links { font-size: 12.5px; margin: 2px 0 8px; }
   .cs-links a { color: #b6b4ff; text-decoration: none; }
+  .cs-rowtap { cursor: pointer; }
+  .csd-ov { position: fixed; inset: 0; z-index: 330; background: rgba(0,0,0,.7); display: none; align-items: flex-end; justify-content: center; }
+  .csd-ov.open { display: flex; }
+  .csd-box { background: #1b1d26; color: #f2f2f7; border: 1px solid #2e313d; width: 100%; max-width: 560px; max-height: 90vh; display: flex; flex-direction: column; border-radius: 18px 18px 0 0; overflow: hidden; }
+  @media (min-width: 640px) { .csd-ov { align-items: center; padding: 20px; } .csd-box { border-radius: 16px; max-height: 86vh; } }
+  .csd-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; border-bottom: 1px solid #2a2d38; flex: none; }
+  .csd-ttl { flex: 1; min-width: 0; font-size: 17px; font-weight: 800; overflow-wrap: anywhere; }
+  .csd-x { background: transparent; border: 1px solid #3a3e4d; color: #f2f2f7; border-radius: 8px; width: 36px; height: 36px; font-size: 16px; cursor: pointer; flex: none; }
+  .csd-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 14px; }
+  .csd-meta { font-size: 13px; color: #a9aebd; display: grid; gap: 2px; }
+  .csd-meta b { color: #f2f2f7; }
+  .csd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 4px; }
+  .csd-c { background: #12141b; border: 1px solid #2e313d; border-radius: 10px; padding: 7px 10px; }
+  .csd-k { font-size: 11px; color: #a9aebd; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+  .csd-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: #f2f2f7; }
+  .csd-v.g, .csd-a.g { color: #34d399; }
+  .csd-v.r { color: #ff9a9a; }
+  .csd-sec { font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: #cfcffb; margin: 14px 0 4px; border-top: 1px solid #2a2d38; padding-top: 10px; }
+  .csd-r { display: flex; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid #23262f; }
+  .csd-r:first-of-type { border-top: none; }
+  .csd-l { flex: 1; min-width: 0; }
+  .csd-n { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+  .csd-s { font-size: 12px; color: #a9aebd; }
+  .csd-a { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 14px; }
+  .csd-r.sch .csd-n, .csd-r.sch .csd-a { color: #a9aebd; font-weight: 600; }
+  .csd-r.skp .csd-n, .csd-r.skp .csd-a { color: #a9aebd; text-decoration: line-through; font-weight: 600; }
+  .csd-tag { display: inline-block; background: #2b2745; color: #d6d4ff; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; text-decoration: none; }
+  .csd-pill { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 800; vertical-align: middle; background: #2b2745; color: #d6d4ff; }
+  .csd-Paid { background: #123a2c; color: #34d399; }
+  .csd-Overdue { background: #4a2227; color: #ffb4b4; }
+  .csd-Upcoming { background: #1f2f3a; color: #7dd3fc; }
+  .csd-Partial { background: #1c3350; color: #9fd0ff; }
+  .csd-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid #2a2d38; flex: none; }
+  .csd-foot .cs-btn { padding: 9px 12px; font-size: 13px; min-height: 40px; display: inline-flex; align-items: center; text-decoration: none; }
   .cs-dup { background: #1b1d26; border: 1px dashed #3a3e55; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
   .cs-dup-t { font-size: 11px; font-weight: 700; color: #a9aebd; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
   .cs-dup-r { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: #f2f2f7; padding: 4px 0; }
@@ -792,6 +826,9 @@
     <!-- DEBT LIST -->
     <div id="debtList"></div>
 
+    <!-- CARD STATEMENT DETAILS (dialog / bottom sheet) -->
+    <div class="csd-ov" id="csDet" role="dialog" aria-modal="true" aria-label="Statement details"><div class="csd-box" id="csDetBody"></div></div>
+
     <!-- ADD DEBT (modal) -->
     <div class="add-overlay" id="addOverlay">
     <div class="card add-modal">
@@ -1055,7 +1092,7 @@ var CE = (function () {
     var out = [], i, t, rows, j;
     for (i = 0; i < S.txns.length; i++) {
       t = S.txns[i];
-      if (t.cardId === card.id && (all || t.date <= today)) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening });
+      if (t.cardId === card.id && !t.skipped && (all || t.date <= today)) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening, sched: t.status === "scheduled" && t.date > today });
     }
     var ins = S.installments || [];
     for (i = 0; i < ins.length; i++) {
@@ -1071,11 +1108,12 @@ var CE = (function () {
     var posts = postings(S, card, today, true), pays = [], i, k;
     for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id) pays.push(S.payments[i]);
     if (!posts.length && !pays.length) return [];
-    var byKey = {}, payBy = {}, minKey = null, maxKey = stmtKeyOf(card, today);
+    var byKey = {}, schBy = {}, payBy = {}, minKey = null, maxKey = stmtKeyOf(card, today);
     for (i = 0; i < posts.length; i++) { k = stmtKeyOf(card, posts[i].date); if (k > maxKey) maxKey = k; }
     for (i = 0; i < posts.length; i++) {
       k = stmtKeyOf(card, posts[i].date);
       byKey[k] = (byKey[k] || 0) + posts[i].amt;
+      if (posts[i].sched) schBy[k] = (schBy[k] || 0) + posts[i].amt;
       if (minKey === null || k < minKey) minKey = k;
     }
     for (i = 0; i < pays.length; i++) {
@@ -1087,7 +1125,7 @@ var CE = (function () {
     var out = [], prev = null, carry = [], key = minKey, guard = 0;
     var st = S.settings || {}, minFixed = st.minFixed == null ? 50000 : st.minFixed, minPct = st.minPct == null ? 5 : st.minPct;
     while (key <= maxKey && guard++ < 1200) {
-      var d = stmtDates(card, key), s = { key: key, start: d.start, close: d.close, due: d.due, charges: byKey[key] || 0, interest: 0, total: 0, paid: 0, remaining: 0, min: 0, status: "Open", est: false, skip: false, pieces: [], remAtDue: 0 };
+      var d = stmtDates(card, key), s = { key: key, start: d.start, close: d.close, due: d.due, charges: byKey[key] || 0, sched: schBy[key] || 0, interest: 0, total: 0, paid: 0, remaining: 0, min: 0, status: "Open", est: false, skip: false, pieces: [], remAtDue: 0 };
       if (prev && today > prev.due) s.interest = Math.round(Math.max(0, prev.remAtDue) * (card.apr || 0) / 100 / 12);
       s.total = Math.max(0, s.charges + s.interest);
       var pieces = (payBy[key] || []).concat(carry), sum = 0;
@@ -1122,10 +1160,16 @@ var CE = (function () {
   }
   function balance(S, card, today) {
     var posts = postings(S, card, today, true), stm = statements(S, card, today), b = 0, i;
-    for (i = 0; i < posts.length; i++) b += posts[i].amt;
+    for (i = 0; i < posts.length; i++) if (!posts[i].sched) b += posts[i].amt;
     for (i = 0; i < stm.length; i++) b += stm[i].interest;
     for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id && S.payments[i].date <= today) b -= S.payments[i].amt;
     return b;
+  }
+  // Scheduled (future recurring) charges: not in balance until their date; they do count in statement totals (dues).
+  function schedTotal(S, card, today) {
+    var posts = postings(S, card, today, true), r = { total: 0, count: 0 };
+    for (var i = 0; i < posts.length; i++) if (posts[i].sched) { r.total += posts[i].amt; r.count++; }
+    return r;
   }
   function util(bal, limit) { return bal > 0 && limit > 0 ? Math.round(bal * 1000 / limit) / 10 : 0; }
   // Default Pay-on = latest payday (13th or 28th) on or before the due date.
@@ -1165,7 +1209,7 @@ var CE = (function () {
   }
   return { dim: dim, isoD: isoD, parseIso: parseIso, addMonthsIso: addMonthsIso, keyOf: keyOf, keyAdd: keyAdd, closeDay: closeDay,
     stmtKeyOf: stmtKeyOf, stmtDates: stmtDates, instPmt: instPmt, instSchedule: instSchedule, postings: postings,
-    statements: statements, balance: balance, util: util, snapshot: snapshot, payDefault: payDefault, payOf: payOf };
+    statements: statements, balance: balance, schedTotal: schedTotal, util: util, snapshot: snapshot, payDefault: payDefault, payOf: payOf };
 })();
 // ===== END CARD ENGINE =====
 </script>
@@ -1996,7 +2040,7 @@ var CE = (function () {
     g.occs.forEach(o => {
       const co = o.paid ? null : cutData.map[o.id + "|" + o.key + "|" + o.pi];
       const tn = o.n > 1 ? " " + (o.pi + 1) + "/" + o.n : "";
-      rows += '<div class="bd-row' + (o.paid ? " bd-paid" : "") + (co ? (co.over ? " cut-over" : " cut-due") : "") + '">' +
+      rows += '<div class="bd-row cs-rowtap' + (o.paid ? " bd-paid" : "") + (co ? (co.over ? " cut-over" : " cut-due") : "") + '" data-csrow="' + kid + '">' +
         '<input type="checkbox" class="bd-check" data-csterm="' + kid + '|' + o.pi + '"' + (o.paid ? " checked" : "") + ' aria-label="Mark paid">' +
         '<span class="bd-label"><span class="due-tag u-up">' + shortDate(o.date) + '</span>' + (o.paid ? "" : cutBadgeHtml(co)) + ' ' +
         '<span class="bd-date">' + shortDate(o.close) + ' stmt' + tn + ' \u00b7 due ' + shortDate(o.due) + (o.est && o.status !== "Upcoming" ? " (est.)" : "") + '</span>' +
@@ -2081,16 +2125,86 @@ var CE = (function () {
     return h ? '<div class="cs-dup">' + h + '</div>' : "";
   }
   // Statement info (read-only).
+  var csDet = null;
+  function csDetClose() { csDet = null; const o = document.getElementById("csDet"); if (o) o.classList.remove("open"); }
+  function csDetCat(id) { const c = (cardsState.categories || []).find(x => x.id === id); return c ? c.name : "Others"; }
+  // Full statement details dialog (read-only list + pay/edit actions); never needs the Card Tracker page.
+  function csDetRender() {
+    const o = document.getElementById("csDet"), box = document.getElementById("csDetBody");
+    if (!o || !box || !csDet || !cardsState) return;
+    const card = cardsState.cards.find(c => c.id === csDet.cardId), today = cardsToday();
+    const st = card && CE.statements(cardsState, card, today).find(s => s.key === csDet.key);
+    if (!st) { csDetClose(); return; }
+    const key = st.key, items = [];
+    cardsState.txns.forEach(t => {
+      if (t.cardId !== card.id || CE.stmtKeyOf(card, t.date) !== key) return;
+      items.push({ date: t.date, name: t.merchant || "(no name)", cat: csDetCat(t.catId), amt: t.amt, rec: !!t.recId, skipped: !!t.skipped, sched: !t.skipped && t.status === "scheduled" && t.date > today, ord: t.createdAt || 0 });
+    });
+    (cardsState.installments || []).forEach(i => {
+      if (i.cardId !== card.id) return;
+      CE.instSchedule(i).forEach(r => { if (r.date <= today && CE.stmtKeyOf(card, r.date) === key) items.push({ date: r.date, name: (i.title || "Installment") + " (installment)", cat: csDetCat(i.catId), amt: r.pay, rec: false, skipped: false, sched: false, ord: 0 }); });
+    });
+    items.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.ord - b.ord);
+    let ch = 0, rf = 0;
+    items.forEach(x => { if (x.skipped) return; if (x.amt < 0) rf += x.amt; else ch += x.amt; });
+    const terms = stmtTerms(card.id, st), pays = cardsState.payments.filter(p => p.cardId === card.id && p.stmtKey === key).sort((a, b) => a.date < b.date ? -1 : 1);
+    const cell = (k, v, cls) => '<div class="csd-c"><div class="csd-k">' + k + '</div><div class="csd-v' + (cls ? " " + cls : "") + '">' + v + '</div></div>';
+    const kid = escH(card.id) + "|" + key;
+    let h = '<div class="csd-head"><div class="csd-ttl">' + escH(cardLabel(card)) + ' <span class="csd-pill csd-' + escH(st.status) + '">' + escH(st.status) + '</span></div>' +
+      '<button type="button" class="csd-x" data-csdclose="1" aria-label="Close">\u2715</button></div>' +
+      '<div class="csd-scroll">' +
+      '<div class="csd-meta"><div>Statement period <b>' + shortDate(st.start) + ' \u2013 ' + shortDate(st.close) + '</b>' + (st.est && st.status !== "Upcoming" ? ' (running)' : '') + '</div>' +
+      '<div>Due date <b>' + shortDate(st.due) + '</b></div>' +
+      '<div>Pay on <b>' + terms.map(t => shortDate(t.date) + (t.n > 1 ? " (" + peso(t.amt / 100) + ")" : "") + (t.paid ? " \u2713" : "")).join(" \u00b7 ") + '</b></div></div>' +
+      '<div class="csd-grid">' + cell("Charges", peso(ch / 100)) + cell("Refunds", peso(rf / 100), rf < 0 ? "g" : "") + cell("Interest / fees", peso(st.interest / 100), st.interest > 0 ? "r" : "") +
+      cell("Payments", peso(st.paid / 100), st.paid > 0 ? "g" : "") + cell("Statement total", peso(st.total / 100)) + cell("Remaining", peso(st.remaining / 100), st.remaining > 0 ? "r" : "g") +
+      cell("Min due", peso(st.min / 100)) + (st.sched > 0 ? cell("Incl. scheduled", peso(st.sched / 100)) : "") + '</div>' +
+      '<div class="csd-sec">Transactions (' + items.length + ')</div>';
+    h += items.length ? items.map(x => '<div class="csd-r' + (x.skipped ? " skp" : x.sched ? " sch" : "") + '"><div class="csd-l"><div class="csd-n">' + (x.rec ? "\u21BB " : "") + escH(x.name) +
+      (x.skipped ? ' <span class="csd-tag">skipped</span>' : x.sched ? ' <span class="csd-tag">scheduled</span>' : '') + '</div><div class="csd-s">' + shortDate(x.date) + ' \u00b7 ' + escH(x.cat) + '</div></div>' +
+      '<div class="csd-a' + (x.amt < 0 && !x.skipped && !x.sched ? " g" : "") + '">' + peso(x.amt / 100) + '</div></div>').join("") : '<div class="csd-s" style="padding:6px 0">No transactions in this statement.</div>';
+    if (pays.length) h += '<div class="csd-sec">Payments</div>' + pays.map(p => '<div class="csd-r"><div class="csd-l"><div class="csd-n">' + shortDate(p.date) + ' \u00b7 ' + escH(p.kind || "payment") + '</div></div><div class="csd-a g">' + peso(p.amt / 100) + '</div></div>').join("");
+    h += '</div><div class="csd-foot">' +
+      (st.remaining > 0 ? '<button type="button" class="cs-btn" data-csdpay="' + kid + '">Pay full</button><button type="button" class="cs-btn" data-csdpart="' + kid + '">Partial\u2026</button>' : '') +
+      '<button type="button" class="cs-btn" data-csdedit="' + kid + '">Edit plan</button>' +
+      '<a class="cs-btn csd-open" href="cards.html?card=' + encodeURIComponent(card.id) + '">Open in Card Tracker</a></div>';
+    box.innerHTML = h;
+    o.classList.add("open");
+  }
   function stmtInfo(cardId, key) {
     if (!cardsState) return;
-    const card = cardsState.cards.find(c => c.id === cardId);
-    const st = card && CE.statements(cardsState, card, cardsToday()).find(s => s.key === key);
-    if (!st) return;
-    const terms = stmtTerms(cardId, st);
-    alert(cardLabel(card) + " statement\nPeriod: " + shortDate(st.start) + " \u2013 " + shortDate(st.close) + "\nDue: " + st.due + "\nTotal: " + peso(st.total / 100) +
-      "\nPaid: " + peso(st.paid / 100) + "\nRemaining: " + peso(st.remaining / 100) + "\nStatus: " + st.status +
-      "\nTerms: " + terms.map(t => shortDate(t.date) + " " + peso(t.amt / 100) + (t.paid ? " \u2713" : "")).join(", "));
+    csDet = { cardId: cardId, key: key };
+    csDetRender();
+    const sc = document.querySelector("#csDetBody .csd-scroll"); if (sc) sc.scrollTop = 0;
   }
+  (function () {
+    const el = document.getElementById("csDet");
+    if (!el) return;
+    el.addEventListener("click", async (e) => {
+      const t = e.target, q = s => (t.closest ? t.closest(s) : null);
+      if (t === el || q("[data-csdclose]")) { csDetClose(); return; }
+      const ed = q("[data-csdedit]");
+      if (ed) { const ps = ed.getAttribute("data-csdedit").split("|"); csDetClose(); openCardEdit(ps[0], ps[1]); return; }
+      const pay = q("[data-csdpay]"), part = q("[data-csdpart]");
+      if (pay || part) {
+        const ps = (pay || part).getAttribute(pay ? "data-csdpay" : "data-csdpart").split("|");
+        let cents = null;
+        if (part) {
+          const v = prompt("Amount to pay (PHP):", "");
+          if (v == null) return;
+          const sv = String(v).replace(/[,\s]|PHP|\u20B1/gi, "");
+          if (!/^\d+(\.\d{1,2})?$/.test(sv)) { alert("Enter a valid amount."); return; }
+          cents = Math.round(parseFloat(sv) * 100);
+          if (!(cents > 0)) return;
+        }
+        const pid = await payCardStmt(ps[0], ps[1], cents);
+        renderAll();
+        csDetRender();
+        if (pid) ccToast(part ? "Partial payment saved" : "Marked paid", function () { removeCardPayment(pid); renderAll(); csDetRender(); });
+      }
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && csDet) csDetClose(); });
+  })();
   // ---- Edit the payment plan (reuses the Add-a-debt form; never touches the card's transactions) ----
   var ceEdit = null, ceSave = { title: "", amtLabel: "", hint: "", btn: "" };
   function ceRestoreForm() {
@@ -2206,6 +2320,8 @@ var CE = (function () {
       const t = e.target, q = s => (t.closest ? t.closest(s) : null);
       const ed = q("[data-csedit]");
       if (ed) { const ps = ed.getAttribute("data-csedit").split("|"); openCardEdit(ps[0], ps[1]); return; }
+      const rw = q("[data-csrow]");
+      if (rw && !q("input,button,a")) { const ps = rw.getAttribute("data-csrow").split("|"); stmtInfo(ps[0], ps[1]); return; }
       const inf = q("[data-csinfo]");
       if (inf) { const ps = inf.getAttribute("data-csinfo").split("|"); stmtInfo(ps[0], ps[1]); return; }
       const lo = q("[data-cslinkopen]");
@@ -3170,6 +3286,7 @@ var CE = (function () {
   }
 
   function renderAll() {
+    if (csDet) { try { csDetRender(); } catch (e) {} }
     maybeAutoJump();
     computeCutoff();
     renderCutoffCard();
@@ -4317,7 +4434,7 @@ var CE = (function () {
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 194;
+  const APP_VERSION = 195;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
