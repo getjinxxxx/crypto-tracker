@@ -66,6 +66,25 @@
   .due-tag { display: inline-block; background: rgba(245,197,66,0.15); color: var(--gold-bright); font-size: 10px;
     font-weight: 700; padding: 1px 6px; border-radius: 999px; text-decoration: none; }
 
+  .bd-dot.on { color: #000; font-size: 11px; font-weight: 800; line-height: 14px; text-align: center; }
+  .bd-row.has-sub, .bd-row.paid-head { cursor: pointer; }
+  .bd-row.paid-head .bd-label, .bd-row.paid-head .bd-amt { color: #c7c7cc; }
+  .chev { width: 14px; flex: none; color: #f2f2f7; font-size: 14px; text-align: center; }
+  .bd-subrow { padding-left: 24px; font-size: 12.5px; color: #a1a1a6; }
+  .bd-row.bd-paid .bd-label, .bd-row.bd-paid .bd-amt { color: #a1a1a6; }
+  .cut-card { background: #232329; border: 1px solid #2a2a30; border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+  .cut-card .cc-title { font-size: 12px; font-weight: 700; letter-spacing: .4px; color: #f2f2f7; margin-bottom: 6px; }
+  .cut-card .cc-total { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: #c7c7cc; padding: 2px 0; }
+  .cut-card .cc-total b { font-size: 20px; color: #f2f2f7; }
+  .cut-card .cc-total.over { color: #ff9a9a; } .cut-card .cc-total.over b { font-size: 14px; color: #ff9a9a; }
+  .cut-card .cc-list { margin-top: 6px; border-top: 1px solid #2a2a30; }
+  .cut-card .cc-row { display: flex; gap: 8px; font-size: 12.5px; padding: 5px 0; border-bottom: 1px solid #2a2a30; color: #f2f2f7; }
+  .cut-card .cc-row .dt { width: 52px; flex: none; color: #c7c7cc; }
+  .cut-card .cc-row .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .cut-card .cc-row .am { font-weight: 600; }
+  .cut-card .cc-row.over, .cut-card .cc-row.over .dt { color: #ff9a9a; background: rgba(255,107,107,0.08); }
+  .cut-card .cc-empty { font-size: 12.5px; color: #c7c7cc; padding: 6px 0; }
+  .cut-card .cc-month { display: flex; justify-content: space-between; font-size: 12px; color: #c7c7cc; margin-top: 6px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 16px; }
   .card h2 { font-size: 13px; color: var(--gold-bright); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .5px; }
   .note-box { width: 100%; min-height: 90px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
@@ -124,6 +143,96 @@
     return Math.max(0, num(it.amount)-paidOf(it));
   }
 
+  // ---- Cutoff helpers (same logic as debt.html periodOf/loadCutDays; viewer has no settings => 13 / 28) ----
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function isoD(y, m0, d) { const t = new Date(y, m0, d); return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate()); }
+  function dimOf(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
+  function parseIso(s) { return [parseInt(s.slice(0, 4), 10), parseInt(s.slice(5, 7), 10) - 1, parseInt(s.slice(8, 10), 10)]; }
+  function addDaysIso(s, n) { const [y, m, d] = parseIso(s); return isoD(y, m, d + n); }
+  function loadCutDays() { return { a: 13, b: 28 }; }
+  function cutEndDay(cd, y, m0) { const D = dimOf(y, m0); return cd.b ? Math.min(cd.b, D) : D; }
+  function periodOf(s) {
+    const cd = loadCutDays(), [y, m0, x] = parseIso(s);
+    const c2 = cutEndDay(cd, y, m0);
+    if (x <= cd.a) {
+      const pm = new Date(y, m0 - 1, 1), py = pm.getFullYear(), pmo = pm.getMonth();
+      const pc2 = cutEndDay(cd, py, pmo);
+      return { start: pc2 >= dimOf(py, pmo) ? isoD(y, m0, 1) : isoD(py, pmo, pc2 + 1), end: isoD(y, m0, cd.a) };
+    }
+    if (x <= c2) return { start: isoD(y, m0, cd.a + 1), end: isoD(y, m0, c2) };
+    return { start: isoD(y, m0, c2 + 1), end: isoD(y, m0 + 1, cd.a) };
+  }
+  function shortDate(s) { const [y, m, d] = parseIso(s); return MONTH_NAMES[m].slice(0, 3) + " " + d; }
+  // Due date (ISO) of an item inside month key k: plan payday, else dueDay, else "" (earliest unpaid plan entry wins).
+  function itemDueIso(it, k) {
+    const [y, m0] = parseKey(k), D = dimOf(y, m0);
+    if (hasPlan(it)) {
+      const es = planEntriesFor(it, k); if (!es.length) return "";
+      const pick = es.filter(p => !p.paid)[0] || es[0];
+      return isoD(y, m0, Math.min(Math.max(1, Math.round(num(pick.payday)) || 1), D));
+    }
+    return (it.dueDay >= 1 && it.dueDay <= 31) ? isoD(y, m0, Math.min(it.dueDay, D)) : "";
+  }
+  // All dated payments inside [start, end]. Items without a due date are skipped.
+  function occurrencesIn(start, end) {
+    const out = [];
+    let key = monthKey(start);
+    const lastKey = monthKey(end);
+    for (let guard = 0; key <= lastKey && guard < 80; guard++, key = addMonths(key, 1)) {
+      const [y, m0] = parseKey(key), D = dimOf(y, m0);
+      data.items.forEach(it => {
+        const name = (it.name && it.name.trim()) ? it.name.trim() : (data.kind === "receivable" ? "Item" : "Debt");
+        if (hasPlan(it)) {
+          it.plan.forEach(p => {
+            if (p.key !== key) return;
+            const date = isoD(y, m0, Math.min(Math.max(1, Math.round(num(p.payday)) || 1), D));
+            if (date < start || date > end) return;
+            const full = num(p.amount);
+            if (full <= 0) return;
+            out.push({ date: date, name: name, amount: full, paid: !!p.paid, recurring: false });
+          });
+          return;
+        }
+        if (!(it.dueDay >= 1 && it.dueDay <= 31) || !isActiveIn(it, key)) return;
+        const date = isoD(y, m0, Math.min(it.dueDay, D));
+        if (date < start || date > end) return;
+        const multi = it.recurring || it.terms > 1;
+        const full = (it.terms > 1 && !it.recurring) ? num(it.amount) / it.terms : num(it.amount);
+        if (full <= 0) return;
+        const checked = multi ? !!(it.paidTerms && it.paidTerms[key]) : !!it.paid;
+        const part = multi ? (num((it.paidAmt || {})[key]) || 0) : (num(it.paidOnce) || 0);
+        const paid = checked || part >= full - 0.009;
+        out.push({ date: date, name: name, amount: paid ? full : Math.max(0, full - part), paid: paid, recurring: !!it.recurring });
+      });
+    }
+    out.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.name < b.name ? -1 : 1));
+    return out;
+  }
+  function sumUnpaid(list) { return list.reduce((s, o) => s + (o.paid ? 0 : o.amount), 0); }
+  function cutoffCardHtml(isRecv) {
+    const now = new Date(), today = isoD(now.getFullYear(), now.getMonth(), now.getDate());
+    const P = periodOf(today);
+    const list = occurrencesIn(P.start, P.end).filter(o => !o.paid);
+    const [ty, tm] = parseIso(today);
+    const lookback = isoD(ty, tm - 24, 1), recurFrom = isoD(ty, tm - 2, 1);
+    const over = occurrencesIn(lookback, addDaysIso(P.start, -1)).filter(o => !o.paid && (!o.recurring || o.date >= recurFrom));
+    const monthL = occurrencesIn(isoD(ty, tm, 1), isoD(ty, tm + 1, 0)).filter(o => !o.paid);
+    const total = sumUnpaid(list), overTotal = sumUnpaid(over), monthTotal = sumUnpaid(monthL);
+    const row = (o, red) => '<div class="cc-row' + (red ? ' over' : '') + '"><span class="dt">' + shortDate(o.date) + '</span><span class="nm">' + esc(o.name) +
+      '</span><span class="am">' + peso(o.amount) + '</span></div>';
+    const rows = over.map(o => row(o, true)).join("") + list.map(o => row(o, o.date < today)).join("");
+    return '<div class="cut-card"><div class="cc-title">' + (isRecv ? "TO RECEIVE THIS CUTOFF" : "TO PAY THIS CUTOFF") + ' \u00b7 ' + shortDate(P.start) + ' \u2013 ' + shortDate(P.end) + '</div>' +
+      '<div class="cc-total"><span>' + (isRecv ? "Due this cutoff" : "To pay this cutoff") + '</span><b>' + peso(total) + '</b></div>' +
+      (over.length ? '<div class="cc-total over"><span>Overdue</span><b>' + peso(overTotal) + '</b></div>' : '') +
+      (rows ? '<div class="cc-list">' + rows + '</div>' : '<div class="cc-empty">Nothing due this cutoff.</div>') +
+      '<div class="cc-month"><span>This month</span><b>' + peso(monthTotal) + '</b></div></div>';
+  }
+  // Collapse state, saved per share link.
+  function openKey() { return "sharedOpen::" + (data && (data.shareId || data.person) || "x"); }
+  function loadOpen() { try { return JSON.parse(localStorage.getItem(openKey()) || "{}") || {}; } catch (e) { return {}; } }
+  function saveOpen(m) { try { localStorage.setItem(openKey(), JSON.stringify(m)); } catch (e) {} }
+
   let data = null;
   let viewMonth = monthKey(new Date());
 
@@ -167,20 +276,22 @@
       }
     });
 
-    // group active-this-month items by sub-category
+    // group active-this-month items by sub-category (unpaid first by due date, paid collapsed at the bottom)
     const active = items.filter(it => isActiveIn(it, viewMonth));
+    const openMap = loadOpen();
     let boxes = "";
     if (active.length) {
       const bySub = {};
       active.forEach(it => { const s = it.subCat || "other"; (bySub[s]=bySub[s]||[]).push(it); });
       Object.keys(bySub).forEach(sub => {
-        const list = bySub[sub];
-        const due = list.reduce((s,it)=> s + perTermOf(it), 0);
-        let rows = "";
-        list.forEach(it => {
-          const paidNow = isPaidThisMonth(it, viewMonth);
+        const list = bySub[sub].map(it => ({ it: it, idx: items.indexOf(it), paid: isPaidThisMonth(it, viewMonth), due: itemDueIso(it, viewMonth) }));
+        const cmp = (x, y) => (x.due || "9999") < (y.due || "9999") ? -1 : (x.due || "9999") > (y.due || "9999") ? 1 : x.idx - y.idx;
+        const unpaidL = list.filter(x => !x.paid).sort(cmp), paidL = list.filter(x => x.paid).sort(cmp);
+        const due = list.reduce((s,x)=> s + perTermOf(x.it), 0);
+        const rowOf = (x) => {
+          const it = x.it, paidNow = x.paid;
           const dt = it.date ? new Date(it.date+"T00:00:00").toLocaleDateString("en-PH",{year:"2-digit",month:"short",day:"numeric"}) : "";
-          const label = (it.name && it.name.trim()) ? it.name : defLabel;
+          const label = esc((it.name && it.name.trim()) ? it.name : defLabel);
           const amt = perTermOf(it);
           let termTag = "";
           if (hasPlan(it)) {
@@ -192,19 +303,30 @@
           if (!hasPlan(it) && it.dueDay && it.dueDay>=1 && it.dueDay<=31){
             dueTag = ' <span class="due-tag">\uD83D\uDCC5 '+it.dueDay+' ('+cutoffForDueDay(it.dueDay)+')</span>';
           }
-          // saved breakdown (what's inside a combined debt)
-          let subHtml = "";
+          let subHtml = "", hasSub = false;
           if (Array.isArray(it.lineItems) && it.lineItems.length) {
-            subHtml = it.lineItems.map(li => '<div class="bd-row" style="padding-left:16px;font-size:12.5px;color:var(--muted)">' +
-              '<span class="bd-label">\u21B3 '+String(li.label||"Item").replace(/</g,"&lt;")+'</span>' +
+            hasSub = true;
+            subHtml = it.lineItems.map(li => '<div class="bd-row bd-subrow">' +
+              '<span class="bd-label">\u21B3 '+esc(li.label||"Item")+'</span>' +
               '<span class="bd-amt">'+peso(num(li.price))+'</span></div>').join("");
           }
-          rows += '<div class="bd-row'+(paidNow?' bd-paid':'')+'">' +
-            '<span class="bd-dot'+(paidNow?' on':'')+'"></span>' +
+          const k = "i" + x.idx, isOpen = !!openMap[k];
+          return '<div class="bd-row'+(paidNow?' bd-paid':'')+(hasSub?' has-sub':'')+'"'+(hasSub?' data-tg="'+k+'" role="button" tabindex="0"':'')+'>' +
+            (hasSub ? '<span class="chev" data-chev="'+k+'">'+(isOpen?'\u25BE':'\u25B8')+'</span>' : '') +
+            '<span class="bd-dot'+(paidNow?' on':'')+'">'+(paidNow?'\u2713':'')+'</span>' +
             '<span class="bd-label">'+label+termTag+dueTag+(dt?' <span class="bd-date">'+dt+'</span>':'')+'</span>' +
-            '<span class="bd-amt">'+peso(amt)+'</span></div>' + subHtml;
-        });
-        boxes += '<div class="sub-box"><div class="sub-box-head"><span>'+subLabel(sub)+'</span><span>'+peso(due)+'</span></div>'+rows+'</div>';
+            '<span class="bd-amt">'+peso(amt)+'</span></div>' +
+            (hasSub ? '<div class="sub-wrap" data-body="'+k+'" style="display:'+(isOpen?'block':'none')+'">'+subHtml+'</div>' : '');
+        };
+        let rows = unpaidL.map(rowOf).join("");
+        if (paidL.length) {
+          const pk = ("p_" + sub + "_" + viewMonth).replace(/[^\w-]/g, "_"), pOpen = !!openMap[pk];
+          const pTot = paidL.reduce((s,x)=> s + perTermOf(x.it), 0);
+          rows += '<div class="bd-row paid-head" data-tg="'+pk+'" role="button" tabindex="0"><span class="chev" data-chev="'+pk+'">'+(pOpen?'\u25BE':'\u25B8')+'</span>' +
+            '<span class="bd-label">Paid ('+paidL.length+')</span><span class="bd-amt">'+peso(pTot)+'</span></div>' +
+            '<div class="sub-wrap" data-body="'+pk+'" style="display:'+(pOpen?'block':'none')+'">'+paidL.map(rowOf).join("")+'</div>';
+        }
+        boxes += '<div class="sub-box"><div class="sub-box-head"><span>'+esc(subLabel(sub))+'</span><span>'+peso(due)+'</span></div>'+rows+'</div>';
       });
     } else {
       boxes = '<div class="sub-box"><div class="bd-row">' + emptyText + '</div></div>';
@@ -226,7 +348,7 @@
           '<div class="seg"><div class="k">Total owed</div><div class="v">' + peso(owed) + '</div></div>' +
           '<div class="seg"><div class="k">Paid</div><div class="v paid">' + peso(paid) + '</div></div>' +
           '<div class="seg"><div class="k">Remaining</div><div class="v owed">' + peso(totalRemaining) + '</div></div>' +
-        '</div>' + boxes +
+        '</div>' + cutoffCardHtml(isRecv) + boxes +
       '</div>' +
       '<div class="card"><h2>' + noteTitle + '</h2>' +
         '<textarea class="note-box" id="noteBox" placeholder="' + notePlaceholder + '"></textarea>' +
@@ -235,6 +357,17 @@
       '</div>' +
       '<div class="foot">' + footText + '</div>';
 
+    document.querySelectorAll("[data-tg]").forEach(el => {
+      const toggle = () => {
+        const k = el.getAttribute("data-tg"), m = loadOpen(), open = !m[k];
+        if (open) m[k] = 1; else delete m[k];
+        saveOpen(m);
+        document.querySelectorAll('[data-body="' + k + '"]').forEach(b => { b.style.display = open ? "block" : "none"; });
+        document.querySelectorAll('[data-chev="' + k + '"]').forEach(c => { c.textContent = open ? "\u25BE" : "\u25B8"; });
+      };
+      el.onclick = toggle;
+      el.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
+    });
     document.getElementById("pm").onclick = () => { viewMonth = addMonths(viewMonth, -1); render(); };
     document.getElementById("nm").onclick = () => { viewMonth = addMonths(viewMonth, 1); render(); };
 
