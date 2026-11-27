@@ -99,6 +99,7 @@
   .p-Open { background: #2b2745; color: #d6d4ff; }
   .p-Paid { background: #123a2c; color: #34d399; }
   .p-Partial { background: #1c3350; color: #9fd0ff; }
+  .p-Upcoming { background: #1f2f3a; color: #7dd3fc; }
   .p-Overdue { background: #4a2227; color: #ffb4b4; }
   .stm { border-top: 1px solid #2a2d38; padding: 10px 0; }
   .stm:first-of-type { border-top: none; }
@@ -230,11 +231,11 @@ var CE = (function () {
     }
     return rows;
   }
-  function postings(S, card, today) {
+  function postings(S, card, today, all) {
     var out = [], i, t, rows, j;
     for (i = 0; i < S.txns.length; i++) {
       t = S.txns[i];
-      if (t.cardId === card.id && t.date <= today) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening });
+      if (t.cardId === card.id && (all || t.date <= today)) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening });
     }
     var ins = S.installments || [];
     for (i = 0; i < ins.length; i++) {
@@ -247,10 +248,11 @@ var CE = (function () {
     return out;
   }
   function statements(S, card, today) {
-    var posts = postings(S, card, today), pays = [], i, k;
+    var posts = postings(S, card, today, true), pays = [], i, k;
     for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id) pays.push(S.payments[i]);
     if (!posts.length && !pays.length) return [];
     var byKey = {}, payBy = {}, minKey = null, maxKey = stmtKeyOf(card, today);
+    for (i = 0; i < posts.length; i++) { k = stmtKeyOf(card, posts[i].date); if (k > maxKey) maxKey = k; }
     for (i = 0; i < posts.length; i++) {
       k = stmtKeyOf(card, posts[i].date);
       byKey[k] = (byKey[k] || 0) + posts[i].amt;
@@ -281,6 +283,7 @@ var CE = (function () {
       s.remaining = s.total - s.paid;
       s.est = s.close > today;
       if (s.remaining === 0 && s.total > 0) s.status = "Paid";
+      else if (s.start > today) s.status = "Upcoming";
       else if (s.remaining > 0 && today > s.due) s.status = "Overdue";
       else if (s.paid > 0) s.status = "Partial";
       else s.status = "Open";
@@ -298,7 +301,7 @@ var CE = (function () {
     return out;
   }
   function balance(S, card, today) {
-    var posts = postings(S, card, today), stm = statements(S, card, today), b = 0, i;
+    var posts = postings(S, card, today, true), stm = statements(S, card, today), b = 0, i;
     for (i = 0; i < posts.length; i++) b += posts[i].amt;
     for (i = 0; i < stm.length; i++) b += stm[i].interest;
     for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id && S.payments[i].date <= today) b -= S.payments[i].amt;
@@ -477,21 +480,51 @@ var CE = (function () {
 
   // ---------- one-time migration: RCBC 8009 from the Nov 4 2026 statement ----------
   const MIG_RCBC = "mig_rcbc8009_v190";
+  function rcbcCard() { return S.cards.find(function (x) { return !x.archived && String(x.last4) === "8009" && /rcbc/i.test(String(x.bank || "")); }); }
+  function rcbcPaidSum(c) { return S.payments.filter(function (p) { return p.cardId === c.id && p.stmtKey === "2026-11"; }).reduce(function (a, p) { return a + num(p.amt); }, 0); }
+  // Idempotent: flag lives in synced state AND every write is guarded by content, so reloads, cloud sync and a second device cannot add a second opening balance or payment.
   function migrateRcbc() {
     if (!S.mig || typeof S.mig !== "object") S.mig = {};
     if (S.mig[MIG_RCBC]) return false;
-    const c = S.cards.find(function (x) { return !x.archived && String(x.last4) === "8009" && /rcbc/i.test(String(x.bank || "")); });
+    const c = rcbcCard();
     if (!c) return false;
-    c.cutoffDay = 4; c.dueDay = 1; c.apr = 36; c.minPct = 3; c.minCeil = true; c.limit = 3500000; stamp(c);
-    if (!S.txns.some(function (t) { return t.cardId === c.id && t.opening && t.date === "2026-11-04"; })) {
-      S.txns.push(mk({ cardId: c.id, date: "2026-11-04", amt: 3896405, merchant: "Opening balance (Nov 4 statement)", catId: "others", notes: "From RCBC statement: total due 38,964.05, due Dec 1 2026", opening: true }));
-      S.payments.push(mk({ cardId: c.id, stmtKey: "2026-11", date: todayIso(), amt: 3896405, kind: "full", note: "Paid (from SOA)" }));
+    const hasOpen = S.txns.some(function (t) { return t.cardId === c.id && t.opening && t.date === "2026-11-04"; });
+    if (hasOpen || rcbcPaidSum(c) >= 3896405) {
+      // Already migrated (or user handled it): mark done, change nothing, no toast.
+      S.mig[MIG_RCBC] = Date.now(); persist(); flush();
+      return false;
     }
+    c.cutoffDay = 4; c.dueDay = 1; c.apr = 36; c.minPct = 3; c.minCeil = true; c.limit = 3500000; stamp(c);
+    S.txns.push(mk({ cardId: c.id, date: "2026-11-04", amt: 3896405, merchant: "Opening balance (Nov 4 statement)", catId: "others", notes: "From RCBC statement: total due 38,964.05, due Dec 1 2026", opening: true }));
+    S.payments.push(mk({ cardId: c.id, stmtKey: "2026-11", date: todayIso(), amt: 3896405, kind: "full", note: "Paid (from SOA)", mig: MIG_RCBC }));
     S.mig[MIG_RCBC] = Date.now();
     persist(); flush();
     return true;
   }
-
+  // One-time-safe repair: remove duplicate migration payments on the Oct 5 - Nov 4 RCBC statement (keeps the user's own payment).
+  function repairRcbcDup() {
+    const c = rcbcCard(); if (!c) return false;
+    const due = 3896405;
+    const all = S.payments.filter(function (p) { return p.cardId === c.id && p.stmtKey === "2026-11"; });
+    if (all.length < 2 || all.reduce(function (a, p) { return a + num(p.amt); }, 0) <= due) return false;
+    const isMig = function (p) { return num(p.amt) === due && (p.mig === MIG_RCBC || p.note === "Paid (from SOA)"); };
+    const dups = all.filter(isMig);
+    if (!dups.length) return false;
+    const own = all.filter(function (p) { return !isMig(p); });
+    const drop = own.length ? dups : dups.slice(1);
+    if (!drop.length) return false;
+    S.payments = S.payments.filter(function (p) { return drop.indexOf(p) < 0; });
+    if (!S.mig || typeof S.mig !== "object") S.mig = {};
+    S.mig.repair_rcbc8009_dup_v193 = { at: Date.now(), removed: drop.length };
+    console.info("[cards] repaired RCBC 8009 duplicate payment(s): removed " + drop.length);
+    persist(); flush();
+    return true;
+  }
+  function runRcbcFixes() {
+    const m = migrateRcbc(), r = repairRcbcDup();
+    if (m) toast("RCBC \u2022\u2022\u20228009 updated from your Nov 4 statement");
+    return m || r;
+  }
   // ---------- recurring ----------
   function generateRecurring() {
     const t = todayIso(), cur = CE.keyOf(t); let made = 0;
@@ -621,12 +654,19 @@ var CE = (function () {
     return h;
   }
 
+  function upcomingHint(c) {
+    const t = todayIso(); let up = 0;
+    CE.statements(S, c, t).forEach(function (s) { if (!s.skip && s.status === "Upcoming") up += s.remaining; });
+    if (up <= 0) return "";
+    const bal = CE.balance(S, c, t);
+    return "<div class='hint' style='margin-top:6px'>Current " + fmt(bal - up) + " \u00b7 Upcoming " + fmt(up) + "</div>";
+  }
   function stmtBlock(c) {
     const t = todayIso(), list = CE.statements(S, c, t).filter(function (s) { return !s.skip; }).reverse();
     if (!list.length) return "<div class='hint'>No statements yet.</div>";
     return list.map(function (s) {
       const pays = S.payments.filter(function (p) { return p.cardId === c.id && p.stmtKey === s.key; });
-      return "<div class='stm'><div class='r1'><b>" + shortDate(s.start) + " \u2013 " + shortDate(s.close) + (s.est ? " \u00b7 running" : "") + "</b><span class='pill p-" + s.status + "'>" + s.status + "</span></div>" +
+      return "<div class='stm'><div class='r1'><b>" + shortDate(s.start) + " \u2013 " + shortDate(s.close) + (s.status === "Upcoming" ? " \u00b7 upcoming" : (s.est ? " \u00b7 running" : "")) + "</b><span class='pill p-" + s.status + "'>" + s.status + "</span></div>" +
         "<div class='r2'><span>Due " + fullDate(s.due) + "</span><b>" + fmt(s.total) + "</b></div>" +
         (s.interest > 0 ? "<div class='r2'><span class='red'>Includes interest</span><b class='red'>" + fmt(s.interest) + "</b></div>" : "") +
         "<div class='r2'><span>Paid</span><b>" + fmt(s.paid) + "</b></div>" +
@@ -664,7 +704,7 @@ var CE = (function () {
       "<div class='card' style='border-left-color:" + escH(c.color) + "'><div class='grid' style='margin:0 0 8px'>" +
       "<div class='stat'><div class='k'>Balance</div><div class='v'>" + fmt(i.bal) + "</div></div><div class='stat'><div class='k'>Available</div><div class='v'>" + fmt(i.avail) + "</div></div></div>" +
       "<div class='t2' style='display:flex;justify-content:space-between;font-size:13px'><span>Limit " + fmt(c.limit) + " \u00b7 " + escH(c.bank || "") + "</span><span>" + i.util + "% used</span></div>" + utilBar(i.util, S.settings.utilWarn) +
-      "<div class='hint' style='margin-top:8px'>Cutoff day " + c.cutoffDay + " \u00b7 due day " + c.dueDay + " \u00b7 APR " + c.apr + "%</div>" +
+      upcomingHint(c) + "<div class='hint' style='margin-top:8px'>Cutoff day " + c.cutoffDay + " \u00b7 due day " + c.dueDay + " \u00b7 APR " + c.apr + "%</div>" +
       "<div class='acts'><button class='btn sec sm' data-act='editcard' data-id='" + escH(c.id) + "'>Edit</button><button class='btn sec sm' data-act='archcard' data-id='" + escH(c.id) + "'>" + (c.archived ? "Unarchive" : "Archive") + "</button>" +
       (attached ? "" : "<button class='btn dng sm' data-act='delcard' data-id='" + escH(c.id) + "'>Delete</button>") + "</div></div>" +
       "<div class='card'><h2>Statements</h2>" + stmtBlock(c) + "</div>" +
@@ -1186,17 +1226,17 @@ var CE = (function () {
     loadLocal();
     const dl = new URLSearchParams(location.search).get("card");
     if (dl && cardById(dl)) { ui.tab = "cards"; ui.cardId = dl; }
-    const migrated = migrateRcbc();
     generateRecurring(); render(); fireNotifications();
-    if (migrated) toast("RCBC \u2022\u2022\u20228009 updated from your Nov 4 statement");
     lastCloud = Date.now();
-    if (await loadCloud()) { const m2 = migrateRcbc(); generateRecurring(); if (!sheetOpen() && !typing()) render(); if (m2) toast("RCBC \u2022\u2022\u20228009 updated from your Nov 4 statement"); }
+    const cloudChanged = await loadCloud();
+    const fixed = runRcbcFixes();
+    if (cloudChanged || fixed) { generateRecurring(); if (!sheetOpen() && !typing()) render(); }
     fireNotifications();
     document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") refreshAll(); });
     window.addEventListener("focus", refreshAll);
   }
 
-  const APP_VERSION = 191;
+  const APP_VERSION = 193;
   function setFooterVersion() { const fv = $("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // Manual update only: shows a banner, never auto-reloads.
   async function checkForUpdate() {

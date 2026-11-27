@@ -1051,11 +1051,11 @@ var CE = (function () {
     }
     return rows;
   }
-  function postings(S, card, today) {
+  function postings(S, card, today, all) {
     var out = [], i, t, rows, j;
     for (i = 0; i < S.txns.length; i++) {
       t = S.txns[i];
-      if (t.cardId === card.id && t.date <= today) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening });
+      if (t.cardId === card.id && (all || t.date <= today)) out.push({ date: t.date, amt: t.amt, catId: t.catId, kind: "txn", open: !!t.opening });
     }
     var ins = S.installments || [];
     for (i = 0; i < ins.length; i++) {
@@ -1068,10 +1068,11 @@ var CE = (function () {
     return out;
   }
   function statements(S, card, today) {
-    var posts = postings(S, card, today), pays = [], i, k;
+    var posts = postings(S, card, today, true), pays = [], i, k;
     for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id) pays.push(S.payments[i]);
     if (!posts.length && !pays.length) return [];
     var byKey = {}, payBy = {}, minKey = null, maxKey = stmtKeyOf(card, today);
+    for (i = 0; i < posts.length; i++) { k = stmtKeyOf(card, posts[i].date); if (k > maxKey) maxKey = k; }
     for (i = 0; i < posts.length; i++) {
       k = stmtKeyOf(card, posts[i].date);
       byKey[k] = (byKey[k] || 0) + posts[i].amt;
@@ -1102,6 +1103,7 @@ var CE = (function () {
       s.remaining = s.total - s.paid;
       s.est = s.close > today;
       if (s.remaining === 0 && s.total > 0) s.status = "Paid";
+      else if (s.start > today) s.status = "Upcoming";
       else if (s.remaining > 0 && today > s.due) s.status = "Overdue";
       else if (s.paid > 0) s.status = "Partial";
       else s.status = "Open";
@@ -1119,7 +1121,7 @@ var CE = (function () {
     return out;
   }
   function balance(S, card, today) {
-    var posts = postings(S, card, today), stm = statements(S, card, today), b = 0, i;
+    var posts = postings(S, card, today, true), stm = statements(S, card, today), b = 0, i;
     for (i = 0; i < posts.length; i++) b += posts[i].amt;
     for (i = 0; i < stm.length; i++) b += stm[i].interest;
     for (i = 0; i < S.payments.length; i++) if (S.payments[i].cardId === card.id && S.payments[i].date <= today) b -= S.payments[i].amt;
@@ -1905,6 +1907,20 @@ var CE = (function () {
     cardsState.mPayOn1 = true;
     cardsPersist();
   }
+  // One-time: RCBC 8009 Dec 5 - Jan 4 statement (due 2027-02-01) is paid on the Dec 28 payday.
+  function cardsMigratePayOn2() {
+    if (!cardsState || cardsState.mPayOn2) return;
+    const card = cardsState.cards.find(c => String(c.last4) === "8009" && /rcbc/i.test(String(c.bank || "") + String(c.nickname || "")));
+    if (!card) return;
+    let st = null;
+    try { st = CE.statements(cardsState, card, cardsToday()).find(s => s.key === "2027-01" && s.due === "2027-02-01" && !s.skip); } catch (e) {}
+    if (!st) return;
+    if (!cardsState.payOn || typeof cardsState.payOn !== "object") cardsState.payOn = {};
+    const k = card.id + "|" + st.key;
+    if (!cardsState.payOn[k] && !(cardsState.payPlan && cardsState.payPlan[k])) cardsState.payOn[k] = "2026-12-28";
+    cardsState.mPayOn2 = true;
+    cardsPersist();
+  }
   // Group of terms of one statement that fall inside the current view window.
   function stmtGroupsInView() {
     const occs = stmtOccsInView(), map = {}, out = [];
@@ -1951,7 +1967,7 @@ var CE = (function () {
       rows += '<div class="bd-row' + (o.paid ? " bd-paid" : "") + (co ? (co.over ? " cut-over" : " cut-due") : "") + '">' +
         '<input type="checkbox" class="bd-check" data-csterm="' + kid + '|' + o.pi + '"' + (o.paid ? " checked" : "") + ' aria-label="Mark paid">' +
         '<span class="bd-label"><span class="due-tag u-up">' + shortDate(o.date) + '</span>' + (o.paid ? "" : cutBadgeHtml(co)) + ' ' +
-        '<span class="bd-date">' + shortDate(o.close) + ' stmt' + tn + ' \u00b7 due ' + shortDate(o.due) + (o.est ? " (est.)" : "") + '</span>' +
+        '<span class="bd-date">' + shortDate(o.close) + ' stmt' + tn + ' \u00b7 due ' + shortDate(o.due) + (o.est && o.status !== "Upcoming" ? " (est.)" : "") + '</span>' +
         (o.partial > 0 ? ' <span class="part-tag">\u20b1' + o.partial.toLocaleString("en-US", { maximumFractionDigits: 2 }) + ' paid</span>' : '') + '</span>' +
         '<span class="bd-amt">' + peso(o.paid ? o.full : o.amount) + '</span></div>';
     });
@@ -3905,6 +3921,7 @@ var CE = (function () {
       }
     } catch (e) {}
     try { cardsMigratePayOn(); } catch (e) {}
+    try { cardsMigratePayOn2(); } catch (e) {}
     if (changed && !silent && appStarted) renderAll();
     return changed;
   }
@@ -3983,7 +4000,7 @@ var CE = (function () {
         if (t.date < start || t.date > end) return;
         const tn = t.n > 1 ? " " + (t.i + 1) + "/" + t.n : "";
         out.push({ id: "cs:" + x.card.id, key: s.key, pi: t.i, date: t.date, due: s.due, close: s.close, name: label + tn, grp: label,
-          item: shortDate(s.close) + " stmt" + tn + (s.est ? " (est.)" : ""),
+          item: shortDate(s.close) + " stmt" + tn + (s.est && s.status !== "Upcoming" ? " (est.)" : ""),
           full: t.amt / 100, amount: (t.paid ? t.amt : t.remC) / 100, paid: t.paid, over: false, recurring: false,
           card: true, status: s.status, cardId: x.card.id, label: label, est: s.est, n: t.n, partial: (!t.paid && t.paidC > 0) ? t.paidC / 100 : 0 });
       });
@@ -4265,7 +4282,7 @@ var CE = (function () {
   })();
 
   // ---------- Auto-update ----------
-  const APP_VERSION = 192;
+  const APP_VERSION = 193;
   function setFooterVersion() { const fv = document.getElementById("footVer"); if (fv) fv.textContent = "v" + APP_VERSION; }
   // MANUAL update only — never auto-reloads (auto-reload caused an endless refresh loop).
   async function checkForUpdate() {
